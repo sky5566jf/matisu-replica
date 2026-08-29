@@ -5,10 +5,10 @@ INSTALL_TARGET = rootless
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = MatisuAuto
-MatisuAuto_FILES = Tweak.xm
-# 触控注入依赖 IOKit 私有头（ digitizer 事件 / IOHIDEventSystemClient ）
+MatisuAuto_FILES = Tweak.xm ../src/MatisuTouch.m
 MatisuAuto_PRIVATE_FRAMEWORKS = IOKit
-# 若改为 backboardd 注入路径，可追加 BackBoardServices
+MatisuAuto_CFLAGS = -I../include
+MatisuAuto_LDFLAGS = -Wl,-undefined,dynamic_lookup
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
