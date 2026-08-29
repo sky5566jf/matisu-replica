@@ -1,0 +1,35 @@
+name: iOS Theos Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Theos
+        uses: waruhachi/theos-action@v2.4.6
+        with:
+          theos-src: 'theos/theos'
+          theos-branch: 'master'
+          sdks-src: 'theos/sdks'
+          sdks-branch: 'master'
+
+      - name: Build Tweak (rootful / rootless / roothide)
+        working-directory: ios/tweak
+        run: |
+          make clean package FINALPACKAGE=1
+          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide
+
+      - name: Upload debs
+        uses: actions/upload-artifact@v4
+        with:
+          name: matisu-auto-debs
+          path: ios/tweak/packages/*.deb
+          if-no-files-found: error

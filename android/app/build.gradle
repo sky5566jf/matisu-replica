@@ -1,0 +1,32 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'com.matisu.auto'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.matisu.auto"
+        minSdk 24          // dispatchGesture 需 API 24+
+        targetSdk 34
+        versionCode 1
+        versionName "0.1"
+    }
+
+    buildTypes {
+        release { minifyEnabled false }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    // Lua 引擎：luaj 是纯 Java 的 Lua 5.2/5.3 实现，无需 NDK，Phase 0 直接可用。
+    // 如需原生性能，可后续替换为 LuaJIT/AndroLua（需 NDK 交叉编译 .so）。
+    implementation 'org.luaj:luaj-jse:3.0.1'
+}

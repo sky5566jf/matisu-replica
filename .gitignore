@@ -1,0 +1,25 @@
+# Android
+*.iml
+.gradle/
+build/
+/local.properties
+captures/
+.externalNativeBuild/
+
+# iOS / Theos
+*.deb
+packages/
+.obj/
+theos/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

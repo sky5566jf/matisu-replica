@@ -1,0 +1,10 @@
+{
+  "name": "matisuauto-pc-runner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MatisuAuto PC 端 Lua 运行器 (Phase 0, 基于 fengari)",
+  "main": "runner.js",
+  "dependencies": {
+    "fengari": "^0.1.13"
+  }
+}
