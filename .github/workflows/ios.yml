@@ -20,11 +20,10 @@ jobs:
           sdks-src: 'theos/sdks'
           sdks-branch: 'master'
 
-      - name: Build Tweak (rootless / roothide debs)
+      - name: Build Tweak (rootless deb)
         working-directory: ios/tweak
         run: |
           make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
-          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide
 
       - name: Build App + package tipa (TrollStore)
         working-directory: ios/app
