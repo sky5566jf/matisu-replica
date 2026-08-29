@@ -32,11 +32,15 @@ replica/
 │   ├── app/src/main/res/xml/accessibility_config.xml
 │   ├── AndroidManifest.xml
 │   └── build.gradle / settings.gradle
-└── ios/tweak/               # iOS Runtime 骨架（Theos tweak）
-    ├── Tweak.xm             # IOHIDEvent 触控注入 + MatisuTouch 封装
-    ├── Makefile
-    ├── control
-    └── README.md
+├── ios/tweak/               # iOS Runtime 骨架（Theos tweak，越狱用）
+│   ├── Tweak.xm             # IOHIDEvent 触控注入 + MatisuTouch 封装
+│   ├── Makefile
+│   └── control
+└── ios/app/                 # iOS Runtime 应用（Theos app → .tipa，TrollStore 可装）
+    ├── Makefile / control / Info.plist / Entitlements.plist
+    ├── main.mm / AppDelegate.*     # 极简 UIKit 应用
+    ├── TouchInject.*              # MatisuTouch 触控注入（复用 tweak 方案）
+    └── ControlServer.*            # 局域网 8182 控制服务（PC 下发 tap/swipe）
 ```
 
 ## 统一 API 契约（core.lua）
@@ -68,14 +72,28 @@ NODE_PATH=<fengari的node_modules> node runner.js
 - 在 `MainActivity` 接入 `luaj` 加载 `core.lua` 并把服务方法桥接为 Lua 的 `touch.* / node.*` 即可运行脚本。
 - 需用户在系统设置里手动开启无障碍服务。
 
-### iOS（需 macOS + Theos + 越狱 SDK）
+### iOS（需 macOS + Theos + 越狱 SDK / TrollStore）
 ```bash
+# A. 越狱 tweak（rootless / roothide）
 cd replica/ios/tweak
-make package            # rootless（iOS 15+ /var/jb）
+make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 make package install    # 需配置 THEOS_DEVICE_IP/PORT
+
+# B. TrollStore 应用（.tipa，非越狱可装）
+cd replica/ios/app
+make package FINALPACKAGE=1          # 产出 .theos/obj/MatisuAuto.app
+# 打包为 .tipa：
+mkdir -p /tmp/tipa/Payload && cp -r .theos/obj/MatisuAuto.app /tmp/tipa/Payload/
+cd /tmp/tipa && zip -r matisu-auto.tipa Payload
 ```
-- `Tweak.xm` 的 `MatisuTouch` 实现触控注入；
-- 后续在 `%ctor` 接入 LuaJIT，加载 `core.lua` 并 ffi 注册为 `touch.*`。
+- `Tweak.xm` 与 `ios/app/TouchInject.mm` 共用 `MatisuTouch` 触控注入（IOHIDEvent digitizer）；
+- `ios/app` 额外提供 `ControlServer`（端口 **8182**）：PC 用 `replica/pc/ios_client.py` 发 `tap 100 200` 即可驱动真机触控；
+- 后续在 `%ctor`/`didFinishLaunching` 接入 LuaJIT，加载 `core.lua` 并 ffi 注册为 `touch.*`。
+
+## 测试设备（已就绪，用于 Phase 0 真机验证）
+- **安卓模拟器**：`192.69.0.18:5555`（已 root），`adb connect` 后 `install` 验证无障碍服务。
+- **iOS 真机（TrollStore）**：`192.69.0.38`（iPhone SE2 / arm64e / iOS 16.1.1），SSH `mobile`/`12345678`。
+  用 TrollStore 安装 `matisu-auto.tipa` 后，PC 端 `python pc/ios_client.py tap x y` 即可在真机触发触控。
 
 ## 后续路线（节选自可行性报告）
 

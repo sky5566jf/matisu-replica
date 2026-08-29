@@ -8,8 +8,10 @@ captures/
 
 # iOS / Theos
 *.deb
+*.tipa
 packages/
 .obj/
+.theos/
 theos/
 
 # Node
@@ -23,3 +25,6 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+
+# CI 下载产物（本地验证用，不入仓）
+ci-artifacts/

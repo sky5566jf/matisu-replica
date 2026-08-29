@@ -1,0 +1,8 @@
+Package: com.matisu.auto
+Name: MatisuAuto
+Version: 0.0.1
+Architecture: iphoneos-arm64
+Description: MatisuAuto iOS runtime (TrollStore installable)
+Maintainer: matisu <dev@matisu.xyz>
+Author: matisu
+Section: Utilities

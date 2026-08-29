@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MatisuAuto</string>
+    <string name="accessibility_description">MatisuAuto 自动化服务：执行 Lua 脚本的触控与界面操作</string>
+</resources>
