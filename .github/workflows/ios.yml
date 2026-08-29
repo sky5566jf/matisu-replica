@@ -30,19 +30,32 @@ jobs:
         run: |
           make clean
           make package FINALPACKAGE=1
-          APP=$(find .theos/obj -name 'MatisuAuto.app' -maxdepth 3 -type d | head -1)
-          echo "APP=$APP"
-          [ -z "$APP" ] && { echo "!! app not found"; exit 1; }
-          rm -rf /tmp/tipa && mkdir -p /tmp/tipa/Payload
-          cp -r "$APP" /tmp/tipa/Payload/
+          # Theos only puts the compiled binary in .theos/obj/MatisuAuto.app.
+          # Assemble the full .app manually from the binary + source plist/entitlements
+          # so the tipa is always a valid, signed bundle (Info.plist + HID entitlements).
+          BIN=$(find .theos/obj/MatisuAuto.app -name MatisuAuto -type f 2>/dev/null | head -1)
+          [ -z "$BIN" ] && { echo "!! binary not built"; exit 1; }
+          rm -rf /tmp/tipa
+          mkdir -p /tmp/tipa/Payload/MatisuAuto.app
+          cp "$BIN" /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto
+          cp Info.plist Entitlements.plist /tmp/tipa/Payload/MatisuAuto.app/
+          LDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)
+          if [ -n "$LDID" ]; then
+            "$LDID" -SEntitlements.plist /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto && echo "signed with ldid"
+          else
+            echo "!! ldid not found; TrollStore will re-sign on install"
+          fi
+          echo "== tipa app contents =="
+          ls -la /tmp/tipa/Payload/MatisuAuto.app
           cd /tmp/tipa && zip -r "$GITHUB_WORKSPACE/matisu-auto.tipa" Payload
-          echo "tipa size: $(stat -f%z $GITHUB_WORKSPACE/matisu-auto.tipa 2>/dev/null || wc -c < $GITHUB_WORKSPACE/matisu-auto.tipa) bytes"
+          echo "tipa size: $(wc -c < $GITHUB_WORKSPACE/matisu-auto.tipa) bytes"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: matisu-auto-ios
           path: |
+            ios/app/packages/*.deb
             ios/tweak/packages/*.deb
             matisu-auto.tipa
           if-no-files-found: warn
