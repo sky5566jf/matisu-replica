@@ -1,15 +1,83 @@
 #import "ScreenShot.h"
 #import <UIKit/UIKit.h>
 #import <CoreGraphics/CoreGraphics.h>
-#import <IOSurface/IOSurface.h>
+#import <dlfcn.h>
 
 #if !__has_feature(objc_arc)
 #error "ScreenShot.m must be compiled with ARC"
 #endif
 
-// 私有 SPI：把指定 IOSurface 渲染为整屏内容（iOS 13+）。weak_import 以便旧系统也能链接。
-extern void CARenderServerRenderDisplay(kern_return_t a, CFStringRef b, IOSurfaceRef surface, int x, int y)
-    __attribute__((weak_import));
+// 新版 iOS SDK 移除了 IOSurface 的 umbrella header，且 IOSurface 属私有框架；
+// 与 AXNodeDump 的 AXRuntime 一致：运行时 dlopen/dlsym，不依赖 SDK 头文件与链接。
+
+typedef struct __IOSurface *IOSurfaceRef;
+
+typedef IOSurfaceRef (*fn_Create)(CFDictionaryRef);
+typedef size_t       (*fn_AlignProperty)(CFStringRef, size_t);
+typedef size_t       (*fn_GetWidth)(IOSurfaceRef);
+typedef size_t       (*fn_GetHeight)(IOSurfaceRef);
+typedef size_t       (*fn_GetBytesPerRow)(IOSurfaceRef);
+typedef int          (*fn_Lock)(IOSurfaceRef, uint32_t, uint32_t *);
+typedef int          (*fn_Unlock)(IOSurfaceRef, uint32_t, uint32_t *);
+typedef void *       (*fn_GetBaseAddress)(IOSurfaceRef);
+typedef void         (*fn_RenderDisplay)(int, CFStringRef, IOSurfaceRef, int, int);
+
+enum { kMIOSurfaceLockReadOnly = 0x00000001 };
+
+static struct {
+    fn_Create          create;
+    fn_AlignProperty   alignProperty;
+    fn_GetWidth        getWidth;
+    fn_GetHeight       getHeight;
+    fn_GetBytesPerRow  getBytesPerRow;
+    fn_Lock            lock;
+    fn_Unlock          unlock;
+    fn_GetBaseAddress  getBaseAddress;
+    fn_RenderDisplay   renderDisplay;
+    CFStringRef       *kBytesPerElement;  // dlsym 出来的是「指向 CFStringRef 常量」的地址
+    CFStringRef       *kBytesPerRow;
+    CFStringRef       *kWidth;
+    CFStringRef       *kHeight;
+    CFStringRef       *kPixelFormat;
+    CFStringRef       *kAllocSize;
+} IO = {0};
+
+static BOOL ioLoad(void) {
+    static dispatch_once_t once;
+    static BOOL ok = NO;
+    dispatch_once(&once, ^{
+        void *h = dlopen("/System/Library/Frameworks/IOSurface.framework/IOSurface", RTLD_LAZY);
+        if (!h) h = dlopen("/System/Library/PrivateFrameworks/IOSurface.framework/IOSurface", RTLD_LAZY);
+        if (!h) return;
+        IO.create         = (fn_Create)dlsym(h, "IOSurfaceCreate");
+        IO.alignProperty  = (fn_AlignProperty)dlsym(h, "IOSurfaceAlignProperty");
+        IO.getWidth       = (fn_GetWidth)dlsym(h, "IOSurfaceGetWidth");
+        IO.getHeight      = (fn_GetHeight)dlsym(h, "IOSurfaceGetHeight");
+        IO.getBytesPerRow = (fn_GetBytesPerRow)dlsym(h, "IOSurfaceGetBytesPerRow");
+        IO.lock           = (fn_Lock)dlsym(h, "IOSurfaceLock");
+        IO.unlock         = (fn_Unlock)dlsym(h, "IOSurfaceUnlock");
+        IO.getBaseAddress = (fn_GetBaseAddress)dlsym(h, "IOSurfaceGetBaseAddress");
+        IO.kBytesPerElement = (CFStringRef *)dlsym(h, "kIOSurfaceBytesPerElement");
+        IO.kBytesPerRow     = (CFStringRef *)dlsym(h, "kIOSurfaceBytesPerRow");
+        IO.kWidth           = (CFStringRef *)dlsym(h, "kIOSurfaceWidth");
+        IO.kHeight          = (CFStringRef *)dlsym(h, "kIOSurfaceHeight");
+        IO.kPixelFormat     = (CFStringRef *)dlsym(h, "kIOSurfacePixelFormat");
+        IO.kAllocSize       = (CFStringRef *)dlsym(h, "kIOSurfaceAllocSize");
+        if (!IO.create || !IO.getWidth || !IO.getHeight || !IO.getBytesPerRow ||
+            !IO.lock || !IO.unlock || !IO.getBaseAddress ||
+            !IO.kBytesPerElement || !IO.kBytesPerRow || !IO.kWidth ||
+            !IO.kHeight || !IO.kPixelFormat || !IO.kAllocSize) return;
+        // CARenderServerRenderDisplay 在 QuartzCore（UIKit 已加载，先试全局符号表）
+        IO.renderDisplay = (fn_RenderDisplay)dlsym(RTLD_DEFAULT, "CARenderServerRenderDisplay");
+        if (!IO.renderDisplay) {
+            void *qc = dlopen("/System/Library/Frameworks/QuartzCore.framework/QuartzCore", RTLD_LAZY | RTLD_GLOBAL);
+            if (qc) IO.renderDisplay = (fn_RenderDisplay)dlsym(qc, "CARenderServerRenderDisplay");
+        }
+        if (!IO.renderDisplay) return;
+        ok = YES;
+    });
+    return ok;
+}
 
 // 截屏目标 IOSurface（创建一次后复用）
 static IOSurfaceRef gSurface = NULL;
@@ -30,41 +98,42 @@ static IOSurfaceRef ensureSurface(void) {
 
     unsigned pixelFormat = 0x42475241; // 'ARGB'
     int bpp = 4;                       // 每像素 4 字节
-    int bpr = (int)IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, bpp * w);
+    int bpr = (int)(IO.alignProperty ? IO.alignProperty(*IO.kBytesPerRow, bpp * w) : (size_t)(bpp * w));
 
     NSDictionary *props = @{
-        (__bridge NSString *)kIOSurfaceBytesPerElement : @(bpp),
-        (__bridge NSString *)kIOSurfaceBytesPerRow     : @(bpr),
-        (__bridge NSString *)kIOSurfaceWidth           : @(w),
-        (__bridge NSString *)kIOSurfaceHeight          : @(h),
-        (__bridge NSString *)kIOSurfacePixelFormat     : @(pixelFormat),
-        (__bridge NSString *)kIOSurfaceAllocSize       : @(bpr * h),
+        (__bridge NSString *)*IO.kBytesPerElement : @(bpp),
+        (__bridge NSString *)*IO.kBytesPerRow     : @(bpr),
+        (__bridge NSString *)*IO.kWidth           : @(w),
+        (__bridge NSString *)*IO.kHeight          : @(h),
+        (__bridge NSString *)*IO.kPixelFormat     : @(pixelFormat),
+        (__bridge NSString *)*IO.kAllocSize       : @(bpr * h),
     };
-    gSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+    gSurface = IO.create((__bridge CFDictionaryRef)props);
     return gSurface;
 }
 
 NSData *_Nullable MatisuCapturePNG(void) {
+    if (!ioLoad()) return nil;
     IOSurfaceRef s = ensureSurface();
-    if (!s || CARenderServerRenderDisplay == NULL) return nil;
+    if (!s) return nil;
 
     // 整屏 -> IOSurface（"LCD" 为主显示）
-    CARenderServerRenderDisplay(0, CFSTR("LCD"), s, 0, 0);
+    IO.renderDisplay(0, CFSTR("LCD"), s, 0, 0);
 
-    int w = (int)IOSurfaceGetWidth(s);
-    int h = (int)IOSurfaceGetHeight(s);
-    int bpr = (int)IOSurfaceGetBytesPerRow(s);
+    int w = (int)IO.getWidth(s);
+    int h = (int)IO.getHeight(s);
+    int bpr = (int)IO.getBytesPerRow(s);
     if (w <= 0 || h <= 0) return nil;
 
-    IOSurfaceLock(s, kIOSurfaceLockReadOnly, NULL);
-    void *base = IOSurfaceGetBaseAddress(s);
+    IO.lock(s, kMIOSurfaceLockReadOnly, NULL);
+    void *base = IO.getBaseAddress(s);
 
     // IOSurface 为 ARGB（字节序 A,R,G,B），用 kCGImageAlphaFirst | ByteOrder32Big 解释
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
     CGContextRef ctx = CGBitmapContextCreate(base, w, h, 8, bpr, cs,
                                              kCGImageAlphaFirst | kCGBitmapByteOrder32Big);
     CGImageRef img = ctx ? CGBitmapContextCreateImage(ctx) : NULL;
-    IOSurfaceUnlock(s, kIOSurfaceLockReadOnly, NULL);
+    IO.unlock(s, kMIOSurfaceLockReadOnly, NULL);
     CGColorSpaceRelease(cs);
     if (ctx) CGContextRelease(ctx);
     if (!img) return nil;

@@ -14,7 +14,6 @@
 #import "AXNodeDump.h"
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
-#import <libproc.h>
 
 #if !__has_feature(objc_arc)
 #error "AXNodeDump.m must be compiled with ARC"
@@ -32,7 +31,6 @@ enum { kMAAXValueCGRectType = 3 };   // 与 macOS AXValueType 编号一致
 typedef AXUIElementRef (*fn_SystemWide)(void);
 typedef MAAXError (*fn_CopyAttr)(AXUIElementRef, CFStringRef, CFTypeRef *);
 typedef MAAXError (*fn_CopyActions)(AXUIElementRef, CFArrayRef *);
-typedef MAAXError (*fn_GetPid)(AXUIElementRef, pid_t *);
 typedef Boolean   (*fn_ValueGetValue)(AXValueRef, uint32_t, void *);
 typedef CFTypeID  (*fn_ValueGetTypeID)(void);
 typedef CFTypeID  (*fn_ElementGetTypeID)(void);
@@ -44,7 +42,6 @@ static struct {
     fn_SystemWide       systemWide;
     fn_CopyAttr         copyAttr;
     fn_CopyActions      copyActions;
-    fn_GetPid           getPid;
     fn_ValueGetValue    valueGetValue;
     fn_ValueGetTypeID   valueTypeID;
     fn_ElementGetTypeID elementTypeID;
@@ -64,7 +61,6 @@ static void axLoad(void) {
     AX.systemWide    = (fn_SystemWide)dlsym(h, "AXUIElementCreateSystemWide");
     AX.copyAttr      = (fn_CopyAttr)dlsym(h, "AXUIElementCopyAttributeValue");
     AX.copyActions   = (fn_CopyActions)dlsym(h, "AXUIElementCopyActionNames");
-    AX.getPid        = (fn_GetPid)dlsym(h, "AXUIElementGetPid");
     AX.valueGetValue = (fn_ValueGetValue)dlsym(h, "AXValueGetValue");
     AX.valueTypeID   = (fn_ValueGetTypeID)dlsym(h, "AXValueGetTypeID");
     AX.elementTypeID = (fn_ElementGetTypeID)dlsym(h, "AXUIElementGetTypeID");
@@ -163,14 +159,20 @@ static BOOL axHasAction(AXUIElementRef el, NSString *action) {
     return found;
 }
 
-/// 前台 App 的进程名（充当 Android 的 packageName，供 packageName(...) 过滤 / frontAppName()）
-static NSString *elementProcName(AXUIElementRef el) {
-    if (!el || !AX.getPid) return @"";
-    pid_t pid = 0;
-    if (AX.getPid(el, &pid) != kMAAXErrorSuccess || pid <= 0) return @"";
-    char buf[256] = {0};
-    if (proc_name(pid, buf, sizeof(buf) - 1) <= 0) return @"";
-    return [NSString stringWithUTF8String:buf] ?: @"";
+/// 前台 App 的 bundle identifier（充当 Android 的 packageName，供 packageName(...) 过滤 / frontAppName()）
+static NSString *elementBundleId(AXUIElementRef el) {
+    if (!el || !AX.copyAttr) return @"";
+    CFStringRef candidates[] = { CFSTR("AXBundleIdentifier"), CFSTR("AXBundleID"), NULL };
+    for (int i = 0; candidates[i]; i++) {
+        CFTypeRef v = NULL;
+        if (AX.copyAttr(el, candidates[i], &v) == kMAAXErrorSuccess && v) {
+            NSString *s = (CFGetTypeID(v) == CFStringGetTypeID())
+                ? [(__bridge NSString *)v copy] : nil;
+            CFRelease(v);
+            if (s.length) return s;
+        }
+    }
+    return @"";
 }
 
 #pragma mark - 角色语义推断（iOS 无 Android 那套显式布尔属性）
@@ -315,7 +317,7 @@ NSData* _Nullable MatisuDumpNodesJSON(void) {
     AX.copyAttr(sys, CFSTR("AXFocusedApplication"), (CFTypeRef *)&app);
     AXUIElementRef root = app ? app : sys;
 
-    NSDictionary *tree = buildNode(root, elementProcName(root), 0);
+    NSDictionary *tree = buildNode(root, elementBundleId(root), 0);
 
     if (app) CFRelease(app);
     CFRelease(sys);
