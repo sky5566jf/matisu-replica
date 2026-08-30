@@ -12,9 +12,23 @@
     <true/>
     <key>com.apple.springboard.launchapplications</key>
     <true/>
-    <key>com.apple.private.hid.client</key>
-    <true/>
-    <key>get-task-allow</key>
-    <true/>
+	<key>com.apple.private.hid.client</key>
+	<true/>
+	<key>com.apple.QuartzCore.global-capture</key>
+	<true/>
+	<key>com.apple.QuartzCore.secure-capture</key>
+	<true/>
+	<key>com.apple.QuartzCore.displayable-context</key>
+	<true/>
+	<key>com.apple.QuartzCore.cache-asynchronous</key>
+	<true/>
+	<key>com.apple.private.IOSurface.protected-access</key>
+	<true/>
+	<key>com.apple.private.accessibility.inspection</key>
+	<true/>
+	<key>com.apple.private.accessibility.AXPreferenceOverride</key>
+	<true/>
+	<key>get-task-allow</key>
+	<true/>
 </dict>
 </plist>
