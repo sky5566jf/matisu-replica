@@ -24,13 +24,13 @@ static void* MAServerLoop(void* arg) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(8182);
+    addr.sin_port = htons(18182);
     addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) < 0) { perror("bind"); close(srv); return NULL; }
     if (listen(srv, 4) < 0) { perror("listen"); close(srv); return NULL; }
 
-    NSLog(@"[MatisuAuto] control server listening on :8182");
+    NSLog(@"[MatisuAuto] control server listening on :18182");
 
     while (1) {
         int cli = accept(srv, NULL, NULL);

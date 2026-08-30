@@ -10,10 +10,24 @@
 | Lua 引擎加载执行 | ✅ | fengari (Lua 5.1 VM) 已成功加载并运行脚本 |
 | 统一 API 契约调用 | ✅ | `core.lua` 定义的 `touch/device/color/node/ui` 被脚本正常调用 |
 | 宿主函数桥接 | ✅ | PC 端将 JS 实现桥接为 Lua 全局 API（`runner.js` 已验证） |
-| 安卓 AccessibilityService 骨架 | 🟡 | 代码完整，需 Android SDK 编译（本机无 SDK） |
-| iOS 触控注入 tweak 骨架 | 🟡 | 代码完整，需 Theos + 越狱 SDK 编译（本机无 SDK） |
+| 安卓 AccessibilityService 骨架 | ✅ | APK 已装模拟器(192.69.0.18:5555)且无障碍服务已启用 |
+| iOS 触控注入 tweak 骨架 | ✅ | .deb(rootless)+.tipa(TrollStore) 均 GitHub Actions 真编译并真机验证 |
 
-**已真跑验证**：`replica/pc/runner.js` 运行 `demo.lua`，输出符合预期（见下方运行记录）。
+## Phase 1 验证结果（PC 引擎桥接真实设备）
+
+| 验证项 | 状态 | 说明 |
+|--------|------|------|
+| `touch.*` → 真实设备 | ✅ | `tap/swipe/doubleTap/longPress/touchDown·Move·Up` 经 iOS 18182 / Android adb 真下发 |
+| `device.*` 真实 | ✅ | getScreenSize/getOSType/getDeviceName 真实；sleep 真实同步睡眠 |
+| `network.*` 真实 | ✅ | httpGet/httpPost/download 走 `curl` 真 HTTP |
+| `cipher.*` 真实 | ✅ | md5/sha1/base64 走 Node crypto |
+| `json.*` 真实 | ✅ | fengari 表 <-> JS 对象互转 |
+| `color.*` / `node.*` | 🟡 | 诚实桩（待 Phase 3 设备侧图色/UI 查询回传） |
+| iOS 真机端到端 | ✅ | demo.lua 全流程下发后应用存活、无崩溃（IOKit 私有符号运行期解析成功） |
+| Android 真机端到端 | ✅ | `MATISU_TARGET=android` 冒烟通过（adb input 下发） |
+
+**已真跑验证**：`replica/pc/runner.js demo.lua` 在 iOS 真机(192.69.0.38)驱动全套触控，应用存活无崩溃；
+切换 `MATISU_TARGET=android` 可在安卓模拟器(192.69.0.18:5555)同等驱动。
 
 ## 目录结构
 
@@ -40,7 +54,7 @@ replica/
     ├── Makefile / control / Info.plist / Entitlements.plist
     ├── main.mm / AppDelegate.*     # 极简 UIKit 应用
     ├── TouchInject.*              # MatisuTouch 触控注入（复用 tweak 方案）
-    └── ControlServer.*            # 局域网 8182 控制服务（PC 下发 tap/swipe）
+    └── ControlServer.*            # 局域网 18182 控制服务（PC 下发 tap/swipe）
 ```
 
 ## 统一 API 契约（core.lua）
@@ -62,9 +76,14 @@ replica/
 ### PC（已验证 ✅）
 ```bash
 cd replica/pc
-NODE_PATH=<fengari的node_modules> node runner.js
+# 默认目标 iOS（192.69.0.38:18182）；可经 devices.json 或环境变量切换目标
+NODE_PATH=<fengari的node_modules> node runner.js                 # 跑 demo.lua（iOS）
+MATISU_TARGET=android NODE_PATH=<fengari> node runner.js demo.lua # 切到 Android（adb）
 # 例: NODE_PATH="C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules" node runner.js
 ```
+- `device_bridge.js`：触控/设备指令路由（iOS TCP ↔ Android adb），目标由 `devices.json` 的 `target` 决定，
+  或被环境变量 `MATISU_TARGET`（ios|android）覆盖（优先级最高）。
+- `network.*` 经系统 `C:/Windows/System32/curl.exe`；`cipher.*` 经 Node `crypto`；`json.*` 为 fengari 表<->JS 互转。
 
 ### 安卓（需 Android SDK）
 用 Android Studio 打开 `replica/android`，Sync 后 `Build → Make`。
@@ -87,7 +106,7 @@ mkdir -p /tmp/tipa/Payload && cp -r .theos/obj/MatisuAuto.app /tmp/tipa/Payload/
 cd /tmp/tipa && zip -r matisu-auto.tipa Payload
 ```
 - `Tweak.xm` 与 `ios/app/TouchInject.mm` 共用 `MatisuTouch` 触控注入（IOHIDEvent digitizer）；
-- `ios/app` 额外提供 `ControlServer`（端口 **8182**）：PC 用 `replica/pc/ios_client.py` 发 `tap 100 200` 即可驱动真机触控；
+- `ios/app` 额外提供 `ControlServer`（端口 **18182**）：PC 用 `replica/pc/ios_client.py` 发 `tap 100 200` 即可驱动真机触控；
 - 后续在 `%ctor`/`didFinishLaunching` 接入 LuaJIT，加载 `core.lua` 并 ffi 注册为 `touch.*`。
 
 ## 测试设备（已就绪，用于 Phase 0 真机验证）
