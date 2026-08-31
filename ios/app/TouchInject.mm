@@ -95,6 +95,27 @@ void MatisuTouchSwipe(float x1, float y1, float x2, float y2, double duration) {
     MatisuTouchUp(0, x2, y2);
 }
 
+// ---- 键盘注入（STHID keyPress，支持 HOME/RETURN/DELETE 等键名与 ASCII 字符）----
+
+void MatisuKeyPressName(const char *name) {
+    if (!name || !*name) return;
+    NSString *key = [NSString stringWithUTF8String:name];
+    if (!key) return;
+    [MAGen() keyPress:key];
+}
+
+/// 逐字符输入（仅 ASCII；大写/符号由 STHID 自动包 Shift）
+void MatisuTypeText(const char *utf8) {
+    if (!utf8) return;
+    for (const char *p = utf8; *p; p++) {
+        unsigned char ch = (unsigned char)*p;
+        if (ch > 0x7E || ch < 0x20) continue;   // 非可打印 ASCII 跳过（中文待 imeLib）
+        char s[2] = { (char)ch, 0 };
+        [MAGen() keyPress:[NSString stringWithUTF8String:s]];
+        usleep(30000);   // 30ms/键，防丢键
+    }
+}
+
 } // extern "C"
 
 @implementation MatisuTouch

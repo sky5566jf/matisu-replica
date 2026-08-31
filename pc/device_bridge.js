@@ -364,9 +364,19 @@ function keyCode(code) {
   return isNaN(n) ? 0 : n;
 }
 
+// iOS 键名映射（原版风格小写键名 -> STHID/DOM 键名）
+const IOS_KEY_NAMES = {
+  home: 'HOME', return: 'RETURN', enter: 'RETURN', delete: 'DELETE_OR_BACKSPACE',
+  backspace: 'DELETE_OR_BACKSPACE', escape: 'ESCAPE', esc: 'ESCAPE', tab: 'TAB',
+  space: 'SPACE', left: 'LEFTARROW', right: 'RIGHTARROW', up: 'UPARROW', down: 'DOWNARROW',
+};
 function keyPress(code) {
   const c = keyCode(code);
-  if (!isAndroid()) { warn('keyPress', 'iOS 键盘事件待设备侧接入'); return false; }
+  if (!isAndroid()) {
+    const name = IOS_KEY_NAMES[String(code).toLowerCase()] || String(code).toUpperCase();
+    const r = iosSock('key ' + name);
+    return r !== null && r !== undefined;
+  }
   return adbRun(['shell', 'input', 'keyevent', c]);
 }
 
@@ -386,7 +396,12 @@ function keyUp(code) { return keyRaw(code, false); }
 /** inputText：ASCII 走 input text；含非 ASCII 时尝试 ADBKeyboard 广播。 */
 function inputText(text) {
   const s = String(text == null ? '' : text);
-  if (!isAndroid()) { warn('inputText', 'iOS 文本输入待设备侧接入'); return false; }
+  if (!isAndroid()) {
+    // iOS：HID 键盘逐键注入（仅 ASCII；中文待设备端 imeLib）
+    if (!/^[\x20-\x7e]*$/.test(s)) { warn('inputText', 'iOS 暂仅支持 ASCII 文本（中文待 imeLib）'); return false; }
+    const r = iosSock('input ' + s);
+    return r !== null && r !== undefined;
+  }
   if (/^[\x20-\x7e]*$/.test(s)) {
     const esc = s.replace(/ /g, '%s').replace(/([()<>|;&*\\~"'`$])/g, '\\$1');
     return adbRun(['shell', 'input', 'text', esc]);

@@ -525,6 +525,10 @@ function jsRestartScript(L) { restartFlag = true; return lauxlib.luaL_error(L, t
 function jsToast(L) { bridge.toast(str(L, 1), lua.lua_isnumber(L, 2) ? num(L, 2) : 0, lua.lua_isnumber(L, 3) ? num(L, 3) : 0, lua.lua_isnumber(L, 4) ? num(L, 4) : 12); return 0; }
 function jsHideToast(L) { bridge.hideToast(); return 0; }
 function jsShowUI(L) { console.log('[ui] showUI (PC 宿主无 UI 引擎，返回空)'); lua.lua_pushnil(L); return 1; }
+function jsInputText(L) { const r = bridge.inputText(str(L, 1)); lua.lua_pushboolean(L, r ? 1 : 0); return 1; }
+function jsKeyPress(L) { const r = bridge.keyPress(str(L, 1)); lua.lua_pushboolean(L, r ? 1 : 0); return 1; }
+function jsGetUIText(L) { console.log('[ui] getUIText (PC 宿主无 UI 引擎)'); lua.lua_pushnil(L); return 1; }
+function jsSetUIText(L) { console.log('[ui] setUIText (PC 宿主无 UI 引擎)'); lua.lua_pushboolean(L, 0); return 1; }
 function jsShowUIEx(L) { console.log('[ui] showUIEx (PC 宿主无 UI 引擎，返回空)'); lua.lua_pushnil(L); return 1; }
 function jsCreateHUD(L) { console.log('[ui] createHUD (PC 宿主未实现)'); lua.lua_pushnil(L); return 1; }
 function jsShowHUD(L) { console.log('[ui] showHUD (PC 宿主未实现)'); return 0; }
@@ -628,6 +632,11 @@ regGlobal('exitScript', jsExitScript);
 regGlobal('toast', jsToast);
 regGlobal('hideToast', jsHideToast);
 regGlobal('showUI', jsShowUI);
+regGlobal('inputText', jsInputText);
+regGlobal('keyPress', jsKeyPress);
+regGlobal('getUIText', jsGetUIText);
+regGlobal('setUIText', jsSetUIText);
+regGlobal('luaExit', jsExitScript);   // 原版别名，同 exitScript
 regGlobal('showUIEx', jsShowUIEx);
 regGlobal('createHUD', jsCreateHUD);
 regGlobal('showHUD', jsShowHUD);

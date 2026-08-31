@@ -126,6 +126,16 @@ static void* MAServerLoop(void* arg) {
                 } else if (sscanf(line, "up %d %f %f", &f, &x, &y) == 3) {
                     MatisuTouchUp(f, x, y);
                     sendOK(cli);
+                } else if (strncmp(line, "key ", 4) == 0 && line[4]) {
+                    // key <NAME>：HOME/RETURN/DELETE/ESCAPE/TAB/SPACE/方向键等（STHID 键盘注入）
+                    MatisuKeyPressName(line + 4);
+                    NSLog(@"[MatisuAuto] key %s", line + 4);
+                    sendOK(cli);
+                } else if (strncmp(line, "input ", 6) == 0 && line[6]) {
+                    // input <text>：ASCII 文本逐键注入（中文待 imeLib）
+                    MatisuTypeText(line + 6);
+                    NSLog(@"[MatisuAuto] input %.40s", line + 6);
+                    sendOK(cli);
                 } else if (strcmp(line, "screencap") == 0) {
                     NSData *png = MatisuCapturePNG();
                     if (png && png.length) {
