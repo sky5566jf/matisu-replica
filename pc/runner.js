@@ -224,8 +224,10 @@ function pushRetXY(L, r) {
   return 3;
 }
 function jsFindPic(L) {
-  const r = bridge.findPic(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), str(L, 5), str(L, 6), num(L, 7, 0), num(L, 8, 0.9));
-  return pushRetXY(L, r);
+  try {
+    const r = bridge.findPic(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), str(L, 5), str(L, 6), num(L, 7, 0), num(L, 8, 0.9));
+    return pushRetXY(L, r);
+  } catch (e) { console.error('[findPic JS 异常]', e.stack); return pushRetXY(L, [-1, -1, -1]); }
 }
 function jsFindPicEx(L) {
   const r = bridge.findPicEx(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), str(L, 5), num(L, 6, 0.9));
@@ -490,7 +492,8 @@ function jsShowControlBar(L) { bridge.showControlBar(lua.lua_toboolean(L, 1)); r
 function jsVibrate(L) { bridge.vibrate(num(L, 1, 100)); return 0; }
 function jsRnd(L) { const a = num(L, 1), b = num(L, 2); lua.lua_pushinteger(L, Math.floor(Math.random() * (b - a + 1)) + a); return 1; }
 function jsExec(L) { const r = bridge.exec(str(L, 1), lua.lua_isboolean(L, 2) ? lua.lua_toboolean(L, 2) : true); lua.lua_pushstring(L, to_luastring(r || '')); return 1; }
-function jsSleep(L) { sleepSync(num(L, 1, 0)); return 0; }
+function jsSleep(L) { sleepSync(num(L, 1, 0) * 1000); return 0; }   // 原版语义：秒
+function jsMSleep(L) { sleepSync(num(L, 1, 0)); return 0; }          // 原版语义：毫秒
 function jsLockScreen(L) { bridge.lockScreen(); return 0; }
 function jsUnLockScreen(L) { bridge.unLockScreen(); return 0; }
 function jsSetBTEnable(L) { bridge.setBTEnable(lua.lua_toboolean(L, 1)); return 0; }
@@ -611,6 +614,7 @@ regGlobal('stopAudio', (L) => { return 0; });
 regGlobal('rnd', jsRnd);
 regGlobal('exec', jsExec);
 regGlobal('sleep', jsSleep);
+regGlobal('mSleep', jsMSleep);
 regGlobal('lockScreen', jsLockScreen);
 regGlobal('unLockScreen', jsUnLockScreen);
 regGlobal('setBTEnable', jsSetBTEnable);
@@ -756,7 +760,12 @@ for (;;) {
   console.log(`\n===== 运行 ${path.basename(userPath)} =====`);
   const status = lauxlib.luaL_dostring(L, to_luastring(userCode));
   if (status !== 0) {
-    const err = to_jsstring(lua.lua_tostring(L, -1));
+    let err;
+    try {
+      err = lua.lua_isstring(L, -1)
+        ? to_jsstring(lua.lua_tostring(L, -1))
+        : '(non-string error object, type=' + to_jsstring(lauxlib.luaL_typename(L, -1)) + ')';
+    } catch (_) { err = '(unprintable error object)'; }
     if (restartFlag && /__MATISU_RESTART__/.test(err)) {
       restartFlag = false;
       console.log('===== restartScript：重跑脚本 =====');
