@@ -40,6 +40,7 @@ static struct {
     BOOL loaded;
     BOOL ok;
     fn_SystemWide       systemWide;
+    fn_CreateApp        createApp;
     fn_CopyAttr         copyAttr;
     fn_CopyActions      copyActions;
     fn_ValueGetValue    valueGetValue;
@@ -68,6 +69,7 @@ static void axLoad(void) {
     }
 
     AX.systemWide    = (fn_SystemWide)dlsym(h, "AXUIElementCreateSystemWide");
+    AX.createApp     = (fn_CreateApp)dlsym(h, "AXUIElementCreateApplication");
     AX.copyAttr      = (fn_CopyAttr)dlsym(h, "AXUIElementCopyAttributeValue");
     AX.copyActions   = (fn_CopyActions)dlsym(h, "AXUIElementCopyActionNames");
     AX.valueGetValue = (fn_ValueGetValue)dlsym(h, "AXValueGetValue");
@@ -75,6 +77,7 @@ static void axLoad(void) {
     AX.elementTypeID = (fn_ElementGetTypeID)dlsym(h, "AXUIElementGetTypeID");
 
     diagSet(@"sym_systemWide", @(AX.systemWide != NULL));
+    diagSet(@"sym_createApp", @(AX.createApp != NULL));
     diagSet(@"sym_copyAttr", @(AX.copyAttr != NULL));
     diagSet(@"sym_copyActions", @(AX.copyActions != NULL));
     diagSet(@"sym_valueGetValue", @(AX.valueGetValue != NULL));
@@ -353,7 +356,51 @@ NSData* _Nullable MatisuDumpNodesJSON(void) {
     MAAXError ferr = AX.copyAttr(sys, CFSTR("AXFocusedApplication"), (CFTypeRef *)&app);
     diagSet(@"focusedApp_err", @(ferr));
     diagSet(@"focusedApp_null", @(app == NULL));
+
+    // iOS 16 实测：systemWide 属性拷贝从 -25211(APIDisabled) 变为 -25212(NoValue)，
+    // 说明 API 已使能但 systemWide 不提供该属性；改用枚举 GUI 进程 pid +
+    // AXUIElementCreateApplication(pid) 查 AXFocused 找前台（libproc 动态符号）。
     AXUIElementRef root = app ? app : sys;
+    if (!app && AX.createApp) {
+        int mib[4] = { 1 /*CTL_KERN*/, 3 /*KERN_PROC*/, 1 /*KERN_PROC_ALL*/, 0 };
+        size_t len = 0;
+        if (sysctl(mib, 4, NULL, &len, NULL, 0) == 0 && len > 0) {
+            struct kinfo_proc *procs = (struct kinfo_proc *)malloc(len);
+            if (procs && sysctl(mib, 4, procs, &len, NULL, 0) == 0) {
+                int cnt = (int)(len / sizeof(struct kinfo_proc));
+                int selfPid = getpid();
+                int tried = 0;
+                for (int i = 0; i < cnt && !app; i++) {
+                    pid_t pid = procs[i].kp_proc.p_pid;
+                    if (pid == selfPid) continue;
+                    char pbuf[4096];
+                    if (proc_pidpath(pid, pbuf, sizeof(pbuf)) <= 0) continue;
+                    NSString *pp = [NSString stringWithUTF8String:pbuf];
+                    if (!pp || ![pp containsString:@".app/"]) continue;
+                    if (!([pp containsString:@"/var/containers/Bundle/Application/"] ||
+                          [pp containsString:@"/Applications/"] ||
+                          [pp containsString:@"/System/Library/CoreServices/"])) continue;
+                    tried++;
+                    AXUIElementRef el = AX.createApp((int)pid);
+                    if (!el) continue;
+                    CFTypeRef focused = NULL;
+                    AX.copyAttr(el, CFSTR("AXFocused"), &focused);
+                    BOOL isFocused = (focused && CFGetTypeID(focused) == CFBooleanGetTypeID() && CFBooleanGetValue((CFBooleanRef)focused));
+                    if (focused) CFRelease(focused);
+                    if (isFocused) {
+                        app = el;
+                        diagSet(@"fallback_frontmost_pid", @(pid));
+                        diagSet(@"fallback_frontmost_path", pp);
+                    } else {
+                        CFRelease(el);
+                    }
+                }
+                diagSet(@"fallback_pids_tried", @(tried));
+            }
+            if (procs) free(procs);
+        }
+        if (app) root = app;
+    }
 
     // 探根节点子元素数量与典型属性错误码，定位「空树」原因
     CFTypeRef kids = NULL;
