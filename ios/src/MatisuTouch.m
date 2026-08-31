@@ -38,36 +38,33 @@ static void MASendFinger(int phase, int finger, float x, float y) {
     float nx = x / gScreenW;
     float ny = y / gScreenH;
 
-    // 事件掩码（对齐 STHID：down/lift 带 Identity，move 不带 Touch 带 Attribute）
-    uint32_t parentMask = kIOHIDDigitizerEventTouch;
-    uint32_t childMask;
+    // 事件掩码（对齐 STHID：父子同 mask；down/lift=Touch|Identity，move=Position|Attribute）
+    uint32_t mask;
     Boolean range = true, touch = true;
     if (phase == 1) {          // down
-        parentMask |= kIOHIDDigitizerEventIdentity;
-        childMask = kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventIdentity;
+        mask = kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventIdentity;
     } else if (phase == 2) {   // move
-        parentMask = kIOHIDDigitizerEventPosition | kIOHIDDigitizerEventAttribute;
-        childMask = kIOHIDDigitizerEventPosition;
+        mask = kIOHIDDigitizerEventPosition | kIOHIDDigitizerEventAttribute;
     } else {                   // up
-        parentMask |= kIOHIDDigitizerEventIdentity;
-        childMask = kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventIdentity;
+        mask = kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventIdentity;
         range = false; touch = false;
     }
 
     // 父事件（hand）
     IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(
         kCFAllocatorDefault, t,
-        kIOHIDDigitizerTransducerTypeHand, 0, 0, parentMask, 0,
+        kIOHIDDigitizerTransducerTypeHand, 0, 0, mask, 0,
         0, 0, 0, 0, 0, 0, touch, 0);
     IOHIDEventSetIntegerValue(parent, kIOHIDEventFieldIsBuiltIn, 1);
     IOHIDEventSetIntegerValue(parent, kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1);
 
-    // 子事件（finger），归一化坐标
+    // 子事件（finger）：identifier 从 2 起（SimulateTouch/STHID 惯例），归一化坐标
+    uint32_t ident = (uint32_t)(finger + 2);
     IOHIDEventRef child = IOHIDEventCreateDigitizerFingerEvent(
         kCFAllocatorDefault, t,
-        (uint32_t)(finger + 1), (uint32_t)(finger + 1), childMask,
+        ident, ident, mask,
         nx, ny, 0,
-        touch ? 0.0f : 0.0f,   // tipPressure（STHID 默认 0）
+        0.0f,                  // tipPressure（STHID 默认 0）
         90.0f,                 // twist
         range, touch, 0);
     float radius = touch ? 5.0f : 0.0f;  // STHID defaultMajorRadius=5
