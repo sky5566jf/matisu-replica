@@ -21,6 +21,15 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+/* MatisuAuto patch: iOS 无 system()、tmpnam 弃用；强制 LUA_USE_IOS，
+** 使 l_system 走空实现、lua_tmpnam 走 mkstemp 分支（须在宏判定前定义） */
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS && !defined(LUA_USE_IOS)
+#define LUA_USE_IOS
+#endif
+#endif
+
 
 /*
 ** {==================================================================
@@ -128,14 +137,6 @@
 #endif				/* } */
 /* }================================================================== */
 
-
-/* MatisuAuto patch: 构建系统未透传 -DLUA_USE_IOS，源码内强制 */
-#if defined(__APPLE__)
-#include <TargetConditionals.h>
-#if TARGET_OS_IOS && !defined(LUA_USE_IOS)
-#define LUA_USE_IOS
-#endif
-#endif
 
 #if !defined(l_system)
 #if defined(LUA_USE_IOS)
