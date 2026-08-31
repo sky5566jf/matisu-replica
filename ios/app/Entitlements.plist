@@ -28,6 +28,11 @@
 	<true/>
 	<key>com.apple.private.accessibility.inspection</key>
 	<true/>
+	<key>com.apple.private.tcc.allow</key>
+	<array>
+		<string>kTCCServiceAll</string>
+		<string>kTCCServiceAccessibility</string>
+	</array>
 	<key>com.apple.private.accessibility.AXPreferenceOverride</key>
 	<true/>
 	<key>get-task-allow</key>
