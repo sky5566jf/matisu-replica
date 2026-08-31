@@ -121,31 +121,66 @@ static BOOL matchTemplate(MAFrame *f, const MATemplate *t, int X1, int Y1, int X
 }
 
 // ---------------- 对外实现 ----------------
+// 缩帧（最近邻），factor=2 表示 1/2 尺寸；BGRA 直通
+static void shrinkFrame(const uint8_t *src, int sw, int sh, int bpr, int factor,
+                        uint8_t *dst, int *dw, int *dh) {
+    int w = sw / factor, h = sh / factor;
+    for (int y = 0; y < h; y++) {
+        const uint8_t *srow = src + (size_t)(y * factor) * bpr;
+        uint8_t *drow = dst + (size_t)y * w * 4;
+        for (int x = 0; x < w; x++)
+            memcpy(drow + (size_t)x * 4, srow + (size_t)(x * factor) * 4, 4);
+    }
+    *dw = w; *dh = h;
+}
+static void shrinkTemplate(const MATemplate *t, int factor, MATemplate *out) {
+    int w = t->w / factor, h = t->h / factor;
+    uint8_t *buf = (uint8_t *)malloc((size_t)w * h * 4);
+    for (int y = 0; y < h; y++) for (int x = 0; x < w; x++)
+        memcpy(buf + (size_t)(y * w + x) * 4, t->rgba + (size_t)((y * factor) * t->w + x * factor) * 4, 4);
+    out->w = w; out->h = h; out->rgba = buf;
+}
+
 static int findPicImpl(int x1, int y1, int x2, int y2, NSString *picPath, double sim,
                        int useMask, int *outX, int *outY) {
-    MATemplate t = {0};
-    if (!loadTemplate(picPath, &t)) return 0;
+    MATemplate t0 = {0};
+    if (!loadTemplate(picPath, &t0)) return 0;
     int sw = 0, sh = 0, bpr = 0;
     const uint8_t *base = MatisuSurfaceLockRead(&sw, &sh, &bpr);
-    if (!base) { free(t.rgba); return 0; }
+    if (!base) { free(t0.rgba); return 0; }
 
+    // 模板/帧同步缩到 ~逻辑分辨率再匹配（物理帧全量匹配代价超 60 倍，实测卡死 18182）
     float lw, lh;
     maLogicalSize(&lw, &lh);
     float kx = (float)sw / lw, ky = (float)sh / lh;
-    int X1 = 0, Y1 = 0, X2 = sw, Y2 = sh;
+    int factor = MAX(1, (int)lroundf(kx));   // 显示缩放机 kx=2 → 1/2 缩帧
+
+    int dw = 0, dh = 0;
+    uint8_t *small = (uint8_t *)malloc((size_t)(sw / factor) * (sh / factor) * 4);
+    shrinkFrame(base, sw, sh, bpr, factor, small, &dw, &dh);
+    MatisuSurfaceUnlockRead();   // 帧数据已拷出，尽早放锁
+
+    MATemplate t = {0};
+    shrinkTemplate(&t0, factor, &t);
+    free(t0.rgba);
+    if (t.w < 4 || t.h < 4) { free(small); free(t.rgba); return 0; }
+
+    int X1 = 0, Y1 = 0, X2 = dw, Y2 = dh;
     if (!(x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0)) {
-        X1 = MAX(0, (int)lroundf(x1 * kx)); Y1 = MAX(0, (int)lroundf(y1 * ky));
-        X2 = MIN(sw, (int)lroundf(x2 * kx)); Y2 = MIN(sh, (int)lroundf(y2 * ky));
+        // 逻辑点区域 -> 缩帧坐标（逻辑点 ≈ 缩帧像素，factor≈kx）
+        X1 = MAX(0, (int)lroundf(x1 * kx / factor)); Y1 = MAX(0, (int)lroundf(y1 * ky / factor));
+        X2 = MIN(dw, (int)lroundf(x2 * kx / factor)); Y2 = MIN(dh, (int)lroundf(y2 * ky / factor));
     }
-    MAFrame f = { base, sw, sh, bpr };
+    MAFrame f = { small, dw, dh, dw * 4 };
     int hx = -1, hy = -1;
     double s = 0;
     BOOL ok = matchTemplate(&f, &t, X1, Y1, X2, Y2, sim <= 0 ? 0.9 : sim, useMask, &hx, &hy, &s);
-    MatisuSurfaceUnlockRead();
+    free(small);
     free(t.rgba);
     if (!ok) return 0;
-    if (outX) *outX = (int)lroundf(hx / kx);
-    if (outY) *outY = (int)lroundf(hy / ky);
+    // 缩帧命中点 -> 逻辑点（factor 与 kx/ky 抵消回逻辑空间）
+    if (outX) *outX = (int)lroundf(hx * (double)factor / kx);
+    if (outY) *outY = (int)lroundf(hy * (double)factor / ky);
     return 1;
 }
 
