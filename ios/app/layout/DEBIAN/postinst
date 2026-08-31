@@ -1,0 +1,46 @@
+#!/bin/sh
+# MatisuAuto 引擎守护安装后处理：生成 LaunchDaemon 并加载（rootful/rootless 自适应）
+set -e
+
+PREFIX=""
+if [ -d /var/jb ]; then PREFIX=/var/jb; fi
+
+APP="$PREFIX/Applications/MatisuAuto.app/MatisuAuto"
+DAEMON_DIR="$PREFIX/Library/LaunchDaemons"
+PLIST="$DAEMON_DIR/com.matisu.auto.daemon.plist"
+
+mkdir -p "$DAEMON_DIR"
+cat > "$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.matisu.auto.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>$APP</string>
+		<string>--daemon</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>UserName</key>
+	<string>mobile</string>
+	<key>StandardOutPath</key>
+	<string>/var/mobile/matisu_ld.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/mobile/matisu_ld.log</string>
+</dict>
+</plist>
+EOF
+chown root:wheel "$PLIST"
+
+launchctl unload "$PLIST" 2>/dev/null || true
+launchctl load "$PLIST" || true
+
+# 刷新桌面图标（越狱 deb 形态带 UI 占位）
+command -v uicache >/dev/null 2>&1 && uicache -p "$PREFIX/Applications/MatisuAuto.app" 2>/dev/null || true
+
+exit 0

@@ -1,0 +1,10 @@
+#!/bin/sh
+# 卸载前：停守护并移除 LaunchDaemon
+PREFIX=""
+if [ -d /var/jb ]; then PREFIX=/var/jb; fi
+PLIST="$PREFIX/Library/LaunchDaemons/com.matisu.auto.daemon.plist"
+
+launchctl unload "$PLIST" 2>/dev/null || true
+rm -f "$PLIST"
+killall MatisuAuto 2>/dev/null || true
+exit 0
