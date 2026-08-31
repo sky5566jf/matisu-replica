@@ -47,7 +47,13 @@ local js = jsonLib.encode({a = 1, b = "x"})
 local tbl = jsonLib.decode(js)
 ok("jsonLib 编解码回环", tbl ~= nil and tbl.a == 1 and tbl.b == "x", js)
 
--- 7. setStopCallBack + exitScript（回调打出标记即过）
+-- 7. 键盘注入（效果已人工验证：HOME 回桌面、Spotlight 输入 sileo）
+ok("keyPress(home) 返回成功", keyPress("home") == true or keyPress("home") == 1)
+mSleep(1500)
+ok("inputText(ASCII) 返回成功", inputText("abc123") == true or inputText("abc123") == 1)
+keyPress("escape")   -- 关掉可能弹出的键盘/界面
+
+-- 8. setStopCallBack + exitScript（回调打出标记即过）
 setStopCallBack(function()
     print("[PASS] setStopCallBack 回调触发")
 end)
