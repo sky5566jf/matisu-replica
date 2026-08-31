@@ -118,11 +118,15 @@ static IOSurfaceRef ensureSurface(void) {
         w = (int)round(nb.size.width);
         h = (int)round(nb.size.height);
     }
-    if (w <= 0 || h <= 0) return NULL;
+    sdiagSet(@"surf_scale", @(scale));
+    sdiagSet(@"surf_pts", [NSString stringWithFormat:@"%.0fx%.0f", pts.width, pts.height]);
+    sdiagSet(@"surf_wh", [NSString stringWithFormat:@"%dx%d", w, h]);
+    if (w <= 0 || h <= 0) { sdiagSet(@"fail_step", @"surf_size_zero"); return NULL; }
 
     unsigned pixelFormat = 0x42475241; // 'ARGB'
     int bpp = 4;                       // 每像素 4 字节
     int bpr = (int)(IO.alignProperty ? IO.alignProperty(*IO.kBytesPerRow, bpp * w) : (size_t)(bpp * w));
+    sdiagSet(@"surf_bpr", @(bpr));
 
     NSDictionary *props = @{
         (__bridge NSString *)*IO.kBytesPerElement : @(bpp),
@@ -133,6 +137,7 @@ static IOSurfaceRef ensureSurface(void) {
         (__bridge NSString *)*IO.kAllocSize       : @(bpr * h),
     };
     gSurface = IO.create((__bridge CFDictionaryRef)props);
+    sdiagSet(@"surf_create_null", @(gSurface == NULL));
     return gSurface;
 }
 

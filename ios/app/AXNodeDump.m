@@ -79,13 +79,15 @@ static void axLoad(void) {
     diagSet(@"sym_copyActions", @(AX.copyActions != NULL));
     diagSet(@"sym_valueGetValue", @(AX.valueGetValue != NULL));
 
-    // 目标进程需已开启 accessibility 才会返回完整树；best-effort 打开系统开关
+    // 目标进程需已开启 accessibility 才会返回完整树；best-effort 打开系统开关。
+    // iOS 16 上符号名为 _AXSSetAccessibilityEnabled（macOS 时期叫 _AXSSetApplicationAccessibilityEnabled）
     void *acc = dlopen("/usr/lib/libAccessibility.dylib", RTLD_LAZY);
     diagSet(@"dlopen_libAccessibility", @(acc != NULL));
     if (acc) {
         fn_SetAXEnabled setEnabled = (fn_SetAXEnabled)dlsym(acc, "_AXSSetApplicationAccessibilityEnabled");
+        if (!setEnabled) setEnabled = (fn_SetAXEnabled)dlsym(acc, "_AXSSetAccessibilityEnabled");
         diagSet(@"sym_setAXEnabled", @(setEnabled != NULL));
-        if (setEnabled) setEnabled(true);
+        if (setEnabled) { setEnabled(true); diagSet(@"setAXEnabled_called", @YES); }
     }
 
     AX.ok = (AX.systemWide && AX.copyAttr);
