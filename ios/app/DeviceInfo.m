@@ -158,10 +158,22 @@ NSString* _Nullable MatisuFrontApp(void) {
             if (FBPM && [FBPM respondsToSelector:NSSelectorFromString(@"sharedInstance")]) {
                 id pm = ((id (*)(id, SEL))objc_msgSend)(FBPM, NSSelectorFromString(@"sharedInstance"));
                 faSet(@"fbpm_nil", @(pm == nil));
-                // frontmostApplication 属性在 iOS 16 已不存在；改为遍历进程找前台
-                SEL procsSel = NSSelectorFromString(@"processes");
-                if (pm && [pm respondsToSelector:procsSel]) {
-                    NSArray *procs = ((id (*)(id, SEL))objc_msgSend)(pm, procsSel);
+                // frontmostApplication 属性在 iOS 16 已不存在；改为遍历进程找前台。
+                // processes/allProcesses 多个候选选择器逐个探测
+                NSArray *procs = nil;
+                for (NSString *selName in @[@"processes", @"allProcesses"]) {
+                    SEL s = NSSelectorFromString(selName);
+                    faSet([@"fbpm_has_" stringByAppendingString:selName], @([pm respondsToSelector:s]));
+                    if ([pm respondsToSelector:s]) {
+                        id r = ((id (*)(id, SEL))objc_msgSend)(pm, s);
+                        if ([r isKindOfClass:[NSArray class]] && [(NSArray *)r count] > 0) { procs = r; break; }
+                        if ([r isKindOfClass:[NSDictionary class]]) procs = [(NSDictionary *)r allValues];
+                        if ([r isKindOfClass:[NSSet class]]) procs = [(NSSet *)r allObjects];
+                        if (procs.count) break;
+                    }
+                }
+                if (procs) {
+                    procs = [procs isKindOfClass:[NSArray class]] ? procs : nil;
                     faSet(@"fbpm_procs", @(procs ? (long)procs.count : -1L));
                     for (id p in (procs ?: @[])) {
                         BOOL fg = NO;
