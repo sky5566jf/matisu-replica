@@ -124,34 +124,58 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
     return d;
 }
 
-// 前台 App bundle id：SpringBoardServices 私有 API。
-// 两个历史符号都尝试：SBSCopyFrontmostApplicationDisplayIdentifier / SBFrontmostApplicationDisplayIdentifier。
+// 前台 App bundle id：FBSApplicationWorkspace（FrontBoardServices，daemon 上下文可靠，
+// 与 TrollVNC frontmost 检测 Tier1 同款），SBS 符号式作兜底。
+#import <objc/runtime.h>
+#import <objc/message.h>
+
 NSString* _Nullable MatisuFrontApp(void) {
-    static int state = 0;            // 0=未探测 1=copy 式 2=port 式 -1=不可用
-    static void *fnCopy = NULL;
-    static void *fnPort = NULL;
-    static void *(*sbsPort)(void) = NULL;
-    if (state == 0) {
+    @try {
+        static Class FBSWS = Nil;
+        static BOOL probed = NO;
+        if (!probed) {
+            probed = YES;
+            if (!NSClassFromString(@"FBSApplicationWorkspace"))
+                dlopen("/System/Library/PrivateFrameworks/FrontBoardServices.framework/FrontBoardServices", RTLD_LAZY);
+            FBSWS = NSClassFromString(@"FBSApplicationWorkspace");
+            if (!FBSWS) FBSWS = NSClassFromString(@"FBApplicationWorkspace");
+            if (!FBSWS) FBSWS = NSClassFromString(@"SBApplicationWorkspace");
+        }
+        if (FBSWS) {
+            SEL dw = NSSelectorFromString(@"defaultWorkspace");
+            if ([FBSWS respondsToSelector:dw]) {
+                id ws = ((id (*)(id, SEL))objc_msgSend)(FBSWS, dw);
+                SEL ra = NSSelectorFromString(@"runningApplications");
+                if (ws && [ws respondsToSelector:ra]) {
+                    NSArray *apps = ((id (*)(id, SEL))objc_msgSend)(ws, ra);
+                    id best = nil;
+                    int bestScore = -1;
+                    BOOL (*msgB)(id, SEL) = (BOOL (*)(id, SEL))objc_msgSend;
+                    for (id a in apps) {
+                        int score = 0;
+                        if ([a respondsToSelector:NSSelectorFromString(@"visibility")])
+                            score = [[a valueForKey:@"visibility"] intValue] * 10;
+                        if ([a respondsToSelector:NSSelectorFromString(@"isActive")] &&
+                            msgB(a, NSSelectorFromString(@"isActive"))) score += 5;
+                        if ([a respondsToSelector:NSSelectorFromString(@"isForeground")] &&
+                            msgB(a, NSSelectorFromString(@"isForeground"))) score += 3;
+                        if (score > bestScore) { bestScore = score; best = a; }
+                    }
+                    if (best && bestScore > 0 && [best respondsToSelector:@selector(bundleIdentifier)]) {
+                        NSString *bid = ((NSString *(*)(id, SEL))objc_msgSend)(best, @selector(bundleIdentifier));
+                        if (bid.length) return bid;
+                    }
+                }
+            }
+        }
+        // 兜底：SBS 符号式
         void *h = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_LAZY);
         if (h) {
-            fnCopy = dlsym(h, "SBSCopyFrontmostApplicationDisplayIdentifier");
-            fnPort = dlsym(h, "SBFrontmostApplicationDisplayIdentifier");
-            sbsPort = (void *(*)(void))dlsym(h, "SBSSpringBoardServerPort");
-        }
-        state = fnCopy ? 1 : ((fnPort && sbsPort) ? 2 : -1);
-    }
-    @try {
-        if (state == 1) {
-            CFStringRef (*copyFn)(void) = (CFStringRef (*)(void))fnCopy;
-            CFStringRef r = copyFn();
-            if (r) { NSString *s = (__bridge_transfer NSString *)r; return s; }
-        } else if (state == 2) {
-            typedef unsigned int mat_port_t;
-            void (*portFn)(mat_port_t, char *) = (void (*)(mat_port_t, char *))fnPort;
-            mat_port_t port = (mat_port_t)(uintptr_t)sbsPort();
-            char buf[512]; memset(buf, 0, sizeof(buf));
-            portFn(port, buf);
-            if (buf[0]) return [NSString stringWithUTF8String:buf];
+            CFStringRef (*copyFn)(void) = (CFStringRef (*)(void))dlsym(h, "SBSCopyFrontmostApplicationDisplayIdentifier");
+            if (copyFn) {
+                CFStringRef r = copyFn();
+                if (r) return (__bridge_transfer NSString *)r;
+            }
         }
     } @catch (__unused id e) {}
     return @"";
