@@ -9,9 +9,9 @@ end
 
 print("===== P0 验收开始 =====")
 
--- 1. 屏幕尺寸（本机显示缩放模式，真实 UI 空间 320x568）
+-- 1. 屏幕尺寸（iOS 显示缩放机 320x568；Android 模拟器 720x1280 竖屏）
 local w, h = getDisplaySize()
-ok("getDisplaySize=320x568", w == 320 and h == 568, w .. "x" .. h)
+ok("getDisplaySize 有效", w ~= nil and h ~= nil and w > 0 and h > 0, w .. "x" .. h)
 
 -- 2. 取色 → 比色 闭环（字符串格式与 cmpColor 兼容即过）
 local cs = getPixelColor(100, 300)
@@ -55,7 +55,7 @@ keyPress("escape")   -- 关掉可能弹出的键盘/界面
 
 -- 8. P1：getScreenDirection / findPicFast / ImageUtil 内存图色
 ok("getScreenDirection 返回值域", getScreenDirection() >= 0 and getScreenDirection() <= 3, getScreenDirection())
-local ffx, ffy = findPicFast(0, 0, w, h, tp, 0.8)
+local ffx, ffy = findPicFast(0, 0, w, h, tp, 0.9)
 ok("findPicFast 找回模板", ffx ~= nil and math.abs(ffx - 60) <= 6 and math.abs(ffy - 150) <= 6,
    ffx and (ffx .. "," .. ffy) or "nil")
 local img = ImageUtil.new(tp)

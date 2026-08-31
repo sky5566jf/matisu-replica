@@ -446,7 +446,8 @@ function pyCap(sub, req) {
       fs.writeFileSync(tmp, JSON.stringify(req), 'utf8');
       args.push(tmp);
     }
-    const out = execFileSync(PY, args, { encoding: 'utf8', timeout: 120000, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    // maxBuffer 64MB：getscreenpixel 全屏 JSON 像素数组可达数 MB（1280x720 ≈ 92万像素）
+    const out = execFileSync(PY, args, { encoding: 'utf8', timeout: 120000, env, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
     const r = JSON.parse(out.trim());
     if (r && r.error) warn(sub, r.error);
     return r;
