@@ -16,6 +16,9 @@ extern "C" {
 
 NSData* _Nullable MatisuCapturePNG(void);
 
+/// 截图通道内部状态（符号解析/失败步骤），供 diag 指令回传
+NSDictionary* MatisuScreenDiag(void);
+
 #ifdef __cplusplus
 }
 #endif

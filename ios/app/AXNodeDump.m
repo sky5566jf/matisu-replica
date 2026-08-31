@@ -47,13 +47,22 @@ static struct {
     fn_ElementGetTypeID elementTypeID;
 } AX;
 
+// diag：记录加载/调用内部状态，经 control server 的 diag 指令回传 PC
+static NSMutableDictionary *gDiag = nil;
+static void diagSet(NSString *k, id v) {
+    if (!gDiag) gDiag = [NSMutableDictionary dictionary];
+    gDiag[k] = v;
+}
+
 static void axLoad(void) {
     if (AX.loaded) return;
     AX.loaded = YES;
 
     void *h = dlopen("/System/Library/PrivateFrameworks/AXRuntime.framework/AXRuntime", RTLD_LAZY);
+    diagSet(@"dlopen_AXRuntime", @(h != NULL));
     if (!h) h = dlopen("/System/Library/PrivateFrameworks/AccessibilityUtilities.framework/AccessibilityUtilities", RTLD_LAZY);
     if (!h) {
+        diagSet(@"dlopen_err", @(dlerror() ?: "unknown"));
         NSLog(@"[MatisuAuto] AXRuntime 载入失败: %s", dlerror() ?: "unknown");
         return;
     }
@@ -65,15 +74,28 @@ static void axLoad(void) {
     AX.valueTypeID   = (fn_ValueGetTypeID)dlsym(h, "AXValueGetTypeID");
     AX.elementTypeID = (fn_ElementGetTypeID)dlsym(h, "AXUIElementGetTypeID");
 
+    diagSet(@"sym_systemWide", @(AX.systemWide != NULL));
+    diagSet(@"sym_copyAttr", @(AX.copyAttr != NULL));
+    diagSet(@"sym_copyActions", @(AX.copyActions != NULL));
+    diagSet(@"sym_valueGetValue", @(AX.valueGetValue != NULL));
+
     // 目标进程需已开启 accessibility 才会返回完整树；best-effort 打开系统开关
     void *acc = dlopen("/usr/lib/libAccessibility.dylib", RTLD_LAZY);
+    diagSet(@"dlopen_libAccessibility", @(acc != NULL));
     if (acc) {
         fn_SetAXEnabled setEnabled = (fn_SetAXEnabled)dlsym(acc, "_AXSSetApplicationAccessibilityEnabled");
+        diagSet(@"sym_setAXEnabled", @(setEnabled != NULL));
         if (setEnabled) setEnabled(true);
     }
 
     AX.ok = (AX.systemWide && AX.copyAttr);
+    diagSet(@"ax_ok", @(AX.ok));
     if (!AX.ok) NSLog(@"[MatisuAuto] AXRuntime 符号缺失，节点查询不可用");
+}
+
+NSDictionary* MatisuAXDiag(void) {
+    axLoad();
+    return gDiag ?: @{};
 }
 
 #pragma mark - AX 取值小工具
@@ -310,12 +332,26 @@ NSData* _Nullable MatisuDumpNodesJSON(void) {
     if (!AX.ok) return nil;
 
     AXUIElementRef sys = AX.systemWide();
-    if (!sys) { NSLog(@"[MatisuAuto] AXUIElementCreateSystemWide 返回空"); return nil; }
+    if (!sys) { diagSet(@"systemWide_ret", @"null"); NSLog(@"[MatisuAuto] AXUIElementCreateSystemWide 返回空"); return nil; }
+    diagSet(@"systemWide_ret", @"ok");
 
     // 优先取前台 App；取不到则退化到系统根
     AXUIElementRef app = NULL;
-    AX.copyAttr(sys, CFSTR("AXFocusedApplication"), (CFTypeRef *)&app);
+    MAAXError ferr = AX.copyAttr(sys, CFSTR("AXFocusedApplication"), (CFTypeRef *)&app);
+    diagSet(@"focusedApp_err", @(ferr));
+    diagSet(@"focusedApp_null", @(app == NULL));
     AXUIElementRef root = app ? app : sys;
+
+    // 探根节点子元素数量与典型属性错误码，定位「空树」原因
+    CFTypeRef kids = NULL;
+    MAAXError kerr = AX.copyAttr(root, CFSTR("AXChildren"), &kids);
+    diagSet(@"root_children_err", @(kerr));
+    diagSet(@"root_children_count", @(kids && CFGetTypeID(kids) == CFArrayGetTypeID() ? (long)CFArrayGetCount((CFArrayRef)kids) : -1L));
+    if (kids) CFRelease(kids);
+    CFTypeRef role = NULL;
+    MAAXError rerr = AX.copyAttr(root, CFSTR("AXRole"), &role);
+    diagSet(@"root_role_err", @(rerr));
+    if (role) CFRelease(role);
 
     NSDictionary *tree = buildNode(root, elementBundleId(root), 0);
 

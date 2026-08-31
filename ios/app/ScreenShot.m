@@ -42,13 +42,21 @@ static struct {
     CFStringRef       *kAllocSize;
 } IO = {0};
 
+// diag：记录加载/捕获内部状态，经 control server 的 diag 指令回传 PC
+static NSMutableDictionary *gSDiag = nil;
+static void sdiagSet(NSString *k, id v) {
+    if (!gSDiag) gSDiag = [NSMutableDictionary dictionary];
+    gSDiag[k] = v;
+}
+
 static BOOL ioLoad(void) {
     static dispatch_once_t once;
     static BOOL ok = NO;
     dispatch_once(&once, ^{
         void *h = dlopen("/System/Library/Frameworks/IOSurface.framework/IOSurface", RTLD_LAZY);
+        sdiagSet(@"dlopen_IOSurface_fw", @(h != NULL));
         if (!h) h = dlopen("/System/Library/PrivateFrameworks/IOSurface.framework/IOSurface", RTLD_LAZY);
-        if (!h) return;
+        if (!h) { sdiagSet(@"dlopen_err", @(dlerror() ?: "unknown")); return; }
         IO.create         = (fn_Create)dlsym(h, "IOSurfaceCreate");
         IO.alignProperty  = (fn_AlignProperty)dlsym(h, "IOSurfaceAlignProperty");
         IO.getWidth       = (fn_GetWidth)dlsym(h, "IOSurfaceGetWidth");
@@ -63,20 +71,36 @@ static BOOL ioLoad(void) {
         IO.kHeight          = (CFStringRef *)dlsym(h, "kIOSurfaceHeight");
         IO.kPixelFormat     = (CFStringRef *)dlsym(h, "kIOSurfacePixelFormat");
         IO.kAllocSize       = (CFStringRef *)dlsym(h, "kIOSurfaceAllocSize");
+        sdiagSet(@"sym_create", @(IO.create != NULL));
+        sdiagSet(@"sym_getWidth", @(IO.getWidth != NULL));
+        sdiagSet(@"sym_lock", @(IO.lock != NULL));
+        sdiagSet(@"sym_getBaseAddress", @(IO.getBaseAddress != NULL));
+        sdiagSet(@"key_kWidth", @(IO.kWidth != NULL));
+        sdiagSet(@"key_kBytesPerRow", @(IO.kBytesPerRow != NULL));
         if (!IO.create || !IO.getWidth || !IO.getHeight || !IO.getBytesPerRow ||
             !IO.lock || !IO.unlock || !IO.getBaseAddress ||
             !IO.kBytesPerElement || !IO.kBytesPerRow || !IO.kWidth ||
             !IO.kHeight || !IO.kPixelFormat || !IO.kAllocSize) return;
         // CARenderServerRenderDisplay 在 QuartzCore（UIKit 已加载，先试全局符号表）
         IO.renderDisplay = (fn_RenderDisplay)dlsym(RTLD_DEFAULT, "CARenderServerRenderDisplay");
+        sdiagSet(@"sym_renderDisplay_global", @(IO.renderDisplay != NULL));
         if (!IO.renderDisplay) {
             void *qc = dlopen("/System/Library/Frameworks/QuartzCore.framework/QuartzCore", RTLD_LAZY | RTLD_GLOBAL);
+            sdiagSet(@"dlopen_QuartzCore", @(qc != NULL));
             if (qc) IO.renderDisplay = (fn_RenderDisplay)dlsym(qc, "CARenderServerRenderDisplay");
         }
+        sdiagSet(@"sym_renderDisplay", @(IO.renderDisplay != NULL));
         if (!IO.renderDisplay) return;
         ok = YES;
     });
+    sdiagSet(@"io_ok", @(ok));
     return ok;
+}
+
+NSDictionary* MatisuScreenDiag(void) {
+    BOOL ok = ioLoad();
+    sdiagSet(@"io_ok", @(ok));
+    return gSDiag ?: @{};
 }
 
 // 截屏目标 IOSurface（创建一次后复用）
@@ -113,9 +137,9 @@ static IOSurfaceRef ensureSurface(void) {
 }
 
 NSData *_Nullable MatisuCapturePNG(void) {
-    if (!ioLoad()) return nil;
+    if (!ioLoad()) { sdiagSet(@"fail_step", @"ioLoad"); return nil; }
     IOSurfaceRef s = ensureSurface();
-    if (!s) return nil;
+    if (!s) { sdiagSet(@"fail_step", @"ensureSurface"); return nil; }
 
     // 整屏 -> IOSurface（"LCD" 为主显示）
     IO.renderDisplay(0, CFSTR("LCD"), s, 0, 0);
@@ -123,10 +147,11 @@ NSData *_Nullable MatisuCapturePNG(void) {
     int w = (int)IO.getWidth(s);
     int h = (int)IO.getHeight(s);
     int bpr = (int)IO.getBytesPerRow(s);
-    if (w <= 0 || h <= 0) return nil;
+    if (w <= 0 || h <= 0) { sdiagSet(@"fail_step", @"zero_size"); return nil; }
 
     IO.lock(s, kMIOSurfaceLockReadOnly, NULL);
     void *base = IO.getBaseAddress(s);
+    sdiagSet(@"base_null", @(base == NULL));
 
     // IOSurface 为 ARGB（字节序 A,R,G,B），用 kCGImageAlphaFirst | ByteOrder32Big 解释
     CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
@@ -136,7 +161,9 @@ NSData *_Nullable MatisuCapturePNG(void) {
     IO.unlock(s, kMIOSurfaceLockReadOnly, NULL);
     CGColorSpaceRelease(cs);
     if (ctx) CGContextRelease(ctx);
-    if (!img) return nil;
+    if (!img) { sdiagSet(@"fail_step", @"make_image"); return nil; }
+    sdiagSet(@"fail_step", @"none");
+    sdiagSet(@"cap_size", [NSString stringWithFormat:@"%dx%d bpr=%d", w, h, bpr]);
 
     UIImage *u = [UIImage imageWithCGImage:img];
     NSData *png = UIImagePNGRepresentation(u);

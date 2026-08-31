@@ -102,6 +102,14 @@ static void* MAServerLoop(void* arg) {
                         sendLE(cli, NULL, 0);
                         NSLog(@"[MatisuAuto] uinode failed (需 accessibility.inspection 授权)");
                     }
+                } else if (strcmp(line, "diag") == 0) {
+                    NSDictionary *d = @{
+                        @"ax": MatisuAXDiag() ?: @{},
+                        @"screen": MatisuScreenDiag() ?: @{},
+                    };
+                    NSData *json = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
+                    if (json && json.length) sendLE(cli, json.bytes, json.length);
+                    else sendLE(cli, NULL, 0);
                 } else if (strcmp(line, "devinfo") == 0) {
                     NSData *json = MatisuDeviceInfoJSON();
                     if (json && json.length) {

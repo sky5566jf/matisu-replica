@@ -10,6 +10,8 @@
     <false/>
     <key>com.apple.backboardd.launchapplications</key>
     <true/>
+    <key>com.apple.backboard.client</key>
+    <true/>
     <key>com.apple.springboard.launchapplications</key>
     <true/>
 	<key>com.apple.private.hid.client</key>

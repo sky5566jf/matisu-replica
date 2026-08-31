@@ -16,6 +16,9 @@ extern "C" {
 
 NSData* _Nullable MatisuDumpNodesJSON(void);
 
+/// AX 通道内部状态（符号解析/属性错误码），供 diag 指令回传
+NSDictionary* MatisuAXDiag(void);
+
 #ifdef __cplusplus
 }
 #endif
