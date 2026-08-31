@@ -5,9 +5,10 @@ INSTALL_TARGET = rootless
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = MatisuAuto
-MatisuAuto_FILES = Tweak.xm ../src/MatisuTouch.m
+MatisuAuto_FILES = Tweak.xm ../src/MatisuTouch.m ../app/AXNodeDump.m ../app/DeviceInfo.m
 MatisuAuto_PRIVATE_FRAMEWORKS = IOKit
-MatisuAuto_CFLAGS = -I../include
+MatisuAuto_FRAMEWORKS = UIKit Foundation CoreGraphics
+MatisuAuto_CFLAGS = -I../include -I../app -fobjc-arc
 MatisuAuto_LDFLAGS = -Wl,-undefined,dynamic_lookup
 
 include $(THEOS_MAKE_PATH)/tweak.mk

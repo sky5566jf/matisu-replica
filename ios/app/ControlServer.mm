@@ -40,6 +40,43 @@ static void sendOK(int cli) {
     sendLE(cli, ok, strlen(ok));
 }
 
+// 优先走 SpringBoard tweak 的节点服务（127.0.0.1:18183，XXTouch 同款架构，
+// SpringBoard 进程内取前台 App 无障碍树，绕过普通进程 -25211 限制）；
+// 取不到返回 nil，调用方回退本进程实现。
+static NSData* queryTweak(const char *cmd, NSTimeInterval timeout) {
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) return nil;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(18183);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) { close(s); return nil; }
+    struct timeval tv = { (time_t)timeout, 0 };
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    write(s, cmd, strlen(cmd));
+    write(s, "\n", 1);
+    uint8_t head[4];
+    ssize_t got = 0;
+    while (got < 4) {
+        ssize_t r = read(s, head + got, 4 - got);
+        if (r <= 0) { close(s); return nil; }
+        got += r;
+    }
+    NSUInteger len = ((NSUInteger)head[0] << 24) | ((NSUInteger)head[1] << 16) |
+                     ((NSUInteger)head[2] << 8) | (NSUInteger)head[3];
+    if (len == 0 || len > 16 * 1024 * 1024) { close(s); return nil; }
+    NSMutableData *data = [NSMutableData dataWithLength:len];
+    got = 0;
+    while (got < len) {
+        ssize_t r = read(s, (uint8_t*)data.mutableBytes + got, len - got);
+        if (r <= 0) { close(s); return nil; }
+        got += r;
+    }
+    close(s);
+    return data;
+}
+
 static void* MAServerLoop(void* arg) {
     (void)arg;
     int srv = socket(AF_INET, SOCK_STREAM, 0);
@@ -95,7 +132,8 @@ static void* MAServerLoop(void* arg) {
                         NSLog(@"[MatisuAuto] screencap failed");
                     }
                 } else if (strcmp(line, "uinode") == 0) {
-                    NSData *json = MatisuDumpNodesJSON();
+                    NSData *json = queryTweak("uinode", 5.0);   // 优先 SpringBoard tweak
+                    if (!json) json = MatisuDumpNodesJSON();    // 回退本进程 AX
                     if (json && json.length) {
                         sendLE(cli, json.bytes, json.length);
                         NSLog(@"[MatisuAuto] uinode -> %lu bytes", (unsigned long)json.length);
@@ -104,8 +142,11 @@ static void* MAServerLoop(void* arg) {
                         NSLog(@"[MatisuAuto] uinode failed (需 accessibility.inspection 授权)");
                     }
                 } else if (strcmp(line, "frontapp") == 0) {
-                    NSString *fa = MatisuFrontApp() ?: @"";
-                    NSData *d = [fa dataUsingEncoding:NSUTF8StringEncoding];
+                    NSData *d = queryTweak("frontapp", 3.0);    // 优先 SpringBoard tweak（全系统可见）
+                    if (!d) {
+                        NSString *fa = MatisuFrontApp() ?: @"";
+                        d = [fa dataUsingEncoding:NSUTF8StringEncoding];
+                    }
                     sendLE(cli, d.bytes, d.length);
                 } else if (strcmp(line, "diag") == 0) {
                     NSDictionary *d = @{
