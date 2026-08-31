@@ -10,4 +10,12 @@
  注意：本文件为自写干净实现，仅依赖公开 IOSurface 框架 + 一个 weak_import 私有符号，
  不引入任何第三方/GPL 头文件。
  */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 NSData* _Nullable MatisuCapturePNG(void);
+
+#ifdef __cplusplus
+}
+#endif

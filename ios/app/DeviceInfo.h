@@ -5,6 +5,14 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// 采集当前设备信息，返回 UTF-8 编码的 JSON NSData；失败返回 nil。
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 NSData* _Nullable MatisuDeviceInfoJSON(void);
 
 NS_ASSUME_NONNULL_END
+
+#ifdef __cplusplus
+}
+#endif

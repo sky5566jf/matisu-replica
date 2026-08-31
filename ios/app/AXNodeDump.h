@@ -10,4 +10,12 @@
  需要 entitlement：com.apple.private.accessibility.inspection
  （TrollStore 应用加上该 entitlement 后即可跨 App 读取系统 UI 树）
  */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 NSData* _Nullable MatisuDumpNodesJSON(void);
+
+#ifdef __cplusplus
+}
+#endif
