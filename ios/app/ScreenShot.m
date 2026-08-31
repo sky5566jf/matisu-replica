@@ -40,6 +40,7 @@ static struct {
     CFStringRef       *kHeight;
     CFStringRef       *kPixelFormat;
     CFStringRef       *kAllocSize;
+    CFStringRef       *kColorSpace;
 } IO = {0};
 
 // diag：记录加载/捕获内部状态，经 control server 的 diag 指令回传 PC
@@ -71,6 +72,8 @@ static BOOL ioLoad(void) {
         IO.kHeight          = (CFStringRef *)dlsym(h, "kIOSurfaceHeight");
         IO.kPixelFormat     = (CFStringRef *)dlsym(h, "kIOSurfacePixelFormat");
         IO.kAllocSize       = (CFStringRef *)dlsym(h, "kIOSurfaceAllocSize");
+        IO.kColorSpace      = (CFStringRef *)dlsym(h, "kIOSurfaceColorSpace");
+        sdiagSet(@"key_kColorSpace", @(IO.kColorSpace != NULL));
         sdiagSet(@"sym_create", @(IO.create != NULL));
         sdiagSet(@"sym_getWidth", @(IO.getWidth != NULL));
         sdiagSet(@"sym_lock", @(IO.lock != NULL));
@@ -128,14 +131,21 @@ static IOSurfaceRef ensureSurface(void) {
     int bpr = (int)(IO.alignProperty ? IO.alignProperty(*IO.kBytesPerRow, bpp * w) : (size_t)(bpp * w));
     sdiagSet(@"surf_bpr", @(bpr));
 
-    NSDictionary *props = @{
+    NSMutableDictionary *props = [@{
         (__bridge NSString *)*IO.kBytesPerElement : @(bpp),
         (__bridge NSString *)*IO.kBytesPerRow     : @(bpr),
         (__bridge NSString *)*IO.kWidth           : @(w),
         (__bridge NSString *)*IO.kHeight          : @(h),
         (__bridge NSString *)*IO.kPixelFormat     : @(pixelFormat),
         (__bridge NSString *)*IO.kAllocSize       : @(bpr * h),
-    };
+    } mutableCopy];
+    // 对齐 TrollVNC：iOS 16 上 IOSurfaceCreate 需要 ColorSpace（sRGB 属性列表），缺了返回 NULL
+    if (IO.kColorSpace) {
+        CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        CFPropertyListRef cspl = cs ? CGColorSpaceCopyPropertyList(cs) : NULL;
+        if (cs) CGColorSpaceRelease(cs);
+        if (cspl) props[(__bridge NSString *)*IO.kColorSpace] = CFBridgingRelease(cspl);
+    }
     gSurface = IO.create((__bridge CFDictionaryRef)props);
     sdiagSet(@"surf_create_null", @(gSurface == NULL));
     return gSurface;

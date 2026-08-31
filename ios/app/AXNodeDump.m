@@ -79,15 +79,26 @@ static void axLoad(void) {
     diagSet(@"sym_copyActions", @(AX.copyActions != NULL));
     diagSet(@"sym_valueGetValue", @(AX.valueGetValue != NULL));
 
-    // 目标进程需已开启 accessibility 才会返回完整树；best-effort 打开系统开关。
-    // iOS 16 上符号名为 _AXSSetAccessibilityEnabled（macOS 时期叫 _AXSSetApplicationAccessibilityEnabled）
+    // AX 外部检查（AXUIElement C API）默认对所有进程关闭（拷属性报 -25211 APIDisabled）。
+    // iOS 16 共享缓存里存在三个相关开关，全部 best-effort 打开：
+    //   _AXSApplicationAccessibilitySetEnabled  —— 进程级 AX API 使能
+    //   _AXSSetAutomationEnabled                —— UI 自动化模式（XCTest 同款）
+    //   _AXSSetAuditInspectionModeEnabled       —— 审计检查模式（Accessibility Inspector 同款）
     void *acc = dlopen("/usr/lib/libAccessibility.dylib", RTLD_LAZY);
     diagSet(@"dlopen_libAccessibility", @(acc != NULL));
     if (acc) {
-        fn_SetAXEnabled setEnabled = (fn_SetAXEnabled)dlsym(acc, "_AXSSetApplicationAccessibilityEnabled");
-        if (!setEnabled) setEnabled = (fn_SetAXEnabled)dlsym(acc, "_AXSSetAccessibilityEnabled");
-        diagSet(@"sym_setAXEnabled", @(setEnabled != NULL));
-        if (setEnabled) { setEnabled(true); diagSet(@"setAXEnabled_called", @YES); }
+        const char *setters[] = {
+            "_AXSApplicationAccessibilitySetEnabled",
+            "_AXSSetAutomationEnabled",
+            "_AXSSetAuditInspectionModeEnabled",
+            "_AXSSetAccessibilityEnabled",
+            NULL,
+        };
+        for (int i = 0; setters[i]; i++) {
+            fn_SetAXEnabled fn = (fn_SetAXEnabled)dlsym(acc, setters[i]);
+            diagSet([NSString stringWithFormat:@"sym_%s", setters[i] + 1], @(fn != NULL));
+            if (fn) fn(true);
+        }
     }
 
     AX.ok = (AX.systemWide && AX.copyAttr);
