@@ -3,6 +3,7 @@
 #import "ScreenShot.h"
 #import "AXNodeDump.h"
 #import "DeviceInfo.h"
+#import "LuaEngine.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <sys/socket.h>
@@ -161,6 +162,15 @@ static void* MAServerLoop(void* arg) {
                         sendLE(cli, NULL, 0);
                         NSLog(@"[MatisuAuto] uinode failed (需 accessibility.inspection 授权)");
                     }
+                } else if (strncmp(line, "run ", 4) == 0 && line[4]) {
+                    // run <base64(lua 源码)>：设备端 Lua 引擎执行（base64 防协议冲突）
+                    NSString *b64 = [NSString stringWithUTF8String:line + 4];
+                    NSData *src = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+                    NSDictionary *r = src
+                        ? MatisuLuaRun([[NSString alloc] initWithData:src encoding:NSUTF8StringEncoding])
+                        : @{ @"ok": @NO, @"output": @"", @"error": @"base64 decode failed" };
+                    NSData *json = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, json ? json.bytes : NULL, json ? json.length : 0);
                 } else if (strcmp(line, "frontapp") == 0) {
                     NSData *d = queryTweak("frontapp", 3.0);    // 优先 SpringBoard tweak（全系统可见）
                     if (!d) {

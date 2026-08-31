@@ -16,6 +16,9 @@ extern "C" {
 
 NSData* _Nullable MatisuCapturePNG(void);
 
+/// 截屏直读单像素（逻辑点坐标），返回 0xRRGGBB，失败 -1。设备端 Lua 引擎用。
+int MatisuCapturePixel(int x, int y);
+
 /// 截图通道内部状态（符号解析/失败步骤），供 diag 指令回传
 NSDictionary* _Nullable MatisuScreenDiag(void);
 

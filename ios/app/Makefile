@@ -5,7 +5,7 @@ PACKAGE_VERSION = 0.1.0
 include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = MatisuAuto
-MatisuAuto_FILES = main.mm AppDelegate.mm TouchInject.mm ControlServer.mm ScreenShot.m AXNodeDump.m DeviceInfo.m sthid/STHIDEventGenerator.mm
+MatisuAuto_FILES = main.mm AppDelegate.mm TouchInject.mm ControlServer.mm ScreenShot.m AXNodeDump.m DeviceInfo.m sthid/STHIDEventGenerator.mm LuaEngine.mm $(filter-out lua/onelua.c,$(wildcard lua/*.c))
 MatisuAuto_PRIVATE_FRAMEWORKS = IOKit
 MatisuAuto_FRAMEWORKS = UIKit CoreGraphics Foundation IOSurface
 MatisuAuto_CODESIGN_ENTITLEMENTS = Entitlements.plist

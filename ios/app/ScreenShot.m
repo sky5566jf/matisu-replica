@@ -140,3 +140,37 @@ NSData *_Nullable MatisuCapturePNG(void) {
 NSDictionary* _Nullable MatisuScreenDiag(void) {
     return gSDiag ?: @{};
 }
+
+// 设备端 Lua 引擎用：截屏到共享 surface 并直读单像素（0xRRGGBB），不做 PNG 编码。
+// 入参为逻辑点坐标（与触控同空间），内部按 surface 物理尺寸等比换算。
+int MatisuCapturePixel(int x, int y) {
+    if (CARenderServerRenderDisplay == NULL) return -1;
+    IOSurfaceRef s = ensureSurface();
+    if (!s) return -1;
+    CARenderServerRenderDisplay(0, CFSTR("LCD"), s, 0, 0);
+
+    int sw = (int)IOSurfaceGetWidth(s);
+    int sh = (int)IOSurfaceGetHeight(s);
+    int bpr = (int)IOSurfaceGetBytesPerRow(s);
+    if (sw <= 0 || sh <= 0) return -1;
+
+    // 逻辑点 -> 物理像素（逻辑宽取 UIScreen.bounds，daemon 下为显示缩放真实值）
+    __block CGSize lb = CGSizeZero;
+    void (^rd)(void) = ^{ lb = [UIScreen mainScreen].bounds.size; };
+    if ([NSThread isMainThread]) rd();
+    else dispatch_sync(dispatch_get_main_queue(), rd);
+    if (lb.width <= 0 || lb.height <= 0) return -1;
+    int px = (int)lroundf((float)x / (float)lb.width * sw);
+    int py = (int)lroundf((float)y / (float)lb.height * sh);
+    if (px < 0 || py < 0 || px >= sw || py >= sh) return -1;
+
+    IOSurfaceLock(s, kMIOSurfaceLockReadOnly, NULL);
+    const uint8_t *base = (const uint8_t *)IOSurfaceGetBaseAddress(s);
+    int ret = -1;
+    if (base) {
+        const uint8_t *p = base + (size_t)py * (size_t)bpr + (size_t)px * 4;
+        ret = (p[2] << 16) | (p[1] << 8) | p[0];   // BGRA -> 0xRRGGBB
+    }
+    IOSurfaceUnlock(s, kMIOSurfaceLockReadOnly, NULL);
+    return ret;
+}
