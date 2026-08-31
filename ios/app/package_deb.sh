@@ -5,7 +5,7 @@ set -e
 MODE=$1; ARCHS=$2; OUT=$3
 
 make clean
-make FINALPACKAGE=1 ARCHS=$ARCHS
+make FINALPACKAGE=1 ARCHS="$ARCHS"
 
 BIN=.theos/obj/MatisuAuto.app/MatisuAuto
 [ -f "$BIN" ] || { echo "!! binary missing: $BIN"; exit 1; }
