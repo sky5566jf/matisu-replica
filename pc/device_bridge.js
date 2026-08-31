@@ -661,6 +661,40 @@ function decodePNG(buf) {
   return { w, h, data: out };
 }
 
+/** 最小 PNG 编码（8bit RGBA，无过滤器），与 decodePNG 配套 */
+function encodePNG(f) {
+  const zlib = require('zlib');
+  const crcTable = encodePNG._t || (encodePNG._t = (() => {
+    const t = new Int32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c; }
+    return t;
+  })());
+  const crc32 = (buf) => { let c = ~0; for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8); return ~c >>> 0; };
+  const chunk = (type, data) => {
+    const out = Buffer.alloc(12 + data.length);
+    out.writeUInt32BE(data.length, 0);
+    out.write(type, 4, 'ascii');
+    data.copy(out, 8);
+    out.writeUInt32BE(crc32(out.slice(4, 8 + data.length)), 8 + data.length);
+    return out;
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(f.w, 0); ihdr.writeUInt32BE(f.h, 4);
+  ihdr[8] = 8; ihdr[9] = 6;   // 8bit RGBA
+  const stride = f.w * 4;
+  const raw = Buffer.alloc((stride + 1) * f.h);
+  for (let y = 0; y < f.h; y++) {
+    raw[y * (stride + 1)] = 0;
+    Buffer.from(f.data.buffer, f.data.byteOffset + y * stride, stride).copy(raw, y * (stride + 1) + 1);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
 function scaleFrame(f, tw, th) {
   if (!f || (f.w === tw && f.h === th)) return f;
   const out = new Uint8Array(tw * th * 4);
@@ -731,7 +765,9 @@ function iosKeepCapture() {
   try { fs.unlinkSync(tmp); } catch (_) {}
   const f = decodePNG(buf);
   if (!f) return false;
-  iosFrame = scaleFrame(f, CFG.ios.w, CFG.ios.h);
+  // 缩放目标用 devinfo 的真实逻辑尺寸（显示缩放机 320x568 ≠ CFG 静态配置 375x667）
+  const lw = iosInfo().width || CFG.ios.w, lh = iosInfo().height || CFG.ios.h;
+  iosFrame = scaleFrame(f, lw, lh);
   return !!iosFrame;
 }
 function iosReleaseCapture() { iosFrame = null; return true; }
@@ -815,11 +851,29 @@ function iosGetScreenPixel(x1, y1, x2, y2) {
   return [X2 - X1, Y2 - Y1, arr];
 }
 function iosIsDisplayDead() { if (!iosFrame && !iosKeepCapture()) return true; return !iosFrame; }
-function iosSnapShot(p) {
-  if (!iosFrame && !iosKeepCapture()) return null;
+function iosSnapShot(p, x1, y1, x2, y2) {
   const tmp = path.join(os.tmpdir(), `matisu_ios_snap_${process.pid}_${Date.now()}.png`);
   if (!iosSock('screencap', tmp)) return null;
-  try { fs.copyFileSync(tmp, p); fs.unlinkSync(tmp); return p; } catch (e) { warn('snapShot', e.message); return null; }
+  try {
+    let f = decodePNG(fs.readFileSync(tmp));
+    fs.unlinkSync(tmp);
+    if (!f) return null;
+    if (x1 !== undefined) {
+      // 带区域：先缩放到逻辑点空间（与 iosFrame 同基准），再裁剪
+      const lw = iosInfo().width || CFG.ios.w, lh = iosInfo().height || CFG.ios.h;
+      f = scaleFrame(f, lw, lh);
+      const [X1, Y1, X2, Y2] = regionOf(f, x1, y1, x2, y2);
+      const cw = X2 - X1, ch = Y2 - Y1;
+      const out = new Uint8Array(cw * ch * 4);
+      for (let y = 0; y < ch; y++) {
+        const si = ((Y1 + y) * f.w + X1) * 4;
+        out.set(f.data.subarray(si, si + cw * 4), y * cw * 4);
+      }
+      f = { w: cw, h: ch, data: out };
+    }
+    fs.writeFileSync(p, encodePNG(f));
+    return p;
+  } catch (e) { warn('snapShot', e.message); return null; }
 }
 
 // ---- iOS 节点过滤（字段名与 android_cap.py pub() 同构）----

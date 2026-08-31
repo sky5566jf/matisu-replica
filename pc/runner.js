@@ -219,9 +219,10 @@ function jsFindCircle(L) { console.log('[image] findCircle PC 宿主待实现');
 
 // ---- 找图（模板匹配，桥接层 JS 实现已落地）----
 function pushRetXY(L, r) {
-  if (!r || r[0] < 0) { lua.lua_pushinteger(L, -1); lua.lua_pushinteger(L, -1); lua.lua_pushnil(L); }
-  else { lua.lua_pushinteger(L, r[0]); lua.lua_pushinteger(L, r[1]); lua.lua_pushinteger(L, r[2]); }
-  return 3;
+  // 原版约定：findPic/findColor 系直接返回 x, y（未命中 -1, -1）
+  if (!r || r[0] < 0) { lua.lua_pushinteger(L, -1); lua.lua_pushinteger(L, -1); }
+  else { lua.lua_pushinteger(L, r[1]); lua.lua_pushinteger(L, r[2]); }
+  return 2;
 }
 function jsFindPic(L) {
   try {
