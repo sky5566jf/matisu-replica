@@ -529,6 +529,31 @@ function jsInputText(L) { const r = bridge.inputText(str(L, 1)); lua.lua_pushboo
 function jsKeyPress(L) { const r = bridge.keyPress(str(L, 1)); lua.lua_pushboolean(L, r ? 1 : 0); return 1; }
 function jsGetUIText(L) { console.log('[ui] getUIText (PC 宿主无 UI 引擎)'); lua.lua_pushnil(L); return 1; }
 function jsSetUIText(L) { console.log('[ui] setUIText (PC 宿主无 UI 引擎)'); lua.lua_pushboolean(L, 0); return 1; }
+function jsGetScreenDirection(L) { lua.lua_pushinteger(L, bridge.getScreenDirection()); return 1; }
+// ---- ImageUtil（内存图色，句柄式）----
+function jsImageNew(L) { lua.lua_pushinteger(L, bridge.imageNew(str(L, 1))); return 1; }
+function jsImageFree(L) { bridge.imageFree(num(L, 1, 0)); return 0; }
+function jsImageGetPixelColor(L) {
+  const type = lua.lua_isnumber(L, 4) ? lua.lua_tointeger(L, 4) : 0;
+  const c = bridge.imageGetPixelColor(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), type);
+  if (type === 1) lua.lua_pushinteger(L, typeof c === 'number' ? c : 0);
+  else lua.lua_pushstring(L, to_luastring(typeof c === 'string' ? c : '000000'));
+  return 1;
+}
+function jsImageFindColor(L) {
+  const r = bridge.imageFindColor(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), num(L, 5, 0), str(L, 6), num(L, 7, 0), num(L, 8, 0.9));
+  lua.lua_pushinteger(L, r[0]); lua.lua_pushinteger(L, r[1]); return 2;
+}
+function jsImageCmpColorEx(L) { lua.lua_pushinteger(L, bridge.imageCmpColorEx(num(L, 1, 0), str(L, 2), num(L, 3, 0.9))); return 1; }
+function jsImageFindPic(L) {
+  const r = bridge.imageFindPic(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), num(L, 5, 0), str(L, 6), num(L, 7, 0.9));
+  return pushRetXY(L, r);
+}
+function jsImageCrop(L) {
+  const r = bridge.imageCrop(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), num(L, 5, 0), str(L, 6));
+  if (r) lua.lua_pushstring(L, to_luastring(r)); else lua.lua_pushnil(L);
+  return 1;
+}
 function jsShowUIEx(L) { console.log('[ui] showUIEx (PC 宿主无 UI 引擎，返回空)'); lua.lua_pushnil(L); return 1; }
 function jsCreateHUD(L) { console.log('[ui] createHUD (PC 宿主未实现)'); lua.lua_pushnil(L); return 1; }
 function jsShowHUD(L) { console.log('[ui] showHUD (PC 宿主未实现)'); return 0; }
@@ -575,7 +600,7 @@ regGlobal('ocrText', jsOcrText);
 regGlobal('findImage', jsFindImage);
 regGlobal('findPic', jsFindPic);
 regGlobal('findPicEx', jsFindPicEx);
-regGlobal('findPicFast', jsImageStub2);
+regGlobal('findPicFast', (L) => pushRetXY(L, bridge.findPicFast(num(L, 1, 0), num(L, 2, 0), num(L, 3, 0), num(L, 4, 0), str(L, 5), num(L, 6, 0.8))));
 regGlobal('findPicAllPoint', jsFindPicAllPoint);
 regGlobal('findCircle', jsFindCircle);
 
@@ -637,6 +662,15 @@ regGlobal('keyPress', jsKeyPress);
 regGlobal('getUIText', jsGetUIText);
 regGlobal('setUIText', jsSetUIText);
 regGlobal('luaExit', jsExitScript);   // 原版别名，同 exitScript
+regGlobal('getScreenDirection', jsGetScreenDirection);
+// ImageUtil.*（内存图色表）
+setField('ImageUtil', 'new', jsImageNew);
+setField('ImageUtil', 'free', jsImageFree);
+setField('ImageUtil', 'getPixelColor', jsImageGetPixelColor);
+setField('ImageUtil', 'findColor', jsImageFindColor);
+setField('ImageUtil', 'cmpColorEx', jsImageCmpColorEx);
+setField('ImageUtil', 'findPic', jsImageFindPic);
+setField('ImageUtil', 'crop', jsImageCrop);
 regGlobal('showUIEx', jsShowUIEx);
 regGlobal('createHUD', jsCreateHUD);
 regGlobal('showHUD', jsShowHUD);

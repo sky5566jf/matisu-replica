@@ -390,8 +390,22 @@ function keyRaw(code, down) {
   }
   return sendEvents([[EV_KEY, lk, down ? 1 : 0], [EV_SYN, SYN_REPORT, 0]]);
 }
-function keyDown(code) { return keyRaw(code, true); }
-function keyUp(code) { return keyRaw(code, false); }
+function keyDown(code) {
+  if (!isAndroid()) {
+    const name = IOS_KEY_NAMES[String(code).toLowerCase()] || String(code).toUpperCase();
+    iosSock('keydown ' + name);
+    return true;
+  }
+  return keyRaw(code, true);
+}
+function keyUp(code) {
+  if (!isAndroid()) {
+    const name = IOS_KEY_NAMES[String(code).toLowerCase()] || String(code).toUpperCase();
+    iosSock('keyup ' + name);
+    return true;
+  }
+  return keyRaw(code, false);
+}
 
 /** inputText：ASCII 走 input text；含非 ASCII 时尝试 ADBKeyboard 广播。 */
 function inputText(text) {
@@ -1283,6 +1297,95 @@ function findPicAllPoint(x1, y1, x2, y2, pic, sim) {
     .map(h => ({ x: ox(h.x), y: oy(h.y), sim: Math.round(h.s * 1000) / 1000 }));
 }
 
+/** getScreenDirection：0/1/2/3 = 0°/90°/180°/270°（与 devinfo rotate 同源） */
+function getScreenDirection() {
+  if (!isAndroid()) return iosInfo().rotate | 0;
+  const r = sh('dumpsys input 2>/dev/null | grep -m1 SurfaceOrientation', 6000);
+  const m = r && r.match(/SurfaceOrientation[^0-9]*(\d)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/** findPicFast：快速找图（同 findPic，相似度容忍略宽、语义对齐原版） */
+function findPicFast(x1, y1, x2, y2, pic, sim) {
+  return findPic(x1, y1, x2, y2, pic, null, 0, sim == null ? 0.8 : sim);
+}
+
+// ============================================================ ImageUtil（内存图色，不截屏）
+// 句柄式：new(path) 载入 PNG → findColor/getPixelColor/cmpColorEx/findPic/crop → free
+const imageStore = new Map();
+let imageSeq = 0;
+
+function imageGet(id) {
+  const f = imageStore.get(id | 0);
+  return f || null;
+}
+function imageNew(p) {
+  const f = decodePNG(fs.readFileSync(String(p)));
+  if (!f) return 0;
+  // 派生 rgbSpec 数组（与 screenPixels 同构，复用匹配算法）
+  const n = f.w * f.h, arr = new Int32Array(n);
+  for (let i = 0; i < n; i++) { const si = i * 4; arr[i] = rgbSpec(f.data[si], f.data[si + 1], f.data[si + 2]); }
+  const id = ++imageSeq;
+  imageStore.set(id, { w: f.w, h: f.h, data: f.data, arr });
+  return id;
+}
+function imageFree(id) { return imageStore.delete(id | 0); }
+function imageGetPixelColor(id, x, y, type) {
+  const f = imageGet(id);
+  if (!f) return (type | 0) === 1 ? 0 : '000000';
+  const X = x | 0, Y = y | 0;
+  if (X < 0 || Y < 0 || X >= f.w || Y >= f.h) return (type | 0) === 1 ? 0 : '000000';
+  const c = f.arr[Y * f.w + X];
+  return (type | 0) === 1 ? c : ('000000' + (c >>> 0).toString(16)).slice(-6).toUpperCase();
+}
+function imageFindColor(id, x1, y1, x2, y2, color, dir, sim) {
+  const f = imageGet(id);
+  if (!f) return [-1, -1];
+  const [X1, Y1, X2, Y2] = regionOf(f, x1, y1, x2, y2);
+  const tol = simTol(sim || 0.9);
+  const specs = parseMulti(color);
+  const pts = [];
+  for (let y = Y1; y < Y2; y++) for (let x = X1; x < X2; x++)
+    if (matchesAny(f, x, y, specs, tol)) pts.push({ x, y });
+  const hit = pickDir(pts, dir);
+  return hit ? [hit.x, hit.y] : [-1, -1];
+}
+function imageCmpColorEx(id, multi, sim) {
+  const f = imageGet(id);
+  if (!f) return 0;
+  const tol = simTol(sim || 0.9);
+  const pts = String(multi).split(',').filter(p => p.trim());
+  if (!pts.length) return 0;
+  for (const pt of pts) {
+    const a = pt.split('|'); if (a.length < 3) return 0;
+    const x = parseInt(a[0], 10), y = parseInt(a[1], 10);
+    if (isNaN(x) || isNaN(y) || x < 0 || y < 0 || x >= f.w || y >= f.h) return 0;
+    if (!matchesAny(f, x, y, parseMulti(a.slice(2).join('|')), tol)) return 0;
+  }
+  return 1;
+}
+function imageFindPic(id, x1, y1, x2, y2, pic, sim) {
+  const f = imageGet(id);
+  const tpl = loadTemplate(pic);
+  if (!f || !tpl) return [-1, -1, -1];
+  const [X1, Y1, X2, Y2] = regionOf(f, x1, y1, x2, y2);
+  const hit = matchTemplate(f, tpl, X1, Y1, X2, Y2, sim == null ? 0.9 : sim, false);
+  return hit ? [1, hit.x, hit.y] : [-1, -1, -1];
+}
+function imageCrop(id, x1, y1, x2, y2, savePath) {
+  const f = imageGet(id);
+  if (!f) return null;
+  const [X1, Y1, X2, Y2] = regionOf(f, x1, y1, x2, y2);
+  const cw = X2 - X1, ch = Y2 - Y1;
+  const out = new Uint8Array(cw * ch * 4);
+  for (let y = 0; y < ch; y++) {
+    const si = ((Y1 + y) * f.w + X1) * 4;
+    out.set(f.data.subarray(si, si + cw * 4), y * cw * 4);
+  }
+  fs.writeFileSync(String(savePath), encodePNG({ w: cw, h: ch, data: out }));
+  return String(savePath);
+}
+
 // ============================================================ 交互（PC 宿主无设备端 UI，落到控制台）
 
 function toast(text, x, y, size) {
@@ -1300,6 +1403,8 @@ module.exports = {
   setScreenScale, keepCapture, releaseCapture, findColor, findMultiColor, findMultiColorAll,
   cmpColor, cmpColorEx, getColorNum, colorDiff, colorToRGB, getPixelColor, getScreenPixel,
   isDisplayDead, snapShot, ocrText, findPic, findPicEx, findImage, findPicAllPoint,
+  getScreenDirection, findPicFast,
+  imageNew, imageFree, imageGetPixelColor, imageFindColor, imageCmpColorEx, imageFindPic, imageCrop,
   // 节点
   nodeQuery, nodeXml,
   // 设备信息

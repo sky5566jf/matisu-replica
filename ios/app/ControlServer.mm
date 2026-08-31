@@ -131,6 +131,12 @@ static void* MAServerLoop(void* arg) {
                     MatisuKeyPressName(line + 4);
                     NSLog(@"[MatisuAuto] key %s", line + 4);
                     sendOK(cli);
+                } else if (strncmp(line, "keydown ", 8) == 0 && line[8]) {
+                    MatisuKeyDownName(line + 8);
+                    sendOK(cli);
+                } else if (strncmp(line, "keyup ", 6) == 0 && line[6]) {
+                    MatisuKeyUpName(line + 6);
+                    sendOK(cli);
                 } else if (strncmp(line, "input ", 6) == 0 && line[6]) {
                     // input <text>：ASCII 文本逐键注入（中文待 imeLib）
                     MatisuTypeText(line + 6);

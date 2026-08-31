@@ -123,6 +123,18 @@ void MatisuTypeText(const char *utf8) {
     }
 }
 
+void MatisuKeyDownName(const char *name) {
+    if (!name || !*name) return;
+    NSString *key = [NSString stringWithUTF8String:name];
+    if (key) [MAGen() keyDown:key];
+}
+
+void MatisuKeyUpName(const char *name) {
+    if (!name || !*name) return;
+    NSString *key = [NSString stringWithUTF8String:name];
+    if (key) [MAGen() keyUp:key];
+}
+
 } // extern "C"
 
 @implementation MatisuTouch
