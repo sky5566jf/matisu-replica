@@ -33,6 +33,15 @@
 		<string>kTCCServiceAll</string>
 		<string>kTCCServiceAccessibility</string>
 	</array>
+	<key>com.apple.security.iokit-user-client-class</key>
+	<array>
+		<string>IOSurfaceRootUserClient</string>
+		<string>IOMobileFramebufferUserClient</string>
+		<string>IOSurfaceAcceleratorClient</string>
+		<string>IOHIDEventServiceFastPathUserClient</string>
+		<string>IOHIDLibUserClient</string>
+		<string>RootDomainUserClient</string>
+	</array>
 	<key>com.apple.private.accessibility.AXPreferenceOverride</key>
 	<true/>
 	<key>get-task-allow</key>
