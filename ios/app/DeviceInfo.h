@@ -14,6 +14,9 @@ NSData* _Nullable MatisuDeviceInfoJSON(void);
 /// 前台 App bundle id（SpringBoardServices 私有 API，取不到返空串）
 NSString* _Nullable MatisuFrontApp(void);
 
+/// frontapp 诊断（供 diag 指令回传）
+NSDictionary* _Nullable MatisuFrontAppDiag(void);
+
 NS_ASSUME_NONNULL_END
 
 #ifdef __cplusplus

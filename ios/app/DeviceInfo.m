@@ -129,6 +129,10 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
 #import <objc/runtime.h>
 #import <objc/message.h>
 
+static NSMutableDictionary *gFADiag = nil;
+static void faSet(NSString *k, id v) { if (!gFADiag) gFADiag = [NSMutableDictionary dictionary]; gFADiag[k] = v; }
+NSDictionary* _Nullable MatisuFrontAppDiag(void) { return gFADiag ?: @{}; }
+
 NSString* _Nullable MatisuFrontApp(void) {
     @try {
         static Class FBSWS = Nil;
@@ -140,14 +144,17 @@ NSString* _Nullable MatisuFrontApp(void) {
             FBSWS = NSClassFromString(@"FBSApplicationWorkspace");
             if (!FBSWS) FBSWS = NSClassFromString(@"FBApplicationWorkspace");
             if (!FBSWS) FBSWS = NSClassFromString(@"SBApplicationWorkspace");
+            faSet(@"ws_class", FBSWS ? NSStringFromClass(FBSWS) : @"nil");
         }
         if (FBSWS) {
             SEL dw = NSSelectorFromString(@"defaultWorkspace");
             if ([FBSWS respondsToSelector:dw]) {
                 id ws = ((id (*)(id, SEL))objc_msgSend)(FBSWS, dw);
+                faSet(@"workspace_nil", @(ws == nil));
                 SEL ra = NSSelectorFromString(@"runningApplications");
                 if (ws && [ws respondsToSelector:ra]) {
                     NSArray *apps = ((id (*)(id, SEL))objc_msgSend)(ws, ra);
+                    faSet(@"apps_count", @(apps ? (long)apps.count : -1L));
                     id best = nil;
                     int bestScore = -1;
                     BOOL (*msgB)(id, SEL) = (BOOL (*)(id, SEL))objc_msgSend;
@@ -163,6 +170,7 @@ NSString* _Nullable MatisuFrontApp(void) {
                     }
                     if (best && bestScore > 0 && [best respondsToSelector:@selector(bundleIdentifier)]) {
                         NSString *bid = ((NSString *(*)(id, SEL))objc_msgSend)(best, @selector(bundleIdentifier));
+                        faSet(@"best_score", @(bestScore));
                         if (bid.length) return bid;
                     }
                 }
@@ -170,10 +178,13 @@ NSString* _Nullable MatisuFrontApp(void) {
         }
         // 兜底：SBS 符号式
         void *h = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_LAZY);
+        faSet(@"sbs_dlopen", @(h != NULL));
         if (h) {
             CFStringRef (*copyFn)(void) = (CFStringRef (*)(void))dlsym(h, "SBSCopyFrontmostApplicationDisplayIdentifier");
+            faSet(@"sbs_sym_copy", @(copyFn != NULL));
             if (copyFn) {
                 CFStringRef r = copyFn();
+                faSet(@"sbs_ret_null", @(r == NULL));
                 if (r) return (__bridge_transfer NSString *)r;
             }
         }

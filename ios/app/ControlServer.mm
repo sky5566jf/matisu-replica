@@ -111,6 +111,7 @@ static void* MAServerLoop(void* arg) {
                     NSDictionary *d = @{
                         @"ax": MatisuAXDiag() ?: @{},
                         @"screen": MatisuScreenDiag() ?: @{},
+                        @"frontapp": MatisuFrontAppDiag() ?: @{},
                     };
                     NSData *json = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
                     if (json && json.length) sendLE(cli, json.bytes, json.length);
