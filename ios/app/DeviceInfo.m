@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #import <sys/sysctl.h>
 #import <sys/types.h>
+#import <dlfcn.h>
 
 static NSString *machineId(void) {
     size_t len = 0;
@@ -121,4 +122,37 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
         return nil;
     }
     return d;
+}
+
+// 前台 App bundle id：SpringBoardServices 私有 API。
+// 两个历史符号都尝试：SBSCopyFrontmostApplicationDisplayIdentifier / SBFrontmostApplicationDisplayIdentifier。
+NSString* _Nullable MatisuFrontApp(void) {
+    static int state = 0;            // 0=未探测 1=copy 式 2=port 式 -1=不可用
+    static void *fnCopy = NULL;
+    static void *fnPort = NULL;
+    static void *(*sbsPort)(void) = NULL;
+    if (state == 0) {
+        void *h = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_LAZY);
+        if (h) {
+            fnCopy = dlsym(h, "SBSCopyFrontmostApplicationDisplayIdentifier");
+            fnPort = dlsym(h, "SBFrontmostApplicationDisplayIdentifier");
+            sbsPort = (void *(*)(void))dlsym(h, "SBSSpringBoardServerPort");
+        }
+        state = fnCopy ? 1 : ((fnPort && sbsPort) ? 2 : -1);
+    }
+    @try {
+        if (state == 1) {
+            CFStringRef (*copyFn)(void) = (CFStringRef (*)(void))fnCopy;
+            CFStringRef r = copyFn();
+            if (r) { NSString *s = (__bridge_transfer NSString *)r; return s; }
+        } else if (state == 2) {
+            typedef unsigned int mat_port_t;
+            void (*portFn)(mat_port_t, char *) = (void (*)(mat_port_t, char *))fnPort;
+            mat_port_t port = (mat_port_t)(uintptr_t)sbsPort();
+            char buf[512]; memset(buf, 0, sizeof(buf));
+            portFn(port, buf);
+            if (buf[0]) return [NSString stringWithUTF8String:buf];
+        }
+    } @catch (__unused id e) {}
+    return @"";
 }

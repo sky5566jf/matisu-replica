@@ -103,6 +103,10 @@ static void* MAServerLoop(void* arg) {
                         sendLE(cli, NULL, 0);
                         NSLog(@"[MatisuAuto] uinode failed (需 accessibility.inspection 授权)");
                     }
+                } else if (strcmp(line, "frontapp") == 0) {
+                    NSString *fa = MatisuFrontApp() ?: @"";
+                    NSData *d = [fa dataUsingEncoding:NSUTF8StringEncoding];
+                    sendLE(cli, d.bytes, d.length);
                 } else if (strcmp(line, "diag") == 0) {
                     NSDictionary *d = @{
                         @"ax": MatisuAXDiag() ?: @{},

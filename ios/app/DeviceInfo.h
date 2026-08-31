@@ -11,6 +11,9 @@ extern "C" {
 
 NSData* _Nullable MatisuDeviceInfoJSON(void);
 
+/// 前台 App bundle id（SpringBoardServices 私有 API，取不到返空串）
+NSString* _Nullable MatisuFrontApp(void);
+
 NS_ASSUME_NONNULL_END
 
 #ifdef __cplusplus
