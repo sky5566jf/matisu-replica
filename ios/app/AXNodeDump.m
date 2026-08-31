@@ -72,8 +72,34 @@ static void axLoad(void) {
     }
 
     AX.systemWide    = (fn_SystemWide)dlsym(h, "AXUIElementCreateSystemWide");
-    AX.createApp     = (fn_CreateApp)dlsym(h, "AXUIElementCreateAppElementWithPid");
-    if (!AX.createApp) AX.createApp = (fn_CreateApp)dlsym(h, "AXUIElementCreateApplication");
+    // AXUIElementCreateAppElementWithPid 在共享缓存中存在但不在 AXRuntime 导出，
+    // 逐个候选框架探测（符号属于哪个框架因版本而异）
+    {
+        const char *fwkCandidates[] = {
+            "/System/Library/PrivateFrameworks/AccessibilityUtilities.framework/AccessibilityUtilities",
+            "/System/Library/PrivateFrameworks/AXRuntime.framework/AXRuntime",
+            "/System/Library/Frameworks/UIKit.framework/UIKit",
+            NULL,
+        };
+        const char *symCandidates[] = {
+            "AXUIElementCreateAppElementWithPid",
+            "AXUIElementCreateApplication",
+            "AXUIElementCreateWithPID",
+            NULL,
+        };
+        for (int fi = 0; fwkCandidates[fi] && !AX.createApp; fi++) {
+            void *fh = (fi == 0) ? dlopen(fwkCandidates[fi], RTLD_LAZY) : h;
+            if (!fh) fh = dlopen(fwkCandidates[fi], RTLD_LAZY);
+            if (!fh) continue;
+            for (int si = 0; symCandidates[si] && !AX.createApp; si++) {
+                AX.createApp = (fn_CreateApp)dlsym(fh, symCandidates[si]);
+                if (AX.createApp) {
+                    diagSet(@"createApp_fwk", @(fwkCandidates[fi]).lastPathComponent);
+                    diagSet(@"createApp_sym", @(symCandidates[si]));
+                }
+            }
+        }
+    }
     AX.copyAttr      = (fn_CopyAttr)dlsym(h, "AXUIElementCopyAttributeValue");
     AX.copyActions   = (fn_CopyActions)dlsym(h, "AXUIElementCopyActionNames");
     AX.valueGetValue = (fn_ValueGetValue)dlsym(h, "AXValueGetValue");
