@@ -19,6 +19,11 @@ NSData* _Nullable MatisuCapturePNG(void);
 /// 截屏直读单像素（逻辑点坐标），返回 0xRRGGBB，失败 -1。设备端 Lua 引擎用。
 int MatisuCapturePixel(int x, int y);
 
+/// 截屏并锁定共享 surface 供批量读取（BGRA 字节序），用完必须 MatisuSurfaceUnlockRead。
+/// 返回基址（NULL=失败），outW/outH/outBpr 回填物理像素参数。设备端图色用。
+const uint8_t* _Nullable MatisuSurfaceLockRead(int *outW, int *outH, int *outBpr);
+void MatisuSurfaceUnlockRead(void);
+
 /// 截图通道内部状态（符号解析/失败步骤），供 diag 指令回传
 NSDictionary* _Nullable MatisuScreenDiag(void);
 

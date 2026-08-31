@@ -11,6 +11,7 @@
 #import "LuaEngine.h"
 #import "TouchInject.h"
 #import "ScreenShot.h"
+#import "ColorFind.h"
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 
@@ -127,6 +128,46 @@ static int l_mSleep(lua_State *L) {
     return 0;
 }
 
+static int l_findColor(lua_State *L) {
+    int ox = -1, oy = -1;
+    int hit = MatisuFindColor((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                              (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                              [NSString stringWithUTF8String:luaL_checkstring(L, 5)],
+                              (int)luaL_optinteger(L, 6, 0), luaL_optnumber(L, 7, 0.9), &ox, &oy);
+    lua_pushinteger(L, hit ? ox : -1);
+    lua_pushinteger(L, hit ? oy : -1);
+    return 2;
+}
+static int l_cmpColor(lua_State *L) {
+    int r = MatisuCmpColor((int)luaL_checkinteger(L, 1), (int)luaL_checkinteger(L, 2),
+                           [NSString stringWithUTF8String:luaL_checkstring(L, 3)], luaL_optnumber(L, 4, 0.9));
+    lua_pushinteger(L, r);
+    return 1;
+}
+static int l_cmpColorEx(lua_State *L) {
+    int r = MatisuCmpColorEx([NSString stringWithUTF8String:luaL_checkstring(L, 1)], luaL_optnumber(L, 2, 0.9));
+    lua_pushinteger(L, r);
+    return 1;
+}
+static int l_getColorNum(lua_State *L) {
+    int n = MatisuGetColorNum((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                              (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                              [NSString stringWithUTF8String:luaL_checkstring(L, 5)], luaL_optnumber(L, 6, 0.9));
+    lua_pushinteger(L, n);
+    return 1;
+}
+static int l_snapShot(lua_State *L) {
+    // snapShot(path)：整屏 PNG 存设备路径（区域参数 Phase 2 暂不支持）
+    NSString *path = [NSString stringWithUTF8String:luaL_checkstring(L, 1)];
+    NSData *png = MatisuCapturePNG();
+    if (png && [png writeToFile:path atomically:YES]) {
+        lua_pushstring(L, path.UTF8String);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
 NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
     if (!source) return nil;
     NSMutableString *out = [NSMutableString string];
@@ -145,6 +186,9 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
         { "keyPress", l_keyPress }, { "inputText", l_inputText },
         { "getDisplaySize", l_getDisplaySize },
         { "getPixelColor", l_getPixelColor },
+        { "findColor", l_findColor }, { "cmpColor", l_cmpColor },
+        { "cmpColorEx", l_cmpColorEx }, { "getColorNum", l_getColorNum },
+        { "snapShot", l_snapShot },
         { "sleep", l_sleep }, { "mSleep", l_mSleep },
         { NULL, NULL },
     };

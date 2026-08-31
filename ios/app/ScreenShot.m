@@ -174,3 +174,24 @@ int MatisuCapturePixel(int x, int y) {
     IOSurfaceUnlock(s, kMIOSurfaceLockReadOnly, NULL);
     return ret;
 }
+
+// 批量读取锁：render + lock 一次，供 ColorFind 全屏扫描
+const uint8_t* _Nullable MatisuSurfaceLockRead(int *outW, int *outH, int *outBpr) {
+    if (CARenderServerRenderDisplay == NULL) return NULL;
+    IOSurfaceRef s = ensureSurface();
+    if (!s) return NULL;
+    CARenderServerRenderDisplay(0, CFSTR("LCD"), s, 0, 0);
+    int w = (int)IOSurfaceGetWidth(s), h = (int)IOSurfaceGetHeight(s), bpr = (int)IOSurfaceGetBytesPerRow(s);
+    if (w <= 0 || h <= 0) return NULL;
+    if (IOSurfaceLock(s, kMIOSurfaceLockReadOnly, NULL) != 0) return NULL;
+    const uint8_t *base = (const uint8_t *)IOSurfaceGetBaseAddress(s);
+    if (!base) { IOSurfaceUnlock(s, kMIOSurfaceLockReadOnly, NULL); return NULL; }
+    if (outW) *outW = w;
+    if (outH) *outH = h;
+    if (outBpr) *outBpr = bpr;
+    return base;
+}
+
+void MatisuSurfaceUnlockRead(void) {
+    if (gSurface) IOSurfaceUnlock(gSurface, kMIOSurfaceLockReadOnly, NULL);
+}
