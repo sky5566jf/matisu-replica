@@ -229,12 +229,11 @@ static int l_printSvc(lua_State *L) {
         lua_pushvalue(L, i);
         lua_call(L, 1, 1);
         const char *s = lua_tostring(L, -1);
-        if (i > 1) [gSvcOut appendString:@"	"];
+        if (i > 1) [gSvcOut appendString:@"\t"];
         if (s) [gSvcOut appendString:[NSString stringWithUTF8String:s] ?: @"?"];
         lua_pop(L, 1);
     }
-    [gSvcOut appendString:@"
-"];
+    [gSvcOut appendString:@"\n"];
     [gSvcOutLock unlock];
     return 0;
 }
@@ -260,8 +259,7 @@ static void *svcThread(void *arg) {
             NSString *msg = err ? [NSString stringWithUTF8String:err] : @"unknown";
             if (![msg containsString:@"__MATISU_STOP__"]) {
                 [gSvcOutLock lock];
-                [gSvcOut appendFormat:@"[service error] %@
-", msg];
+                [gSvcOut appendFormat:@"[service error] %@\n", msg];
                 [gSvcOutLock unlock];
             }
         }
