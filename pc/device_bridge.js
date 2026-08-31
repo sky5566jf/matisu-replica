@@ -803,6 +803,13 @@ function iosKeepCapture() {
 function iosReleaseCapture() { iosFrame = null; return true; }
 
 function iosFindColor(x1, y1, x2, y2, color, dir, sim) {
+  // 设备端原生指令（快；失败回退 PC 帧匹配）
+  const out = iosSock(`findcolor ${x1 | 0} ${y1 | 0} ${x2 | 0} ${y2 | 0} ${color} ${dir | 0} ${sim == null ? 0.9 : sim}`);
+  if (out) {
+    const m = String(out).trim().split(/\s+/);
+    const fx = parseInt(m[0], 10), fy = parseInt(m[1], 10);
+    if (!isNaN(fx) && !isNaN(fy)) return fx >= 0 ? [1, fx, fy] : [-1, -1, -1];
+  }
   if (!iosFrame && !iosKeepCapture()) return [-1, -1, -1];
   const f = iosFrame; const [X1, Y1, X2, Y2] = regionOf(f, x1, y1, x2, y2);
   const tol = simTol(sim || 0.9); const specs = parseMulti(color); const pts = [];
@@ -841,12 +848,16 @@ function iosFindMultiColorAll(x1, y1, x2, y2, first, offset, dir, sim) {
   return pts;
 }
 function iosCmpColor(x, y, color, sim) {
+  const out = iosSock(`cmpcolor ${x | 0} ${y | 0} ${color} ${sim == null ? 0.9 : sim}`);
+  if (out) return String(out).trim() === '1' ? 1 : 0;
   if (!iosFrame && !iosKeepCapture()) return 0;
   const f = iosFrame; const X = x | 0, Y = y | 0;
   if (X < 0 || Y < 0 || X >= f.w || Y >= f.h) return 0;
   return matchesAny(f, X, Y, parseMulti(color), simTol(sim || 0.9)) ? 1 : 0;
 }
 function iosCmpColorEx(multicolor, sim) {
+  const out = iosSock(`cmpcolorex ${multicolor} ${sim == null ? 0.9 : sim}`);
+  if (out) return String(out).trim() === '1' ? 1 : 0;
   if (!iosFrame && !iosKeepCapture()) return 0;
   const f = iosFrame; const tol = simTol(sim || 0.9);
   const pts = String(multicolor).split(',').filter(p => p.trim());
@@ -860,6 +871,8 @@ function iosCmpColorEx(multicolor, sim) {
   return 1;
 }
 function iosGetColorNum(x1, y1, x2, y2, color, sim) {
+  const out = iosSock(`getcolornum ${x1 | 0} ${y1 | 0} ${x2 | 0} ${y2 | 0} ${color} ${sim == null ? 0.9 : sim}`);
+  if (out) { const n = parseInt(String(out).trim(), 10); if (!isNaN(n)) return n; }
   if (!iosFrame && !iosKeepCapture()) return 0;
   const f = iosFrame; const [X1, Y1, X2, Y2] = regionOf(f, x1, y1, x2, y2);
   const tol = simTol(sim || 0.9); const specs = parseMulti(color); let n = 0;

@@ -4,6 +4,7 @@
 #import "AXNodeDump.h"
 #import "DeviceInfo.h"
 #import "LuaEngine.h"
+#import "ColorFind.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <sys/socket.h>
@@ -230,6 +231,46 @@ static void* MAServerLoop(void* arg) {
                     NSDictionary *r = @{ @"running": @(MatisuLuaRunning()), @"output": MatisuLuaDrainOutput() };
                     NSData *json4 = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
                     sendLE(cli, json4 ? json4.bytes : NULL, json4 ? json4.length : 0);
+                } else if (strncmp(line, "findcolor ", 10) == 0) {
+                    // findcolor x1 y1 x2 y2 <color> <dir> <sim> -> "x y\n"（未中 -1 -1）
+                    int x1, y1, x2, y2, dir; double simv; char color[128];
+                    int ox = -1, oy = -1;
+                    if (sscanf(line + 10, "%d %d %d %d %127s %d %lf", &x1, &y1, &x2, &y2, color, &dir, &simv) == 7) {
+                        MatisuFindColor(x1, y1, x2, y2, @(color), dir, simv, &ox, &oy);
+                    }
+                    char resp[32];
+                    int rl = snprintf(resp, sizeof(resp), "%d %d\n", ox, oy);
+                    sendLE(cli, resp, (size_t)rl);
+                } else if (strncmp(line, "cmpcolor ", 9) == 0) {
+                    // cmpcolor x y <color> <sim> -> "1\n"/"0\n"
+                    int x, y; double simv; char color[128];
+                    int r = 0;
+                    if (sscanf(line + 9, "%d %d %127s %lf", &x, &y, color, &simv) == 4) {
+                        r = MatisuCmpColor(x, y, @(color), simv);
+                    }
+                    char resp[8];
+                    int rl = snprintf(resp, sizeof(resp), "%d\n", r);
+                    sendLE(cli, resp, (size_t)rl);
+                } else if (strncmp(line, "cmpcolorex ", 11) == 0) {
+                    // cmpcolorex <multi 串> <sim>（multi 无空格：x|y|color,...）
+                    char multi[1024]; double simv;
+                    int r = 0;
+                    if (sscanf(line + 11, "%1023s %lf", multi, &simv) == 2) {
+                        r = MatisuCmpColorEx(@(multi), simv);
+                    }
+                    char resp[8];
+                    int rl = snprintf(resp, sizeof(resp), "%d\n", r);
+                    sendLE(cli, resp, (size_t)rl);
+                } else if (strncmp(line, "getcolornum ", 12) == 0) {
+                    // getcolornum x1 y1 x2 y2 <color> <sim> -> "n\n"
+                    int x1, y1, x2, y2; double simv; char color[128];
+                    int n = 0;
+                    if (sscanf(line + 12, "%d %d %d %d %127s %lf", &x1, &y1, &x2, &y2, color, &simv) == 6) {
+                        n = MatisuGetColorNum(x1, y1, x2, y2, @(color), simv);
+                    }
+                    char resp[16];
+                    int rl = snprintf(resp, sizeof(resp), "%d\n", n);
+                    sendLE(cli, resp, (size_t)rl);
                 } else if (strcmp(line, "frontapp") == 0) {
                     NSData *d = queryTweak("frontapp", 3.0);    // 优先 SpringBoard tweak（全系统可见）
                     if (!d) {
