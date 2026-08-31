@@ -53,7 +53,27 @@ mSleep(1500)
 ok("inputText(ASCII) 返回成功", inputText("abc123") == true or inputText("abc123") == 1)
 keyPress("escape")   -- 关掉可能弹出的键盘/界面
 
--- 8. setStopCallBack + exitScript（回调打出标记即过）
+-- 8. P1：getScreenDirection / findPicFast / ImageUtil 内存图色
+ok("getScreenDirection 返回值域", getScreenDirection() >= 0 and getScreenDirection() <= 3, getScreenDirection())
+local ffx, ffy = findPicFast(0, 0, w, h, tp, 0.8)
+ok("findPicFast 找回模板", ffx ~= nil and math.abs(ffx - 60) <= 6 and math.abs(ffy - 150) <= 6,
+   ffx and (ffx .. "," .. ffy) or "nil")
+local img = ImageUtil.new(tp)
+ok("ImageUtil.new 加载模板", img ~= nil and img > 0, img)
+if img and img > 0 then
+    local ic = ImageUtil.getPixelColor(img, 0, 0)
+    ok("ImageUtil.getPixelColor", type(ic) == "string" and #ic >= 6, ic)
+    local ix, iy = ImageUtil.findColor(img, 0, 0, 60, 60, ic, 0, 0.95)
+    ok("ImageUtil.findColor 找回 (0,0)", ix == 0 and iy == 0, ix .. "," .. iy)
+    ok("ImageUtil.cmpColorEx 单点", ImageUtil.cmpColorEx(img, "0|0|" .. ic, 0.95) == 1)
+    local px, py = ImageUtil.findPic(img, 0, 0, 60, 60, tp, 0.95)
+    ok("ImageUtil.findPic 自匹配", px ~= nil and px <= 2 and py <= 2, px and (px .. "," .. py) or "nil")
+    local cp = ImageUtil.crop(img, 0, 0, 30, 30, "tpl_crop.png")
+    ok("ImageUtil.crop 存盘", cp ~= nil, cp)
+    ImageUtil.free(img)
+end
+
+-- 9. setStopCallBack + exitScript（回调打出标记即过）
 setStopCallBack(function()
     print("[PASS] setStopCallBack 回调触发")
 end)
