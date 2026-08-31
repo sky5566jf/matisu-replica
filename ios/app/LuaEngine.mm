@@ -12,6 +12,7 @@
 #import "TouchInject.h"
 #import "ScreenShot.h"
 #import "ColorFind.h"
+#import "PicFind.h"
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 
@@ -159,15 +160,41 @@ static int l_getColorNum(lua_State *L) {
     return 1;
 }
 static int l_snapShot(lua_State *L) {
-    // snapShot(path)：整屏 PNG 存设备路径（区域参数 Phase 2 暂不支持）
+    // snapShot(path[, x1,y1,x2,y2])：PNG 存设备路径（无区域=全屏）
     NSString *path = [NSString stringWithUTF8String:luaL_checkstring(L, 1)];
-    NSData *png = MatisuCapturePNG();
+    NSData *png = nil;
+    if (lua_gettop(L) >= 5) {
+        png = MatisuCapturePNGRegion((int)luaL_checkinteger(L, 2), (int)luaL_checkinteger(L, 3),
+                                     (int)luaL_checkinteger(L, 4), (int)luaL_checkinteger(L, 5));
+    } else {
+        png = MatisuCapturePNG();
+    }
     if (png && [png writeToFile:path atomically:YES]) {
         lua_pushstring(L, path.UTF8String);
     } else {
         lua_pushnil(L);
     }
     return 1;
+}
+static int l_findPic(lua_State *L) {
+    int ox = -1, oy = -1;
+    int hit = MatisuFindPic((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                            (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                            [NSString stringWithUTF8String:luaL_checkstring(L, 5)],
+                            luaL_optnumber(L, 6, 0.9), &ox, &oy);
+    lua_pushinteger(L, hit ? ox : -1);
+    lua_pushinteger(L, hit ? oy : -1);
+    return 2;
+}
+static int l_findPicEx(lua_State *L) {
+    int ox = -1, oy = -1;
+    int hit = MatisuFindPicEx((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                              (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                              [NSString stringWithUTF8String:luaL_checkstring(L, 5)],
+                              luaL_optnumber(L, 6, 0.9), &ox, &oy);
+    lua_pushinteger(L, hit ? ox : -1);
+    lua_pushinteger(L, hit ? oy : -1);
+    return 2;
 }
 
 NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
@@ -319,6 +346,7 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "findColor", l_findColor }, { "cmpColor", l_cmpColor },
         { "cmpColorEx", l_cmpColorEx }, { "getColorNum", l_getColorNum },
         { "snapShot", l_snapShot },
+        { "findPic", l_findPic }, { "findPicEx", l_findPicEx },
         { NULL, NULL },
     };
     lua_pushcfunction(L, printFn);
