@@ -85,6 +85,10 @@ static void axLoad(void) {
             "AXUIElementCreateAppElementWithPid",
             "AXUIElementCreateApplication",
             "AXUIElementCreateWithPID",
+            "AXUIElementCreateWithPIDAndID",
+            "AXUIElementCreateWithID",
+            "AXUIElementCreateData",
+            "AXUIElementCreateWithData",
             NULL,
         };
         for (int fi = 0; fwkCandidates[fi] && !AX.createApp; fi++) {
