@@ -77,48 +77,15 @@ static int batteryPercent(void) {
     return p;
 }
 
-// UIScreen 私有 API：headless 下唯一仍返回真实物理像素的入口
-//（bounds/nativeBounds/nativeScale 在 daemon 下全是 320 宽兼容值）。
-@interface UIScreen (MatisuPrivate)
-@property(nonatomic, readonly) CGRect _unjailedReferenceBoundsInPixels;
-@end
-
-CGSize MatisuLogicalScreenSize(void) {
-    UIScreen *scr = [UIScreen mainScreen];
-    CGRect b = scr.bounds;
-    // headless daemon（无 UIApplicationMain）下 bounds 为 320 宽兼容默认值；
-    // 现代 iPhone 原生逻辑宽 >=375，<=321 即判定为兼容默认。
-    BOOL headlessDefault = (b.size.width > 0 && b.size.width <= 321.0);
-    if (!headlessDefault && b.size.width > 0 && b.size.height > 0) return b.size;
-    // daemon：nativeBounds 同样是兼容值，必须用 _unjailedReferenceBoundsInPixels
-    CGFloat ns = scr.nativeScale;
-    if (ns <= 0) ns = scr.scale;
-    if (ns <= 0) ns = 2;
-    if ([scr respondsToSelector:@selector(_unjailedReferenceBoundsInPixels)]) {
-        CGSize px = scr._unjailedReferenceBoundsInPixels.size;
-        CGSize logical = CGSizeMake(px.width / ns, px.height / ns);
-        if (logical.width > 0 && logical.height > 0) return logical;
-    }
-    CGRect nb = scr.nativeBounds;
-    CGSize logical = CGSizeMake(nb.size.width / ns, nb.size.height / ns);
-    if (logical.width > 0 && logical.height > 0) return logical;
-    return b.size;
-}
-
 NSData* _Nullable MatisuDeviceInfoJSON(void) {
     __block NSMutableDictionary *info = nil;
 
     void (^collect)(void) = ^{
         UIScreen *scr = [UIScreen mainScreen];
-        CGSize logical = MatisuLogicalScreenSize();   // 逻辑点（daemon 下也准确）
-        CGFloat scale = scr.nativeScale;
-        if (scale <= 0) scale = scr.scale;
+        CGRect b = scr.bounds;              // 逻辑点
+        CGFloat scale = scr.scale;
         if (scale <= 0) scale = 1;
-        CGRect nb = scr.nativeBounds;       // 像素（daemon 下是兼容值，仅兜底）
-        if ([scr respondsToSelector:@selector(_unjailedReferenceBoundsInPixels)]) {
-            CGRect ur = scr._unjailedReferenceBoundsInPixels;
-            if (ur.size.width > 0 && ur.size.height > 0) nb = ur;   // 真实物理像素
-        }
+        CGRect nb = scr.nativeBounds;       // 像素（始终竖向基准）
         UIDevice *dev = [UIDevice currentDevice];
 
         info = [NSMutableDictionary dictionary];
@@ -128,8 +95,8 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
         info[@"systemName"]    = dev.systemName ?: @"iOS";
         info[@"systemVersion"] = dev.systemVersion ?: @"";
         info[@"sdk"]           = @([dev.systemVersion integerValue]);   // iOS 主版本号
-        info[@"width"]         = @((int)lround(logical.width));
-        info[@"height"]        = @((int)lround(logical.height));
+        info[@"width"]         = @((int)lround(b.size.width));
+        info[@"height"]        = @((int)lround(b.size.height));
         info[@"scale"]         = @((double)scale);
         info[@"pixelWidth"]    = @((int)lround(nb.size.width));
         info[@"pixelHeight"]   = @((int)lround(nb.size.height));

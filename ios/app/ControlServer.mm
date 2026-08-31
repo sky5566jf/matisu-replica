@@ -179,9 +179,8 @@ static void* MAServerLoop(void* arg) {
 
 void MatisuControlServerStart(void) {
     // 触控坐标归一化基准：digitizer HID 事件用 0~1 归一化坐标，
-    // 以原生逻辑点尺寸为基准（daemon 下 UIScreen.bounds 是 320x568 兼容
-    // 默认值，MatisuLogicalScreenSize 内部改用像素/缩放换算）
-    CGSize pts = MatisuLogicalScreenSize();
+    // 以当前屏幕逻辑点尺寸为基准（与 PC 端下发坐标系一致）
+    CGSize pts = [UIScreen mainScreen].bounds.size;
     if (pts.width > 0 && pts.height > 0) {
         MatisuTouchSetScreenSize((float)pts.width, (float)pts.height);
     }
