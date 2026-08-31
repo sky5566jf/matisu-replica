@@ -141,7 +141,7 @@ NSDictionary* _Nullable MatisuScreenDiag(void) {
     return gSDiag ?: @{};
 }
 
-// 设备端 Lua 引擎用：截屏到共享 surface 并直读单像素（0xRRGGBB），不做 PNG 编码。
+// 设备端 Lua 引擎用：截屏到共享 surface 并直读单像素（0xBBGGRR 原版契约），不做 PNG 编码。
 // 入参为逻辑点坐标（与触控同空间），内部按 surface 物理尺寸等比换算。
 int MatisuCapturePixel(int x, int y) {
     if (CARenderServerRenderDisplay == NULL) return -1;
@@ -169,7 +169,7 @@ int MatisuCapturePixel(int x, int y) {
     int ret = -1;
     if (base) {
         const uint8_t *p = base + (size_t)py * (size_t)bpr + (size_t)px * 4;
-        ret = (p[2] << 16) | (p[1] << 8) | p[0];   // BGRA -> 0xRRGGBB
+        ret = (p[0] << 16) | (p[1] << 8) | p[2];   // BGRA -> 0xBBGGRR（原版契约格式）
     }
     IOSurfaceUnlock(s, kMIOSurfaceLockReadOnly, NULL);
     return ret;
