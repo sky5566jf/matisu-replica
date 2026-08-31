@@ -158,13 +158,26 @@ NSString* _Nullable MatisuFrontApp(void) {
             if (FBPM && [FBPM respondsToSelector:NSSelectorFromString(@"sharedInstance")]) {
                 id pm = ((id (*)(id, SEL))objc_msgSend)(FBPM, NSSelectorFromString(@"sharedInstance"));
                 faSet(@"fbpm_nil", @(pm == nil));
-                if (pm && [pm respondsToSelector:NSSelectorFromString(@"frontmostApplication")]) {
-                    id fa = ((id (*)(id, SEL))objc_msgSend)(pm, NSSelectorFromString(@"frontmostApplication"));
-                    faSet(@"fbpm_fa_nil", @(fa == nil));
-                    if (fa && [fa respondsToSelector:@selector(bundleIdentifier)]) {
-                        NSString *bid = ((NSString *(*)(id, SEL))objc_msgSend)(fa, @selector(bundleIdentifier));
-                        if (bid.length) return bid;
+                // frontmostApplication 属性在 iOS 16 已不存在；改为遍历进程找前台
+                SEL procsSel = NSSelectorFromString(@"processes");
+                if (pm && [pm respondsToSelector:procsSel]) {
+                    NSArray *procs = ((id (*)(id, SEL))objc_msgSend)(pm, procsSel);
+                    faSet(@"fbpm_procs", @(procs ? (long)procs.count : -1L));
+                    for (id p in (procs ?: @[])) {
+                        BOOL fg = NO;
+                        for (NSString *selName in @[@"isForeground", @"foreground", @"isActive"]) {
+                            SEL s = NSSelectorFromString(selName);
+                            if ([p respondsToSelector:s]) {
+                                fg = ((BOOL (*)(id, SEL))objc_msgSend)(p, s);
+                                if (fg) { faSet(@"fbpm_fg_sel", selName); break; }
+                            }
+                        }
+                        if (fg && [p respondsToSelector:@selector(bundleIdentifier)]) {
+                            NSString *bid = ((NSString *(*)(id, SEL))objc_msgSend)(p, @selector(bundleIdentifier));
+                            if (bid.length) return bid;
+                        }
                     }
+                    faSet(@"fbpm_fg_found", @NO);
                 }
             }
         }
