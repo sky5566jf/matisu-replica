@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 #import "AppDelegate.h"
 #import "ControlServer.h"
+#import "LuaEngine.h"
 #include <string.h>
 #include <unistd.h>
 
@@ -19,6 +20,7 @@ int main(int argc, char *argv[]) {
         if (daemon) {
             NSLog(@"[MatisuAuto] 守护模式启动（headless, uid=%d）", getuid());
             MatisuControlServerStart();
+            MatisuLuaAutoRun();   // scripts/autorun.lua 存在则常驻执行
             CFRunLoopRun();
             return 0;
         }

@@ -22,6 +22,8 @@ extern "C" {
 #import "lua/lualib.h"
 }
 
+static void registerFns(lua_State *L, lua_CFunction printFn);
+
 // 输出收集（每次 run 挂在 lua_State 的 registry 上）
 #define MA_OUT_KEY "matisu_output"
 
@@ -179,23 +181,7 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
     lua_pushlightuserdata(L, (__bridge void *)out);
     lua_setfield(L, LUA_REGISTRYINDEX, MA_OUT_KEY);
 
-    static const struct { const char *name; lua_CFunction fn; } FNS[] = {
-        { "print", l_print },
-        { "tap", l_tap }, { "longTap", l_longTap }, { "swipe", l_swipe },
-        { "touchDown", l_touchDown }, { "touchMove", l_touchMove }, { "touchUp", l_touchUp },
-        { "keyPress", l_keyPress }, { "inputText", l_inputText },
-        { "getDisplaySize", l_getDisplaySize },
-        { "getPixelColor", l_getPixelColor },
-        { "findColor", l_findColor }, { "cmpColor", l_cmpColor },
-        { "cmpColorEx", l_cmpColorEx }, { "getColorNum", l_getColorNum },
-        { "snapShot", l_snapShot },
-        { "sleep", l_sleep }, { "mSleep", l_mSleep },
-        { NULL, NULL },
-    };
-    for (int i = 0; FNS[i].name; i++) {
-        lua_pushcfunction(L, FNS[i].fn);
-        lua_setglobal(L, FNS[i].name);
-    }
+    registerFns(L, l_print);
 
     NSMutableDictionary *r = [NSMutableDictionary dictionary];
     int status = luaL_loadbufferx(L, source.UTF8String, (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], "=script", "t");
@@ -211,4 +197,136 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
     }
     lua_close(L);
     return r;
+}
+
+// ============================================================
+// 常驻脚本服务态（单实例）+ 脚本目录管理
+// ============================================================
+#import <pthread.h>
+
+static lua_State *gSvcL = NULL;
+static volatile BOOL gSvcStop = NO;
+static volatile BOOL gSvcRunning = NO;
+static pthread_t gSvcTid;
+static NSMutableString *gSvcOut = nil;
+static NSLock *gSvcOutLock = nil;
+
+NSString* _Nonnull MatisuScriptDir(void) {
+    NSString *dir = @"/var/mobile/MatisuAuto/scripts";
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    return dir;
+}
+
+// 常驻 state 的 print 走共享输出（加锁）
+static int l_printSvc(lua_State *L) {
+    if (!gSvcOutLock) gSvcOutLock = [NSLock new];
+    if (!gSvcOut) gSvcOut = [NSMutableString string];
+    int n = lua_gettop(L);
+    lua_getglobal(L, "tostring");
+    [gSvcOutLock lock];
+    for (int i = 1; i <= n; i++) {
+        lua_pushvalue(L, -1);
+        lua_pushvalue(L, i);
+        lua_call(L, 1, 1);
+        const char *s = lua_tostring(L, -1);
+        if (i > 1) [gSvcOut appendString:@"	"];
+        if (s) [gSvcOut appendString:[NSString stringWithUTF8String:s] ?: @"?"];
+        lua_pop(L, 1);
+    }
+    [gSvcOut appendString:@"
+"];
+    [gSvcOutLock unlock];
+    return 0;
+}
+
+// 中断 hook：stop 置位后抛错终止脚本
+static void svcHook(lua_State *L, lua_Debug *ar) {
+    (void)ar;
+    if (gSvcStop) luaL_error(L, "__MATISU_STOP__");
+}
+
+static void *svcThread(void *arg) {
+    NSString *source = (__bridge_transfer NSString *)arg;
+    lua_State *L = luaL_newstate();
+    if (L) {
+        luaL_openlibs(L);
+        registerFns(L, l_printSvc);
+        lua_sethook(L, svcHook, LUA_MASKCOUNT, 10000);
+        int status = luaL_loadbufferx(L, source.UTF8String,
+                                      (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], "=service", "t");
+        if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
+        if (status != LUA_OK) {
+            const char *err = lua_tostring(L, -1);
+            NSString *msg = err ? [NSString stringWithUTF8String:err] : @"unknown";
+            if (![msg containsString:@"__MATISU_STOP__"]) {
+                [gSvcOutLock lock];
+                [gSvcOut appendFormat:@"[service error] %@
+", msg];
+                [gSvcOutLock unlock];
+            }
+        }
+        lua_close(L);
+    }
+    gSvcL = NULL;
+    gSvcRunning = NO;
+    return NULL;
+}
+
+BOOL MatisuLuaStart(NSString *source) {
+    if (gSvcRunning || !source) return NO;
+    if (!gSvcOutLock) gSvcOutLock = [NSLock new];
+    if (!gSvcOut) gSvcOut = [NSMutableString string];
+    gSvcStop = NO;
+    gSvcRunning = YES;
+    pthread_create(&gSvcTid, NULL, svcThread, (__bridge_retained void *)source);
+    pthread_detach(gSvcTid);
+    return YES;
+}
+
+void MatisuLuaStop(void) {
+    if (!gSvcRunning) return;
+    gSvcStop = YES;   // hook 下一拍触发 luaL_error
+}
+
+BOOL MatisuLuaRunning(void) { return gSvcRunning; }
+
+NSString* _Nonnull MatisuLuaDrainOutput(void) {
+    if (!gSvcOutLock) gSvcOutLock = [NSLock new];
+    if (!gSvcOut) gSvcOut = [NSMutableString string];
+    [gSvcOutLock lock];
+    NSString *r = [gSvcOut copy];
+    [gSvcOut setString:@""];
+    [gSvcOutLock unlock];
+    return r;
+}
+
+void MatisuLuaAutoRun(void) {
+    NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:@"autorun.lua"];
+    NSString *src = [NSString stringWithContentsOfFile:f encoding:NSUTF8StringEncoding error:nil];
+    if (src.length) {
+        BOOL ok = MatisuLuaStart(src);
+        NSLog(@"[MatisuAuto] autorun.lua %@", ok ? @"started" : @"start failed");
+    }
+}
+
+// FNS 表共享注册（one-shot 用 l_print，常驻用 l_printSvc）
+static void registerFns(lua_State *L, lua_CFunction printFn) {
+    static const struct { const char *name; lua_CFunction fn; } FNS[] = {
+        { "tap", l_tap }, { "longTap", l_longTap }, { "swipe", l_swipe },
+        { "touchDown", l_touchDown }, { "touchMove", l_touchMove }, { "touchUp", l_touchUp },
+        { "keyPress", l_keyPress }, { "inputText", l_inputText },
+        { "getDisplaySize", l_getDisplaySize },
+        { "getPixelColor", l_getPixelColor },
+        { "sleep", l_sleep }, { "mSleep", l_mSleep },
+        { "findColor", l_findColor }, { "cmpColor", l_cmpColor },
+        { "cmpColorEx", l_cmpColorEx }, { "getColorNum", l_getColorNum },
+        { "snapShot", l_snapShot },
+        { NULL, NULL },
+    };
+    lua_pushcfunction(L, printFn);
+    lua_setglobal(L, "print");
+    for (int i = 0; FNS[i].name; i++) {
+        lua_pushcfunction(L, FNS[i].fn);
+        lua_setglobal(L, FNS[i].name);
+    }
 }

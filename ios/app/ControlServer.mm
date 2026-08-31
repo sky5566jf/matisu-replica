@@ -171,6 +171,65 @@ static void* MAServerLoop(void* arg) {
                         : @{ @"ok": @NO, @"output": @"", @"error": @"base64 decode failed" };
                     NSData *json = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
                     sendLE(cli, json ? json.bytes : NULL, json ? json.length : 0);
+                } else if (strncmp(line, "runfile ", 8) == 0 && line[8]) {
+                    // runfile <相对路径>：执行 scripts 目录下脚本（one-shot）
+                    NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:@(line + 8)];
+                    NSString *src = [NSString stringWithContentsOfFile:f encoding:NSUTF8StringEncoding error:nil];
+                    NSDictionary *r = src
+                        ? MatisuLuaRun(src)
+                        : @{ @"ok": @NO, @"output": @"", @"error": [NSString stringWithFormat:@"script not found: %@", @(line + 8)] };
+                    NSData *json2 = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, json2 ? json2.bytes : NULL, json2 ? json2.length : 0);
+                } else if (strncmp(line, "upload ", 7) == 0 && line[7]) {
+                    // upload <b64(相对路径)> <b64(内容)>：写 scripts 目录
+                    NSString *rest = [@(line + 7) stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    NSRange sp = [rest rangeOfString:@" "];
+                    BOOL okw = NO;
+                    if (sp.location != NSNotFound) {
+                        NSData *pd = [[NSData alloc] initWithBase64EncodedString:[rest substringToIndex:sp.location] options:0];
+                        NSData *cd = [[NSData alloc] initWithBase64EncodedString:[rest substringFromIndex:sp.location + 1] options:0];
+                        NSString *rel = pd ? [[NSString alloc] initWithData:pd encoding:NSUTF8StringEncoding] : nil;
+                        if (rel.length && cd && ![rel containsString:@".."]) {
+                            NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:rel];
+                            [[NSFileManager defaultManager] createDirectoryAtPath:[f stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
+                            okw = [cd writeToFile:f atomically:YES];
+                        }
+                    }
+                    const char *resp = okw ? "OK\n" : "FAIL\n";
+                    sendLE(cli, resp, strlen(resp));
+                } else if (strcmp(line, "list") == 0) {
+                    // list：scripts 目录文件清单（相对路径数组 JSON）
+                    NSDirectoryEnumerator *en = [[NSFileManager defaultManager] enumeratorAtPath:MatisuScriptDir()];
+                    NSMutableArray *files = [NSMutableArray array];
+                    NSString *p2;
+                    while ((p2 = [en nextObject])) {
+                        if ([[en fileAttributes][NSFileType] isEqualToString:NSFileTypeRegular]) [files addObject:p2];
+                    }
+                    NSData *json3 = [NSJSONSerialization dataWithJSONObject:files options:0 error:nil];
+                    sendLE(cli, json3 ? json3.bytes : NULL, json3 ? json3.length : 0);
+                } else if (strncmp(line, "delete ", 7) == 0 && line[7]) {
+                    NSString *rel = @(line + 7);
+                    BOOL okd = NO;
+                    if (![rel containsString:@".."]) {
+                        okd = [[NSFileManager defaultManager] removeItemAtPath:[MatisuScriptDir() stringByAppendingPathComponent:rel] error:nil];
+                    }
+                    const char *resp = okd ? "OK\n" : "FAIL\n";
+                    sendLE(cli, resp, strlen(resp));
+                } else if (strncmp(line, "start ", 6) == 0 && line[6]) {
+                    // start <b64(lua)>：常驻脚本（后台线程，print 进共享缓冲）
+                    NSData *src = [[NSData alloc] initWithBase64EncodedString:@(line + 6) options:0];
+                    NSString *code = src ? [[NSString alloc] initWithData:src encoding:NSUTF8StringEncoding] : nil;
+                    BOOL oks = code && MatisuLuaStart(code);
+                    const char *resp = oks ? "OK\n" : "FAIL\n";
+                    sendLE(cli, resp, strlen(resp));
+                } else if (strcmp(line, "stop") == 0) {
+                    MatisuLuaStop();
+                    sendOK(cli);
+                } else if (strcmp(line, "state") == 0) {
+                    // state：常驻脚本状态 + 累计输出（取走即清）
+                    NSDictionary *r = @{ @"running": @(MatisuLuaRunning()), @"output": MatisuLuaDrainOutput() };
+                    NSData *json4 = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, json4 ? json4.bytes : NULL, json4 ? json4.length : 0);
                 } else if (strcmp(line, "frontapp") == 0) {
                     NSData *d = queryTweak("frontapp", 3.0);    // 优先 SpringBoard tweak（全系统可见）
                     if (!d) {

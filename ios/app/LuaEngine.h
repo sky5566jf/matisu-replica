@@ -13,6 +13,20 @@ extern "C" {
 /// 每次调用新建独立 lua_State（脚本间隔离）；print 输出收集进 output。
 NSDictionary* _Nullable MatisuLuaRun(NSString *source);
 
+// ---- 常驻脚本（单实例服务态）----
+/// 后台线程启动常驻脚本；已在跑返回 NO（先 MatisuLuaStop）。
+BOOL MatisuLuaStart(NSString *source);
+/// 请求停止常驻脚本（hook 中断，luaL_error 抛出 "__MATISU_STOP__"）。
+void MatisuLuaStop(void);
+BOOL MatisuLuaRunning(void);
+/// 取走常驻脚本累计 print 输出（线程安全，取后清空）。
+NSString* _Nonnull MatisuLuaDrainOutput(void);
+/// daemon 启动时调用：/var/mobile/MatisuAuto/scripts/autorun.lua 存在则常驻执行。
+void MatisuLuaAutoRun(void);
+
+/// 脚本根目录（mobile 可写）
+NSString* _Nonnull MatisuScriptDir(void);
+
 #ifdef __cplusplus
 }
 #endif
