@@ -24,8 +24,9 @@ static BOOL parseOne(NSString *seg, MAColorSpec *out) {
     NSString *s = [seg stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if ([s hasPrefix:@"0x"] || [s hasPrefix:@"0X"]) s = [s substringFromIndex:2];
     NSArray *parts = [s componentsSeparatedByString:@"-"];
-    if (parts[0].length != 6) return NO;
-    const char *c = parts[0].UTF8String;
+    NSString *hexPart = parts[0];
+    if (hexPart.length != 6) return NO;
+    const char *c = hexPart.UTF8String;
     int v = hexVal(c, 6);
     out->b = (v >> 16) & 0xFF; out->g = (v >> 8) & 0xFF; out->r = v & 0xFF;   // BBGGRR
     out->dr = out->dg = out->db = 0;
