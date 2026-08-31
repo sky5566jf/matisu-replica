@@ -72,7 +72,8 @@ static void axLoad(void) {
     }
 
     AX.systemWide    = (fn_SystemWide)dlsym(h, "AXUIElementCreateSystemWide");
-    AX.createApp     = (fn_CreateApp)dlsym(h, "AXUIElementCreateApplication");
+    AX.createApp     = (fn_CreateApp)dlsym(h, "AXUIElementCreateAppElementWithPid");
+    if (!AX.createApp) AX.createApp = (fn_CreateApp)dlsym(h, "AXUIElementCreateApplication");
     AX.copyAttr      = (fn_CopyAttr)dlsym(h, "AXUIElementCopyAttributeValue");
     AX.copyActions   = (fn_CopyActions)dlsym(h, "AXUIElementCopyActionNames");
     AX.valueGetValue = (fn_ValueGetValue)dlsym(h, "AXValueGetValue");
