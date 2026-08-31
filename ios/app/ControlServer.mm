@@ -100,6 +100,10 @@ static void* MAServerLoop(void* arg) {
         if (cli < 0) continue;
         char buf[4096];
         ssize_t n;
+        // 每连接一个 autoreleasepool：screencap/uinode 在非主线程产生大量
+        // autoreleased 对象（UIImage/PNG/JSON），无 pool 会累积泄漏直至
+        // jetsam per-process-limit 杀进程（真机实证 10 连发即崩）。
+        @autoreleasepool {
         while ((n = recv(cli, buf, sizeof(buf) - 1, 0)) > 0) {
             buf[n] = 0;
             char* line = strtok(buf, "\r\n");
@@ -172,6 +176,7 @@ static void* MAServerLoop(void* arg) {
                 line = strtok(NULL, "\r\n");
             }
         }
+        } // @autoreleasepool
         close(cli);
     }
     return NULL;
