@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 #import "sthid/STHIDEventGenerator.h"
+#import "sthid/UIScreen+Private.h"
 
 // ============================================================
 // MatisuAuto iOS 触控注入 —— STHID 桥接版

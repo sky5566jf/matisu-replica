@@ -110,6 +110,8 @@ __used NS_INLINE void STAccurateSleep(NSTimeInterval seconds) {
 /// MatisuAuto 桥接：直接把当前活动触点数组下发（内部走 _updateTouchPoints，
 /// 按下/移动/抬起的状态迁移由 STHID 自动推断）。供手指级 down/move/up API 使用。
 - (void)stUpdatePoints:(CGPoint *)points count:(NSUInteger)count;
+- (void)touchDownAtPoints:(CGPoint *)locations touchCount:(NSUInteger)touchCount;
+- (void)liftUpAtPoints:(CGPoint *)locations touchCount:(NSUInteger)touchCount;
 
 // Keep-Alive: interval in seconds. 0 disables the timer (default 0).
 @property (nonatomic) NSTimeInterval keepAliveInterval;
