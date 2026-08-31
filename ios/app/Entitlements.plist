@@ -14,6 +14,12 @@
     <true/>
     <key>com.apple.springboard.launchapplications</key>
     <true/>
+    <key>com.apple.springboard.frontmostApplication.bundleID</key>
+    <true/>
+    <key>com.apple.frontboard.workspace-service</key>
+    <true/>
+    <key>com.apple.frontboard.systemappservices</key>
+    <true/>
 	<key>com.apple.private.hid.client</key>
 	<true/>
 	<key>com.apple.private.hid.client.event-dispatch</key>
