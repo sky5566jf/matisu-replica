@@ -77,19 +77,29 @@ static int batteryPercent(void) {
     return p;
 }
 
+// UIScreen 私有 API：headless 下唯一仍返回真实物理像素的入口
+//（bounds/nativeBounds/nativeScale 在 daemon 下全是 320 宽兼容值）。
+@interface UIScreen (MatisuPrivate)
+@property(nonatomic, readonly) CGRect _unjailedReferenceBoundsInPixels;
+@end
+
 CGSize MatisuLogicalScreenSize(void) {
     UIScreen *scr = [UIScreen mainScreen];
     CGRect b = scr.bounds;
-    // headless daemon（无 UIApplicationMain）下 UIKit 未初始化显示指标，
-    // bounds 恒为 320 宽兼容默认值（实测高可能带小数，如 568.5）。
-    // 现代 iPhone 原生逻辑宽 >=375；<=321 即判定为兼容默认，改用像素/缩放换算。
-    // 对真正 320 宽的旧机（SE1），换算结果与 bounds 相同，无副作用。
+    // headless daemon（无 UIApplicationMain）下 bounds 为 320 宽兼容默认值；
+    // 现代 iPhone 原生逻辑宽 >=375，<=321 即判定为兼容默认。
     BOOL headlessDefault = (b.size.width > 0 && b.size.width <= 321.0);
     if (!headlessDefault && b.size.width > 0 && b.size.height > 0) return b.size;
-    CGRect nb = scr.nativeBounds;               // 像素，竖向基准
+    // daemon：nativeBounds 同样是兼容值，必须用 _unjailedReferenceBoundsInPixels
     CGFloat ns = scr.nativeScale;
     if (ns <= 0) ns = scr.scale;
     if (ns <= 0) ns = 2;
+    if ([scr respondsToSelector:@selector(_unjailedReferenceBoundsInPixels)]) {
+        CGSize px = scr._unjailedReferenceBoundsInPixels.size;
+        CGSize logical = CGSizeMake(px.width / ns, px.height / ns);
+        if (logical.width > 0 && logical.height > 0) return logical;
+    }
+    CGRect nb = scr.nativeBounds;
     CGSize logical = CGSizeMake(nb.size.width / ns, nb.size.height / ns);
     if (logical.width > 0 && logical.height > 0) return logical;
     return b.size;
@@ -104,7 +114,11 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
         CGFloat scale = scr.nativeScale;
         if (scale <= 0) scale = scr.scale;
         if (scale <= 0) scale = 1;
-        CGRect nb = scr.nativeBounds;       // 像素（始终竖向基准）
+        CGRect nb = scr.nativeBounds;       // 像素（daemon 下是兼容值，仅兜底）
+        if ([scr respondsToSelector:@selector(_unjailedReferenceBoundsInPixels)]) {
+            CGRect ur = scr._unjailedReferenceBoundsInPixels;
+            if (ur.size.width > 0 && ur.size.height > 0) nb = ur;   // 真实物理像素
+        }
         UIDevice *dev = [UIDevice currentDevice];
 
         info = [NSMutableDictionary dictionary];
