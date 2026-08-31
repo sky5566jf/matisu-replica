@@ -60,7 +60,7 @@ extern IOHIDEventRef IOHIDEventCreateDigitizerFingerEvent(CFAllocatorRef allocat
     Boolean range, Boolean touch, IOOptionBits options);
 extern void IOHIDEventSetIntegerValue(IOHIDEventRef event, uint32_t field, long long value);
 extern void IOHIDEventSetFloatValue(IOHIDEventRef event, uint32_t field, IOHIDFloat value);
-extern void IOHIDEventAppendEvent(IOHIDEventRef event, IOHIDEventRef childEvent);
+extern void IOHIDEventAppendEvent(IOHIDEventRef event, IOHIDEventRef childEvent, uint32_t options);
 extern void IOHIDEventSetSenderID(IOHIDEventRef event, uint64_t senderID);
 extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef allocator);
 extern void IOHIDEventSystemClientDispatchEvent(IOHIDEventSystemClientRef client, IOHIDEventRef event);

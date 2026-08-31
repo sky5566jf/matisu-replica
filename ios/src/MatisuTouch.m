@@ -72,7 +72,7 @@ static void MASendFinger(int phase, int finger, float x, float y) {
     IOHIDEventSetFloatValue(child, kIOHIDEventFieldDigitizerMinorRadius, radius);
     IOHIDEventSetIntegerValue(child, kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1);
 
-    IOHIDEventAppendEvent(parent, child);
+    IOHIDEventAppendEvent(parent, child, 0);
     IOHIDEventSetSenderID(parent, MATISU_SENDER_ID);
     IOHIDEventSystemClientDispatchEvent(MASystemClient(), parent);
 
