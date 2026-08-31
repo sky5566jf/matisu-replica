@@ -146,6 +146,28 @@ NSString* _Nullable MatisuFrontApp(void) {
             if (!FBSWS) FBSWS = NSClassFromString(@"SBApplicationWorkspace");
             faSet(@"ws_class", FBSWS ? NSStringFromClass(FBSWS) : @"nil");
         }
+        // Tier 0：FBProcessManager（RootCore 同源，frontmostApplication 属性）
+        {
+            static Class FBPM = Nil;
+            if (!FBPM) {
+                if (!NSClassFromString(@"FBProcessManager"))
+                    dlopen("/System/Library/PrivateFrameworks/FrontBoard.framework/FrontBoard", RTLD_LAZY);
+                FBPM = NSClassFromString(@"FBProcessManager");
+                faSet(@"fbpm_class", FBPM ? @"ok" : @"nil");
+            }
+            if (FBPM && [FBPM respondsToSelector:NSSelectorFromString(@"sharedInstance")]) {
+                id pm = ((id (*)(id, SEL))objc_msgSend)(FBPM, NSSelectorFromString(@"sharedInstance"));
+                faSet(@"fbpm_nil", @(pm == nil));
+                if (pm && [pm respondsToSelector:NSSelectorFromString(@"frontmostApplication")]) {
+                    id fa = ((id (*)(id, SEL))objc_msgSend)(pm, NSSelectorFromString(@"frontmostApplication"));
+                    faSet(@"fbpm_fa_nil", @(fa == nil));
+                    if (fa && [fa respondsToSelector:@selector(bundleIdentifier)]) {
+                        NSString *bid = ((NSString *(*)(id, SEL))objc_msgSend)(fa, @selector(bundleIdentifier));
+                        if (bid.length) return bid;
+                    }
+                }
+            }
+        }
         if (FBSWS) {
             SEL dw = NSSelectorFromString(@"defaultWorkspace");
             if ([FBSWS respondsToSelector:dw]) {
