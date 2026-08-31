@@ -43,7 +43,12 @@ Maintainer: Matisu
 Section: Utilities
 EOF
 
-DPKGDEB=$(command -v dpkg-deb || echo "$THEOS/bin/dpkg-deb")
 mkdir -p ../dist
-"$DPKGDEB" -b "$STAGE" "../dist/$OUT"
+if command -v dpkg-deb >/dev/null 2>&1; then
+  dpkg-deb -b "$STAGE" "../dist/$OUT"
+elif [ -x "$THEOS/bin/dm.pl" ]; then
+  "$THEOS/bin/dm.pl" -b -Zgzip "$STAGE" "../dist/$OUT"
+else
+  echo "!! no dpkg-deb or dm.pl"; exit 1
+fi
 echo "built ../dist/$OUT"
