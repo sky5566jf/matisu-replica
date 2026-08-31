@@ -250,7 +250,7 @@ static void *svcThread(void *arg) {
     if (L) {
         luaL_openlibs(L);
         registerFns(L, l_printSvc);
-        lua_sethook(L, svcHook, LUA_MASKCOUNT, 10000);
+        lua_sethook(L, svcHook, LUA_MASKCOUNT, 50);
         int status = luaL_loadbufferx(L, source.UTF8String,
                                       (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], "=service", "t");
         if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
