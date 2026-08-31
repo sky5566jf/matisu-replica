@@ -77,13 +77,30 @@ static int batteryPercent(void) {
     return p;
 }
 
+CGSize MatisuLogicalScreenSize(void) {
+    UIScreen *scr = [UIScreen mainScreen];
+    CGRect b = scr.bounds;
+    // headless daemon（无 UIApplicationMain）下 UIKit 未初始化显示指标，
+    // bounds 恒为 320x568 兼容默认值 —— 检测该特征后改用像素/缩放换算
+    BOOL headlessDefault = (fabs(b.size.width - 320.0) < 0.5 && fabs(b.size.height - 568.0) < 0.5);
+    if (!headlessDefault && b.size.width > 0 && b.size.height > 0) return b.size;
+    CGRect nb = scr.nativeBounds;               // 像素，竖向基准
+    CGFloat ns = scr.nativeScale;
+    if (ns <= 0) ns = scr.scale;
+    if (ns <= 0) ns = 2;
+    CGSize logical = CGSizeMake(nb.size.width / ns, nb.size.height / ns);
+    if (logical.width > 0 && logical.height > 0) return logical;
+    return b.size;
+}
+
 NSData* _Nullable MatisuDeviceInfoJSON(void) {
     __block NSMutableDictionary *info = nil;
 
     void (^collect)(void) = ^{
         UIScreen *scr = [UIScreen mainScreen];
-        CGRect b = scr.bounds;              // 逻辑点
-        CGFloat scale = scr.scale;
+        CGSize logical = MatisuLogicalScreenSize();   // 逻辑点（daemon 下也准确）
+        CGFloat scale = scr.nativeScale;
+        if (scale <= 0) scale = scr.scale;
         if (scale <= 0) scale = 1;
         CGRect nb = scr.nativeBounds;       // 像素（始终竖向基准）
         UIDevice *dev = [UIDevice currentDevice];
@@ -95,8 +112,8 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
         info[@"systemName"]    = dev.systemName ?: @"iOS";
         info[@"systemVersion"] = dev.systemVersion ?: @"";
         info[@"sdk"]           = @([dev.systemVersion integerValue]);   // iOS 主版本号
-        info[@"width"]         = @((int)lround(b.size.width));
-        info[@"height"]        = @((int)lround(b.size.height));
+        info[@"width"]         = @((int)lround(logical.width));
+        info[@"height"]        = @((int)lround(logical.height));
         info[@"scale"]         = @((double)scale);
         info[@"pixelWidth"]    = @((int)lround(nb.size.width));
         info[@"pixelHeight"]   = @((int)lround(nb.size.height));
