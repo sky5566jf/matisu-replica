@@ -14,9 +14,12 @@
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 
+// lua 官方头无 extern "C" 守卫（lua.hpp 在 etc/ 未 vendor），C++ 侧自行包裹
+extern "C" {
 #import "lua/lua.h"
 #import "lua/lauxlib.h"
 #import "lua/lualib.h"
+}
 
 // 输出收集（每次 run 挂在 lua_State 的 registry 上）
 #define MA_OUT_KEY "matisu_output"
