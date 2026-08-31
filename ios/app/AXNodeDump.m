@@ -14,6 +14,8 @@
 #import "AXNodeDump.h"
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
+#import <sys/sysctl.h>
+extern int proc_pidpath(int pid, void *buffer, unsigned int buffersize);
 
 #if !__has_feature(objc_arc)
 #error "AXNodeDump.m must be compiled with ARC"
@@ -29,6 +31,7 @@ enum { kMAAXErrorSuccess = 0 };
 enum { kMAAXValueCGRectType = 3 };   // 与 macOS AXValueType 编号一致
 
 typedef AXUIElementRef (*fn_SystemWide)(void);
+typedef AXUIElementRef (*fn_CreateApp)(int pid);
 typedef MAAXError (*fn_CopyAttr)(AXUIElementRef, CFStringRef, CFTypeRef *);
 typedef MAAXError (*fn_CopyActions)(AXUIElementRef, CFArrayRef *);
 typedef Boolean   (*fn_ValueGetValue)(AXValueRef, uint32_t, void *);
