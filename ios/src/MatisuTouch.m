@@ -3,14 +3,26 @@
 #import <unistd.h>
 
 // ============================================================
-// MatisuAuto iOS 触控注入实现（Phase 0）
-// 方案：父 digitizer 事件(hand) + 子 digitizer 事件(finger)，
-//       经 IOHIDEventSystemClient 分发。
-// 坐标：屏幕点（points），与 PC 端 ios_client.py 下发一致。
-// 注意：必须设置 SenderID，否则 iOS 会静默丢弃合成事件。
+// MatisuAuto iOS 触控注入实现
+// 方案：父 digitizer 事件(hand) + 子 finger 事件，经 IOHIDEventSystemClient 分发。
+// 对齐可工作的 TrollVNC STHIDEventGenerator：
+//   1) SenderID 必须用 0x8000000817319372（backboardd 认可的系统发送者），
+//      自编 SenderID 会被静默丢弃；
+//   2) digitizer 坐标为 0~1 归一化（相对显示屏），不能直接传逻辑点；
+//   3) 父事件置 IsBuiltIn，子事件用 IOHIDEventCreateDigitizerFingerEvent
+//      并补 minor/major radius。
 // ============================================================
 
-#define MATISU_SENDER_ID 0xDEFACEDBEEFFECE5ULL
+#define MATISU_SENDER_ID 0x8000000817319372ULL
+
+// 归一化基准（逻辑点），由 MatisuTouchSetScreenSize 设置
+static float gScreenW = 320.0f;
+static float gScreenH = 568.0f;
+
+void MatisuTouchSetScreenSize(float w, float h) {
+    if (w > 0) gScreenW = w;
+    if (h > 0) gScreenH = h;
+}
 
 static IOHIDEventSystemClientRef MASystemClient() {
     static IOHIDEventSystemClientRef client = NULL;
@@ -23,31 +35,44 @@ static IOHIDEventSystemClientRef MASystemClient() {
 // phase: 1=按下 2=移动 3=抬起
 static void MASendFinger(int phase, int finger, float x, float y) {
     uint64_t t = mach_absolute_time();
+    float nx = x / gScreenW;
+    float ny = y / gScreenH;
+
+    // 事件掩码（对齐 STHID：down/lift 带 Identity，move 不带 Touch 带 Attribute）
+    uint32_t parentMask = kIOHIDDigitizerEventTouch;
+    uint32_t childMask;
+    Boolean range = true, touch = true;
+    if (phase == 1) {          // down
+        parentMask |= kIOHIDDigitizerEventIdentity;
+        childMask = kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventIdentity;
+    } else if (phase == 2) {   // move
+        parentMask = kIOHIDDigitizerEventPosition | kIOHIDDigitizerEventAttribute;
+        childMask = kIOHIDDigitizerEventPosition;
+    } else {                   // up
+        parentMask |= kIOHIDDigitizerEventIdentity;
+        childMask = kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventIdentity;
+        range = false; touch = false;
+    }
 
     // 父事件（hand）
     IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(
         kCFAllocatorDefault, t,
-        kIOHIDDigitizerTransducerTypeHand, 0, 0, kIOHIDDigitizerEventTouch, 0,
-        0, 0, 0, 0, 0, 0, true, 0);
+        kIOHIDDigitizerTransducerTypeHand, 0, 0, parentMask, 0,
+        0, 0, 0, 0, 0, 0, touch, 0);
+    IOHIDEventSetIntegerValue(parent, kIOHIDEventFieldIsBuiltIn, 1);
     IOHIDEventSetIntegerValue(parent, kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1);
 
-    uint32_t eventMask;
-    Boolean range = true, touch = true;
-    if (phase == 1) {
-        eventMask = kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch | kIOHIDDigitizerEventPosition;
-    } else if (phase == 2) {
-        eventMask = kIOHIDDigitizerEventPosition;
-    } else { // up
-        eventMask = kIOHIDDigitizerEventTouch;
-        range = false; touch = false;
-    }
-
-    // 子事件（finger）
-    IOHIDEventRef child = IOHIDEventCreateDigitizerEvent(
+    // 子事件（finger），归一化坐标
+    IOHIDEventRef child = IOHIDEventCreateDigitizerFingerEvent(
         kCFAllocatorDefault, t,
-        kIOHIDDigitizerTransducerTypeFinger, (uint32_t)(finger + 1), 2, eventMask,
-        0, x, y, 0, 0, 0, range, touch, 0);
-    IOHIDEventSetIntegerValue(child, kIOHIDEventFieldDigitizerType, kIOHIDDigitizerTransducerTypeFinger);
+        (uint32_t)(finger + 1), (uint32_t)(finger + 1), childMask,
+        nx, ny, 0,
+        touch ? 0.0f : 0.0f,   // tipPressure（STHID 默认 0）
+        90.0f,                 // twist
+        range, touch, 0);
+    float radius = touch ? 5.0f : 0.0f;  // STHID defaultMajorRadius=5
+    IOHIDEventSetFloatValue(child, kIOHIDEventFieldDigitizerMajorRadius, radius);
+    IOHIDEventSetFloatValue(child, kIOHIDEventFieldDigitizerMinorRadius, radius);
     IOHIDEventSetIntegerValue(child, kIOHIDEventFieldDigitizerIsDisplayIntegrated, 1);
 
     IOHIDEventAppendEvent(parent, child);

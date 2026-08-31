@@ -4,6 +4,7 @@
 #import "AXNodeDump.h"
 #import "DeviceInfo.h"
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #import <sys/socket.h>
 #import <netinet/in.h>
 #import <arpa/inet.h>
@@ -131,6 +132,13 @@ static void* MAServerLoop(void* arg) {
 }
 
 void MatisuControlServerStart(void) {
+    // 触控坐标归一化基准：digitizer HID 事件用 0~1 归一化坐标，
+    // 以当前屏幕逻辑点尺寸为基准（与 PC 端下发坐标系一致）
+    CGSize pts = [UIScreen mainScreen].bounds.size;
+    if (pts.width > 0 && pts.height > 0) {
+        MatisuTouchSetScreenSize((float)pts.width, (float)pts.height);
+    }
+    NSLog(@"[MatisuAuto] touch normalize base: %.0fx%.0f", pts.width, pts.height);
     pthread_t tid;
     pthread_create(&tid, NULL, MAServerLoop, NULL);
     pthread_detach(tid);

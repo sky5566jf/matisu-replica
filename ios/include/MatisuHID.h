@@ -29,6 +29,11 @@ typedef float IOHIDFloat;
 #define kIOHIDDigitizerEventRange    0x00000001
 #define kIOHIDDigitizerEventTouch    0x00000002
 #define kIOHIDDigitizerEventPosition 0x00000004
+#define kIOHIDDigitizerEventIdentity 0x00000008
+#define kIOHIDDigitizerEventAttribute 0x00000010
+
+// 顶层 IOHIDEventField（IOHIDEventFieldBase(type)=type<<16，kIOHIDEventTypeNULL=0）
+#define kIOHIDEventFieldIsBuiltIn                   4
 
 // IOHIDEventField（digitizer 基址 0xB0000）
 #define kIOHIDEventFieldDigitizerX                  0xB0000
@@ -39,6 +44,8 @@ typedef float IOHIDFloat;
 #define kIOHIDEventFieldDigitizerEventMask          0xB0007
 #define kIOHIDEventFieldDigitizerRange              0xB0008
 #define kIOHIDEventFieldDigitizerTouch              0xB0009
+#define kIOHIDEventFieldDigitizerMajorRadius        0xB0014
+#define kIOHIDEventFieldDigitizerMinorRadius        0xB0015
 #define kIOHIDEventFieldDigitizerIsDisplayIntegrated 0xB0019
 
 // 私有符号（运行时存在于设备的 IOKit.framework）
@@ -46,6 +53,10 @@ extern IOHIDEventRef IOHIDEventCreateDigitizerEvent(CFAllocatorRef allocator, ui
     IOHIDDigitizerTransducerType type, uint32_t index, uint32_t identity,
     IOHIDDigitizerEventMask eventMask, uint32_t buttonMask,
     IOHIDFloat x, IOHIDFloat y, IOHIDFloat z, IOHIDFloat tipPressure, IOHIDFloat barrelPressure,
+    Boolean range, Boolean touch, IOOptionBits options);
+extern IOHIDEventRef IOHIDEventCreateDigitizerFingerEvent(CFAllocatorRef allocator, uint64_t timeStamp,
+    uint32_t index, uint32_t identity, IOHIDDigitizerEventMask eventMask,
+    IOHIDFloat x, IOHIDFloat y, IOHIDFloat z, IOHIDFloat tipPressure, IOHIDFloat twist,
     Boolean range, Boolean touch, IOOptionBits options);
 extern void IOHIDEventSetIntegerValue(IOHIDEventRef event, uint32_t field, long long value);
 extern void IOHIDEventSetFloatValue(IOHIDEventRef event, uint32_t field, IOHIDFloat value);
@@ -55,6 +66,9 @@ extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef all
 extern void IOHIDEventSystemClientDispatchEvent(IOHIDEventSystemClientRef client, IOHIDEventRef event);
 
 // ---- 对外 C API（供 LuaJIT ffi / ObjC 封装调用）----
+/// 设置触控坐标归一化基准（屏幕逻辑点尺寸）。digitizer HID 事件用 0~1 归一化坐标，
+/// 必须由使用方（有 UIKit 上下文处）启动时设置；默认 320x568。
+void MatisuTouchSetScreenSize(float w, float h);
 void MatisuTouchTap(float x, float y);
 void MatisuTouchDown(int finger, float x, float y);
 void MatisuTouchMove(int finger, float x, float y);

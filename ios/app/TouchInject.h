@@ -5,6 +5,7 @@ extern "C" {
 #endif
 
 // 触控注入 C API（实现见 ios/src/MatisuTouch.m，与 tweak 共用）
+void MatisuTouchSetScreenSize(float w, float h);
 void MatisuTouchTap(float x, float y);
 void MatisuTouchDown(int finger, float x, float y);
 void MatisuTouchMove(int finger, float x, float y);
