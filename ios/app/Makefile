@@ -4,7 +4,7 @@ TARGET = iphone:latest:14.0
 include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = MatisuAuto
-MatisuAuto_FILES = main.mm AppDelegate.mm TouchInject.mm ControlServer.mm ScreenShot.m AXNodeDump.m DeviceInfo.m ../src/MatisuTouch.m
+MatisuAuto_FILES = main.mm AppDelegate.mm TouchInject.mm ControlServer.mm ScreenShot.m AXNodeDump.m DeviceInfo.m sthid/STHIDEventGenerator.mm
 MatisuAuto_PRIVATE_FRAMEWORKS = IOKit
 MatisuAuto_FRAMEWORKS = UIKit CoreGraphics Foundation IOSurface
 MatisuAuto_CODESIGN_ENTITLEMENTS = Entitlements.plist
