@@ -81,8 +81,10 @@ CGSize MatisuLogicalScreenSize(void) {
     UIScreen *scr = [UIScreen mainScreen];
     CGRect b = scr.bounds;
     // headless daemon（无 UIApplicationMain）下 UIKit 未初始化显示指标，
-    // bounds 恒为 320x568 兼容默认值 —— 检测该特征后改用像素/缩放换算
-    BOOL headlessDefault = (fabs(b.size.width - 320.0) < 0.5 && fabs(b.size.height - 568.0) < 0.5);
+    // bounds 恒为 320 宽兼容默认值（实测高可能带小数，如 568.5）。
+    // 现代 iPhone 原生逻辑宽 >=375；<=321 即判定为兼容默认，改用像素/缩放换算。
+    // 对真正 320 宽的旧机（SE1），换算结果与 bounds 相同，无副作用。
+    BOOL headlessDefault = (b.size.width > 0 && b.size.width <= 321.0);
     if (!headlessDefault && b.size.width > 0 && b.size.height > 0) return b.size;
     CGRect nb = scr.nativeBounds;               // 像素，竖向基准
     CGFloat ns = scr.nativeScale;
