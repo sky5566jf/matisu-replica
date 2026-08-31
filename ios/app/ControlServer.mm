@@ -231,6 +231,18 @@ static void* MAServerLoop(void* arg) {
                     NSDictionary *r = @{ @"running": @(MatisuLuaRunning()), @"output": MatisuLuaDrainOutput() };
                     NSData *json4 = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
                     sendLE(cli, json4 ? json4.bytes : NULL, json4 ? json4.length : 0);
+                } else if (strncmp(line, "getpixel ", 9) == 0) {
+                    // getpixel <x> <y> -> "BBGGRR
+"（抓抓取色用，逻辑点坐标）
+                    int gx, gy;
+                    int gc = -1;
+                    if (sscanf(line + 9, "%d %d", &gx, &gy) == 2) gc = MatisuCapturePixel(gx, gy);
+                    char gresp[16];
+                    int grl = gc >= 0 ? snprintf(gresp, sizeof(gresp), "%06X
+", (unsigned)gc & 0xFFFFFF)
+                                      : snprintf(gresp, sizeof(gresp), "-1
+");
+                    sendLE(cli, gresp, (size_t)grl);
                 } else if (strncmp(line, "findcolor ", 10) == 0) {
                     // findcolor x1 y1 x2 y2 <color> <dir> <sim> -> "x y\n"（未中 -1 -1）
                     int x1, y1, x2, y2, dir; double simv; char color[128];
