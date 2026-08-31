@@ -101,7 +101,7 @@
 */
 #if !defined(lua_tmpnam)	/* { */
 
-#if defined(LUA_USE_POSIX)	/* { */
+#if defined(LUA_USE_POSIX) || defined(LUA_USE_IOS)	/* { */
 
 #include <unistd.h>
 
@@ -128,6 +128,14 @@
 #endif				/* } */
 /* }================================================================== */
 
+
+/* MatisuAuto patch: 构建系统未透传 -DLUA_USE_IOS，源码内强制 */
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS && !defined(LUA_USE_IOS)
+#define LUA_USE_IOS
+#endif
+#endif
 
 #if !defined(l_system)
 #if defined(LUA_USE_IOS)
