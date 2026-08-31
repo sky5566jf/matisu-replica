@@ -101,6 +101,13 @@ void MatisuKeyPressName(const char *name) {
     if (!name || !*name) return;
     NSString *key = [NSString stringWithUTF8String:name];
     if (!key) return;
+    NSString *up = [key uppercaseString];
+    // iOS 系统键走 Consumer 页（STHID 专项方法），KeyboardHome 在 iOS 不等效主屏键
+    if ([up isEqualToString:@"HOME"])            { [MAGen() menuPress]; return; }
+    if ([up isEqualToString:@"APPSWITCHER"] ||
+        [up isEqualToString:@"HOMEDOUBLE"])    { [MAGen() menuDoublePress]; return; }
+    if ([up isEqualToString:@"POWER"] ||
+        [up isEqualToString:@"LOCK"])          { [MAGen() powerPress]; return; }
     [MAGen() keyPress:key];
 }
 
