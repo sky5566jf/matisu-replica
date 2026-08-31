@@ -52,43 +52,18 @@ jobs:
       - name: Build App deb (rootful)
         working-directory: ios/app
         run: |
-          make clean
-          make FINALPACKAGE=1
-          cp Info.plist Entitlements.plist .theos/obj/MatisuAuto.app/ 2>/dev/null || true
-          LDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)
-          [ -n "$LDID" ] && "$LDID" -SEntitlements.plist .theos/obj/MatisuAuto.app/MatisuAuto || true
-          make package FINALPACKAGE=1
-          mkdir -p ../dist
-          mv packages/*.deb ../dist/matisu-auto_rootful.deb
-          ls -la ../dist/
+          chmod +x package_deb.sh
+          ./package_deb.sh rootful "arm64 arm64e" matisu-auto_rootful.deb
 
       # ============ 引擎模式 3/4：无线越狱 arm64（rootless deb） ============
       - name: Build App deb (rootless arm64)
         working-directory: ios/app
-        run: |
-          make clean
-          make FINALPACKAGE=1 ARCHS=arm64
-          cp Info.plist Entitlements.plist .theos/obj/MatisuAuto.app/ 2>/dev/null || true
-          LDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)
-          [ -n "$LDID" ] && "$LDID" -SEntitlements.plist .theos/obj/MatisuAuto.app/MatisuAuto || true
-          make package FINALPACKAGE=1 ARCHS=arm64 THEOS_PACKAGE_SCHEME=rootless
-          mkdir -p ../dist
-          mv packages/*.deb ../dist/matisu-auto_rootless_arm64.deb
-          ls -la ../dist/
+        run: ./package_deb.sh rootless arm64 matisu-auto_rootless_arm64.deb
 
       # ============ 引擎模式 4/4：无线越狱 arm64e（rootless deb） ============
       - name: Build App deb (rootless arm64e)
         working-directory: ios/app
-        run: |
-          make clean
-          make FINALPACKAGE=1 ARCHS=arm64e
-          cp Info.plist Entitlements.plist .theos/obj/MatisuAuto.app/ 2>/dev/null || true
-          LDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)
-          [ -n "$LDID" ] && "$LDID" -SEntitlements.plist .theos/obj/MatisuAuto.app/MatisuAuto || true
-          make package FINALPACKAGE=1 ARCHS=arm64e THEOS_PACKAGE_SCHEME=rootless
-          mkdir -p ../dist
-          mv packages/*.deb ../dist/matisu-auto_rootless_arm64e.deb
-          ls -la ../dist/
+        run: ./package_deb.sh rootless arm64e matisu-auto_rootless_arm64e.deb
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
