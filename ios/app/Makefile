@@ -16,7 +16,8 @@ MatisuAuto_CFLAGS += -I../include -fobjc-arc
 # OCR：onnxruntime iOS 静态库（CI 下载到 ios/ort/，见 ios.yml）
 # ORT_ROOT 指向含 ios-arm64/onnxruntime.a 与 Headers 的 xcframework 目录
 ORT_ROOT ?= ../ort/onnxruntime.xcframework
-MatisuAuto_CFLAGS += -I$(ORT_ROOT)/Headers -std=c++17
+MatisuAuto_CFLAGS += -I$(ORT_ROOT)/Headers
+MatisuAuto_CCFLAGS += -std=c++17
 MatisuAuto_LDFLAGS = -Wl,-undefined,dynamic_lookup
 MatisuAuto_LDFLAGS += $(ORT_ROOT)/ios-arm64/onnxruntime.a -lc++
 
