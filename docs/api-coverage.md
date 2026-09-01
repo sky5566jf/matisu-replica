@@ -1,8 +1,8 @@
 # MatisuAuto 复刻进度表（API manifest）
-> 生成: 2026-09-01T12:45:19  ｜  PC 179 / iOS 56 / Android 17 已注册
+> 生成: 2026-09-01T12:58:15  ｜  PC 179 / iOS 78 / Android 17 已注册
 
 ## 触控（全局函数）（12 个）
-**契约函数 133 个；覆盖率 PC 130/133 (97%) / iOS 28/133 (21%) / Android 17/133 (12%)**
+**契约函数 133 个；覆盖率 PC 130/133 (97%) / iOS 42/133 (31%) / Android 17/133 (12%)**
 
 > 注：仅统计 core.lua 契约函数（133 个）；文档长尾 ~570 个见 lua-api-surface.md §5。
 
@@ -32,7 +32,7 @@
 | findColorT | ✅ | — | — |
 | findMultiColor | ✅ | ✅ | — |
 | findMultiColorT | ✅ | — | — |
-| findMultiColorAll | ✅ | — | — |
+| findMultiColorAll | ✅ | ✅ | — |
 | findMultiColorAllT | ✅ | — | — |
 | cmpColor | ✅ | ✅ | ✅ |
 | cmpColorEx | ✅ | ✅ | ✅ |
@@ -40,54 +40,54 @@
 | getColorNum | ✅ | ✅ | ✅ |
 | colorDiff | ✅ | — | — |
 | getPixelColor | ✅ | ✅ | ✅ |
-| getScreenPixel | ✅ | — | — |
-| isDisplayDead | ✅ | — | — |
-| keepCapture | ✅ | — | — |
-| releaseCapture | ✅ | — | — |
-| setScreenScale | ✅ | — | — |
+| getScreenPixel | ✅ | ✅ | — |
+| isDisplayDead | ✅ | ✅ | — |
+| keepCapture | ✅ | ✅ | — |
+| releaseCapture | ✅ | ✅ | — |
+| setScreenScale | ✅ | ✅ | — |
 | snapShot | ✅ | ✅ | ✅ |
 | ocrText | ✅ | — | — |
-| findImage | ✅ | — | — |
+| findImage | ✅ | ✅ | — |
 | findPic | ✅ | ✅ | — |
 | findPicEx | ✅ | ✅ | — |
-| findPicFast | ✅ | — | — |
+| findPicFast | ✅ | ✅ | — |
 | findPicAllPoint | ✅ | — | — |
 | findCircle | ✅ | — | — |
 
-缺口: findColorT, findMultiColorT, findMultiColorAll, findMultiColorAllT, cmpColorExT, colorDiff, getScreenPixel, isDisplayDead, keepCapture, releaseCapture, setScreenScale, ocrText, findImage, findPicFast, findPicAllPoint, findCircle
+缺口: findColorT, findMultiColorT, findMultiColorAllT, cmpColorExT, colorDiff, ocrText, findPicAllPoint, findCircle
 
 ## 设备信息（全局函数）（26 个）
 
 | 函数 | PC | iOS | Android |
 |---|---|---|---|
-| getCpuArch | ✅ | — | — |
-| getSdPath | ✅ | — | — |
-| getDisplayDpi | ✅ | — | — |
+| getCpuArch | ✅ | ✅ | — |
+| getSdPath | ✅ | N/A | — |
+| getDisplayDpi | ✅ | ✅ | — |
 | getBatteryLevel | ✅ | ✅ | — |
 | getDeviceId | ✅ | ✅ | — |
-| getBrand | ✅ | — | — |
-| getBootLoader | ✅ | — | — |
-| getBoard | ✅ | — | — |
-| getManufacturer | ✅ | — | — |
-| getProduct | ✅ | — | — |
-| getDevice | ✅ | — | — |
+| getBrand | ✅ | N/A | — |
+| getBootLoader | ✅ | N/A | — |
+| getBoard | ✅ | N/A | — |
+| getManufacturer | ✅ | N/A | — |
+| getProduct | ✅ | N/A | — |
+| getDevice | ✅ | N/A | — |
 | getModel | ✅ | ✅ | — |
-| getHardware | ✅ | — | — |
-| getId | ✅ | — | — |
-| getFingerprint | ✅ | — | — |
-| getCpuAbi | ✅ | — | — |
-| getCpuAbi2 | ✅ | — | — |
-| getSdkVersion | ✅ | — | — |
-| getOsVersionName | ✅ | — | — |
+| getHardware | ✅ | N/A | — |
+| getId | ✅ | N/A | — |
+| getFingerprint | ✅ | N/A | — |
+| getCpuAbi | ✅ | N/A | — |
+| getCpuAbi2 | ✅ | N/A | — |
+| getSdkVersion | ✅ | N/A | — |
+| getOsVersionName | ✅ | ✅ | — |
 | getWifiMac | ✅ | — | — |
 | getDisplayInfo | ✅ | — | — |
 | getDisplaySize | ✅ | ✅ | ✅ |
 | getDisplayRotate | ✅ | — | — |
-| getPackageName | ✅ | — | — |
-| getSubscriberId | ✅ | — | — |
-| getSimSerialNumber | ✅ | — | — |
+| getPackageName | ✅ | N/A | — |
+| getSubscriberId | ✅ | N/A | — |
+| getSimSerialNumber | ✅ | N/A | — |
 
-缺口: getCpuArch, getSdPath, getDisplayDpi, getBrand, getBootLoader, getBoard, getManufacturer, getProduct, getDevice, getHardware, getId, getFingerprint, getCpuAbi, getCpuAbi2, getSdkVersion, getOsVersionName, getWifiMac, getDisplayInfo, getDisplayRotate, getPackageName, getSubscriberId, getSimSerialNumber
+缺口: getWifiMac, getDisplayInfo, getDisplayRotate
 
 ## 应用管理（全局函数）（15 个）
 
@@ -95,45 +95,45 @@
 |---|---|---|---|
 | runApp | ✅ | ✅ | — |
 | stopApp | ✅ | — | — |
-| getInstalledApk | ✅ | — | — |
-| getInstalledApps | — | — | — |
-| installApk | ✅ | — | — |
-| getCurrentActivity | ✅ | — | — |
+| getInstalledApk | ✅ | N/A | — |
+| getInstalledApps | — | N/A | — |
+| installApk | ✅ | N/A | — |
+| getCurrentActivity | ✅ | N/A | — |
 | frontAppName | ✅ | ✅ | — |
 | appIsFront | ✅ | — | — |
-| appIsRunning | ✅ | — | — |
+| appIsRunning | ✅ | N/A | — |
 | readPasteboard | ✅ | ✅ | — |
 | writePasteboard | ✅ | ✅ | — |
-| scanImage | — | — | — |
-| sendSms | — | — | — |
-| phoneCall | ✅ | — | — |
-| runIntent | ✅ | — | — |
+| scanImage | — | N/A | — |
+| sendSms | — | N/A | — |
+| phoneCall | ✅ | N/A | — |
+| runIntent | ✅ | N/A | — |
 
-缺口: stopApp, getInstalledApk, getInstalledApps, installApk, getCurrentActivity, appIsFront, appIsRunning, scanImage, sendSms, phoneCall, runIntent
+缺口: stopApp, getInstalledApps, appIsFront, scanImage, sendSms
 
 ## 系统控制（全局函数）（17 个）
 
 | 函数 | PC | iOS | Android |
 |---|---|---|---|
-| setControlBarPosNew | ✅ | — | — |
-| showControlBar | ✅ | — | — |
-| restartScript | ✅ | — | — |
-| vibrate | ✅ | — | — |
+| setControlBarPosNew | ✅ | N/A | — |
+| showControlBar | ✅ | N/A | — |
+| restartScript | ✅ | ✅ | — |
+| vibrate | ✅ | ✅ | — |
 | playAudio | ✅ | — | — |
 | stopAudio | ✅ | — | — |
-| rnd | ✅ | — | — |
-| exec | ✅ | — | — |
+| rnd | ✅ | ✅ | — |
+| exec | ✅ | N/A | — |
 | sleep | ✅ | ✅ | ✅ |
 | mSleep | ✅ | ✅ | ✅ |
 | lockScreen | ✅ | — | — |
 | unLockScreen | ✅ | — | — |
-| setBTEnable | ✅ | — | — |
-| setWifiEnable | ✅ | — | — |
-| setAirplaneMode | ✅ | — | — |
+| setBTEnable | ✅ | N/A | — |
+| setWifiEnable | ✅ | N/A | — |
+| setAirplaneMode | ✅ | N/A | — |
 | getRunEnvType | ✅ | — | — |
 | exitScript | ✅ | ✅ | — |
 
-缺口: setControlBarPosNew, showControlBar, restartScript, vibrate, playAudio, stopAudio, rnd, exec, lockScreen, unLockScreen, setBTEnable, setWifiEnable, setAirplaneMode, getRunEnvType
+缺口: playAudio, stopAudio, lockScreen, unLockScreen, getRunEnvType
 
 ## 交互（全局函数 + ui 动态UI 模块表）（16 个）
 

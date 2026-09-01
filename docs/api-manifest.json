@@ -1,8 +1,8 @@
 {
- "generated": "2026-09-01T12:45:19",
+ "generated": "2026-09-01T12:58:15",
  "summary": {
   "pc": 179,
-  "ios": 56,
+  "ios": 78,
   "android": 17
  },
  "sections": [
@@ -115,7 +115,7 @@
     {
      "name": "findMultiColorAll",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -163,31 +163,31 @@
     {
      "name": "getScreenPixel",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "isDisplayDead",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "keepCapture",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "releaseCapture",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "setScreenScale",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -205,7 +205,7 @@
     {
      "name": "findImage",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -223,7 +223,7 @@
     {
      "name": "findPicFast",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -247,19 +247,19 @@
     {
      "name": "getCpuArch",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "getSdPath",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getDisplayDpi",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -277,37 +277,37 @@
     {
      "name": "getBrand",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getBootLoader",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getBoard",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getManufacturer",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getProduct",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getDevice",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
@@ -319,43 +319,43 @@
     {
      "name": "getHardware",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getId",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getFingerprint",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getCpuAbi",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getCpuAbi2",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getSdkVersion",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getOsVersionName",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -385,19 +385,19 @@
     {
      "name": "getPackageName",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getSubscriberId",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getSimSerialNumber",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     }
    ]
@@ -421,25 +421,25 @@
     {
      "name": "getInstalledApk",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getInstalledApps",
      "pc": false,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "installApk",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "getCurrentActivity",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
@@ -457,7 +457,7 @@
     {
      "name": "appIsRunning",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
@@ -475,25 +475,25 @@
     {
      "name": "scanImage",
      "pc": false,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "sendSms",
      "pc": false,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "phoneCall",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "runIntent",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     }
    ]
@@ -505,25 +505,25 @@
     {
      "name": "setControlBarPosNew",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "showControlBar",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "restartScript",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "vibrate",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -541,13 +541,13 @@
     {
      "name": "rnd",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "exec",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
@@ -577,19 +577,19 @@
     {
      "name": "setBTEnable",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "setWifiEnable",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {
      "name": "setAirplaneMode",
      "pc": true,
-     "ios": false,
+     "ios": "N/A",
      "android": false
     },
     {

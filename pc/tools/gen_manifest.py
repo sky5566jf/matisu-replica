@@ -91,6 +91,24 @@ def is_stdlib(name):
     return name.startswith(STDLIB_PREFIX)
 
 
+# Android 平台专属（原版 iOS 端同样没有；iOS 端标 N/A 不计缺口）
+ANDROID_ONLY = {
+    'getBrand', 'getBootLoader', 'getBoard', 'getManufacturer', 'getProduct', 'getDevice',
+    'getHardware', 'getId', 'getFingerprint', 'getCpuAbi', 'getCpuAbi2', 'getSdkVersion',
+    'getPackageName', 'getSubscriberId', 'getSimSerialNumber', 'getInstalledApk',
+    'getInstalledApps', 'installApk', 'getCurrentActivity', 'appIsRunning', 'sendSms',
+    'phoneCall', 'runIntent', 'scanImage', 'setBTEnable', 'setWifiEnable', 'setAirplaneMode',
+    'getSdPath', 'setControlBarPosNew', 'showControlBar', 'exec',
+}
+
+
+def platform_na(name, platform):
+    """该函数在此平台不适用（原版同样没有）"""
+    if platform == 'ios' and name in ANDROID_ONLY:
+        return True
+    return False
+
+
 def main():
     sections = parse_sections()
     pc, ios, android = parse_pc() | parse_bridge(), parse_ios(), parse_android()
@@ -110,19 +128,26 @@ def main():
             if is_stdlib(fn):
                 st = {'pc': True, 'ios': True, 'android': True, 'builtin': True}
             else:
-                st = {'pc': fn in pc, 'ios': fn in ios, 'android': fn in android}
+                st = {
+                    'pc': fn in pc,
+                    'ios': 'N/A' if platform_na(fn, 'ios') else fn in ios,
+                    'android': 'N/A' if platform_na(fn, 'android') else fn in android,
+                }
             items.append({'name': fn, **st})
             total += 1
-            done_pc += st['pc']
-            done_ios += st['ios']
-            done_android += st['android']
+            done_pc += bool(st['pc'])
+            done_ios += bool(st['ios'] and st['ios'] != 'N/A')
+            done_android += bool(st['android'] and st['android'] != 'N/A')
         missing = [i['name'] for i in items if not (i['pc'] and i['ios'])]
         md.append(f'## {sec["name"]}（{len(items)} 个）')
         md.append('')
         md.append('| 函数 | PC | iOS | Android |')
         md.append('|---|---|---|---|')
         for i in items:
-            mark = lambda v: '✅' if v else '—'
+            def mark(v):
+                if v == 'N/A':
+                    return 'N/A'
+                return '✅' if v else '—'
             if i.get('builtin'):
                 md.append(f'| {i["name"]} | 内置 | 内置 | 内置 |')
             else:
