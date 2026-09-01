@@ -89,7 +89,7 @@ static NSData* queryTweak(const char *cmd, NSTimeInterval timeout) {
 // 返回空串（调用方跳过）。（老协议 4096 定长 buf + strtok 会把跨包的长行截断，
 // 且无法承载二进制，故改累积缓冲。）
 static char *MANextCommand(int cli, NSMutableData *acc) {
-    const uint8_t *bytes = acc.bytes;
+    const uint8_t *bytes = (const uint8_t *)acc.bytes;
     NSUInteger len = acc.length;
     for (NSUInteger i = 0; i < len; i++) {
         if (bytes[i] != '\n') continue;

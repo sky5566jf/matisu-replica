@@ -14,6 +14,6 @@ int MatisuUnzipDataToDir(NSData *zipData, NSString *destDir);
 
 /// 安装脚本包：name=纯文件名（如 demo.lrj），payload=zip 内容。
 /// 成功返回 YES 且 outFiles 为解出的文件数；errMsg 带失败原因。
-BOOL MatisuInstallPackage(NSString *name, NSData *payload, int *outFiles, NSString **errMsg);
+BOOL MatisuInstallPackage(NSString *name, NSData *payload, int *_Nullable outFiles, NSString *_Nullable *_Nullable errMsg);
 
 NS_ASSUME_NONNULL_END
