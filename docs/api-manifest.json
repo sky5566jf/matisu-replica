@@ -1,0 +1,856 @@
+{
+ "generated": "2026-09-01T12:45:19",
+ "summary": {
+  "pc": 179,
+  "ios": 56,
+  "android": 17
+ },
+ "sections": [
+  {
+   "name": "触控（全局函数）",
+   "count": 12,
+   "functions": [
+    {
+     "name": "tap",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "longTap",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "swipe",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "touchDown",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "touchMove",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "touchMoveEx",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "touchUp",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "inputText",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "keyPress",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "keyDown",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "keyUp",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "setOnTouchListener",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "图色与找图（全局函数，颜色 BBGGRR）",
+   "count": 25,
+   "functions": [
+    {
+     "name": "findColor",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "findColorT",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findMultiColor",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "findMultiColorT",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findMultiColorAll",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findMultiColorAllT",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "cmpColor",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "cmpColorEx",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "cmpColorExT",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getColorNum",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "colorDiff",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getPixelColor",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "getScreenPixel",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "isDisplayDead",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "keepCapture",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "releaseCapture",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "setScreenScale",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "snapShot",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "ocrText",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findImage",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findPic",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "findPicEx",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "findPicFast",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findPicAllPoint",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "findCircle",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "设备信息（全局函数）",
+   "count": 26,
+   "functions": [
+    {
+     "name": "getCpuArch",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getSdPath",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getDisplayDpi",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getBatteryLevel",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "getDeviceId",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "getBrand",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getBootLoader",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getBoard",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getManufacturer",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getProduct",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getDevice",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getModel",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "getHardware",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getId",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getFingerprint",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getCpuAbi",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getCpuAbi2",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getSdkVersion",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getOsVersionName",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getWifiMac",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getDisplayInfo",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getDisplaySize",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "getDisplayRotate",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getPackageName",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getSubscriberId",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getSimSerialNumber",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "应用管理（全局函数）",
+   "count": 15,
+   "functions": [
+    {
+     "name": "runApp",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "stopApp",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getInstalledApk",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getInstalledApps",
+     "pc": false,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "installApk",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getCurrentActivity",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "frontAppName",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "appIsFront",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "appIsRunning",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "readPasteboard",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "writePasteboard",
+     "pc": true,
+     "ios": true,
+     "android": false
+    },
+    {
+     "name": "scanImage",
+     "pc": false,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "sendSms",
+     "pc": false,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "phoneCall",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "runIntent",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "系统控制（全局函数）",
+   "count": 17,
+   "functions": [
+    {
+     "name": "setControlBarPosNew",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "showControlBar",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "restartScript",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "vibrate",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "playAudio",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "stopAudio",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "rnd",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "exec",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "sleep",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "mSleep",
+     "pc": true,
+     "ios": true,
+     "android": true
+    },
+    {
+     "name": "lockScreen",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "unLockScreen",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "setBTEnable",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "setWifiEnable",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "setAirplaneMode",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "getRunEnvType",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "exitScript",
+     "pc": true,
+     "ios": true,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "交互（全局函数 + ui 动态UI 模块表）",
+   "count": 16,
+   "functions": [
+    {
+     "name": "toast",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "hideToast",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "showUI",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "showUIEx",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "createHUD",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "showHUD",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "hideHUD",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.newLayout",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.addButton",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.addEditText",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.addTextView",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.addCheckBox",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.addRadioBox",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.addComboBox",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.setOnClick",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "ui.show",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "节点库 / 输入法 模块表",
+   "count": 13,
+   "functions": [
+    {
+     "name": "nodeLib.getNodeXml",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "nodeLib.saveNode",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "nodeLib.saveNodeNew",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "nodeLib.lockNode",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "nodeLib.unlockNode",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "nodeLib.openAccessibility",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "nodeLib.closeAccessibility",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "imeLib.lock",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "imeLib.unlock",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "imeLib.setText",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "imeLib.deleteChar",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "imeLib.finishInput",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "imeLib.keyEvent",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  },
+  {
+   "name": "加解密 / 网络 / JSON 模块表（标准扩展库）",
+   "count": 9,
+   "functions": [
+    {
+     "name": "cipher.md5",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "cipher.sha1",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "cipher.base64",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "cipher.aes",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "network.httpGet",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "network.httpPost",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "network.download",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "json.encode",
+     "pc": true,
+     "ios": false,
+     "android": false
+    },
+    {
+     "name": "json.decode",
+     "pc": true,
+     "ios": false,
+     "android": false
+    }
+   ]
+  }
+ ]
+}
