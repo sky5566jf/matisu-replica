@@ -386,6 +386,144 @@ static int l_jsonDecode(lua_State *L) {
 }
 
 // ---------------- 剪贴板 / 应用 ----------------
+// ---------------- 设备信息（复用 DeviceInfo 采集，JSON 缓存） ----------------
+#import "DeviceInfo.h"
+
+static NSDictionary *maDevInfo(void) {
+    static NSDictionary *cache = nil;
+    static NSTimeInterval cacheAt = 0;
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (cache && now - cacheAt < 2.0) return cache;
+    NSData *d = MatisuDeviceInfoJSON();
+    cache = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : @{};
+    cacheAt = now;
+    return cache;
+}
+
+static void pushInfoStr(lua_State *L, NSString *key) {
+    id v = maDevInfo()[key];
+    lua_pushstring(L, v ? [[v description] UTF8String] : "");
+}
+static void pushInfoInt(lua_State *L, NSString *key) {
+    id v = maDevInfo()[key];
+    lua_pushinteger(L, v ? (lua_Integer)[v longLongValue] : 0);
+}
+
+static int l_getModel(lua_State *L) { pushInfoStr(L, @"model"); return 1; }
+static int l_getDeviceName(lua_State *L) { pushInfoStr(L, @"modelName"); return 1; }
+static int l_getSysVer(lua_State *L) { pushInfoStr(L, @"systemVersion"); return 1; }
+static int l_getDeviceId(lua_State *L) { pushInfoStr(L, @"model"); return 1; }   // machineId 即设备唯一标识
+static int l_getBatteryLevel(lua_State *L) { pushInfoInt(L, @"battery"); return 1; }
+static int l_isCharging(lua_State *L) { id v = maDevInfo()[@"charging"]; lua_pushboolean(L, v && [v boolValue]); return 1; }
+static int l_frontAppName(lua_State *L) {
+    NSString *fa = MatisuFrontApp() ?: @"";
+    lua_pushstring(L, fa.UTF8String);
+    return 1;
+}
+static int l_getScreenDirection(lua_State *L) {
+    // 0=竖屏 1=横屏（与原版一致：竖 0/横 1）
+    __block UIInterfaceOrientation o = UIInterfaceOrientationPortrait;
+    void (^rd)(void) = ^{ o = [UIApplication sharedApplication].statusBarOrientation; };
+    if ([NSThread isMainThread]) rd();
+    else dispatch_sync(dispatch_get_main_queue(), rd);
+    lua_pushinteger(L, UIInterfaceOrientationIsLandscape(o) ? 1 : 0);
+    return 1;
+}
+static int l_getSysLang(lua_State *L) {
+    NSString *lang = [[NSLocale preferredLanguages] firstObject] ?: @"";
+    lua_pushstring(L, lang.UTF8String);
+    return 1;
+}
+static int l_getSysTimezone(lua_State *L) {
+    NSString *tz = [[NSTimeZone localTimeZone] name] ?: @"";
+    lua_pushstring(L, tz.UTF8String);
+    return 1;
+}
+static int l_getDeviceType(lua_State *L) {
+    // 原版：0=手机 1=平板（iOS 端语义）
+    lua_pushinteger(L, [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad ? 1 : 0);
+    return 1;
+}
+static int l_getEngineVersion(lua_State *L) {
+    lua_pushstring(L, "MatisuAuto 0.1 (Lua 5.4)");
+    return 1;
+}
+static int l_getScreenFrame(lua_State *L) {
+    float w = 0, h = 0;
+    maScreenSize(&w, &h);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%.0f,%.0f,%.0f,%.0f", 0.0f, 0.0f, w, h);
+    lua_pushstring(L, buf);
+    return 1;
+}
+static int l_getScreenResolution(lua_State *L) {
+    id w = maDevInfo()[@"pixelWidth"], h = maDevInfo()[@"pixelHeight"];
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%ldx%ld", (long)[w longValue], (long)[h longValue]);
+    lua_pushstring(L, buf);
+    return 1;
+}
+
+// ---------------- 日志控制台（设备端 log.txt） ----------------
+static NSString *maLogPath(void) { return @"/var/mobile/MatisuAuto/log.txt"; }
+static void maLogAppend(NSString *level, NSString *msg) {
+    @autoreleasepool {
+        NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+        fmt.dateFormat = @"MM-dd HH:mm:ss";
+        NSString *line = [NSString stringWithFormat:@"[%@][%@] %@\n", [fmt stringFromDate:[NSDate date]], level, msg];
+        NSString *p = maLogPath();
+        [[NSFileManager defaultManager] createDirectoryAtPath:[p stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:p]) {
+            [line writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            return;
+        }
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
+        [fh seekToEndOfFile];
+        [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+        [fh closeFile];
+    }
+}
+static int l_logLevel(lua_State *L, NSString *level) {
+    int n = lua_gettop(L);
+    NSMutableString *msg = [NSMutableString string];
+    for (int i = 1; i <= n; i++) {
+        size_t len = 0; const char *s = luaL_tolstring(L, i, &len);
+        if (i > 1) [msg appendString:@"\t"];
+        if (s) [msg appendString:[NSString stringWithUTF8String:s] ?: @"?"];
+        lua_pop(L, 1);
+    }
+    maLogAppend(level, msg);
+    return 0;
+}
+static int l_logPrint(lua_State *L) { return l_logLevel(L, @"INFO"); }
+static int l_logDebug(lua_State *L) { return l_logLevel(L, @"DEBUG"); }
+static int l_logInfo(lua_State *L) { return l_logLevel(L, @"INFO"); }
+static int l_logWarn(lua_State *L) { return l_logLevel(L, @"WARN"); }
+static int l_logError(lua_State *L) { return l_logLevel(L, @"ERROR"); }
+static int l_vvLog(lua_State *L) { return l_logLevel(L, @"TRACE"); }
+static int l_clearCLog(lua_State *L) {
+    [@"" writeToFile:maLogPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    return 0;
+}
+
+// ---------------- 脚本控制 ----------------
+static int l_exitScript(lua_State *L) {
+    return luaL_error(L, "__MATISU_EXIT__");
+}
+// setStopCallBack(fn)：常驻脚本被 stop 时回调（registry 存 ref）
+#define MA_STOPCB_KEY "matisu_stopcb"
+static int l_setStopCallBack(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+    lua_pushvalue(L, 1);
+    lua_setfield(L, LUA_REGISTRYINDEX, MA_STOPCB_KEY);
+    return 0;
+}
+static void maInvokeStopCb(lua_State *L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, MA_STOPCB_KEY);
+    if (lua_isfunction(L, -1)) lua_pcall(L, 0, 0, 0);
+    else lua_pop(L, 1);
+}
+
 static int l_readPasteboard(lua_State *L) {
     NSString *s = MatisuReadPasteboard();
     lua_pushstring(L, s.UTF8String);
@@ -428,9 +566,16 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
         r[@"output"] = out;
     } else {
         const char *err = lua_tostring(L, -1);
-        r[@"ok"] = @NO;
-        r[@"output"] = out;
-        r[@"error"] = err ? [NSString stringWithUTF8String:err] : @"unknown error";
+        NSString *msg = err ? [NSString stringWithUTF8String:err] : @"unknown error";
+        if ([msg containsString:@"__MATISU_EXIT__"]) {
+            // exitScript() 主动结束：视为正常结束（对齐原版语义）
+            r[@"ok"] = @YES;
+            r[@"output"] = out;
+        } else {
+            r[@"ok"] = @NO;
+            r[@"output"] = out;
+            r[@"error"] = msg;
+        }
     }
     lua_close(L);
     return r;
@@ -494,7 +639,9 @@ static void *svcThread(void *arg) {
         if (status != LUA_OK) {
             const char *err = lua_tostring(L, -1);
             NSString *msg = err ? [NSString stringWithUTF8String:err] : @"unknown";
-            if (![msg containsString:@"__MATISU_STOP__"]) {
+            if ([msg containsString:@"__MATISU_STOP__"]) {
+                maInvokeStopCb(L);   // 用户 stop → setStopCallBack 回调
+            } else if (![msg containsString:@"__MATISU_EXIT__"]) {
                 [gSvcOutLock lock];
                 [gSvcOut appendFormat:@"[service error] %@\n", msg];
                 [gSvcOutLock unlock];
@@ -585,6 +732,20 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "MD5", l_MD5 }, { "encodeBase64", l_encodeBase64 }, { "decodeBase64", l_decodeBase64 },
         { "readPasteboard", l_readPasteboard }, { "writePasteboard", l_writePasteboard },
         { "runApp", l_runApp }, { "openUrl", l_openUrl },
+        // 设备信息
+        { "getModel", l_getModel }, { "getDeviceName", l_getDeviceName },
+        { "getSysVer", l_getSysVer }, { "getDeviceId", l_getDeviceId },
+        { "getBatteryLevel", l_getBatteryLevel }, { "isCharging", l_isCharging },
+        { "frontAppName", l_frontAppName }, { "getScreenDirection", l_getScreenDirection },
+        { "getSysLang", l_getSysLang }, { "getSysTimezone", l_getSysTimezone },
+        { "getDeviceType", l_getDeviceType }, { "getEngineVersion", l_getEngineVersion },
+        { "getScreenFrame", l_getScreenFrame }, { "getScreenResolution", l_getScreenResolution },
+        // 日志控制台
+        { "logPrint", l_logPrint }, { "logDebug", l_logDebug }, { "logInfo", l_logInfo },
+        { "logWarn", l_logWarn }, { "logError", l_logError }, { "vvLog", l_vvLog },
+        { "clearCLog", l_clearCLog },
+        // 脚本控制
+        { "exitScript", l_exitScript }, { "setStopCallBack", l_setStopCallBack },
         { NULL, NULL },
     };
     // jsonLib 表（encode/decode）
