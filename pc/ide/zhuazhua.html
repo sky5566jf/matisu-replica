@@ -91,6 +91,9 @@
     <div class="sep"></div>
     <button id="btnShot">截图(CTRL+S)</button>
     <label><input type="checkbox" id="autoShot"> 自动截图 2s</label>
+    <button id="btnProj">投影(实时操控)</button>
+    <button id="btnCast">投影(实时操控)</button>
+    <button id="btnAutoPick">自动取色(CTRL+A)</button>
     <div class="sep"></div>
     <div class="mini">坐标: <span id="posinfo">-</span></div>
     <div class="mini">颜色: <span id="colorinfo">-</span></div>
@@ -107,6 +110,7 @@
       </select>
     </label>
     <div class="sep"></div>
+    <button id="btnAutoPick">自动取色(CTRL+A)</button>
     <button id="btnClearMarks">清除面板标记</button>
     <label>取色个数
       <select id="maxpts">
@@ -279,6 +283,7 @@ function drawMag(p) {
 
 // ============ 取样点 ============
 $('shot').addEventListener('click', () => {
+  if (castMode) return;   // 投影模式单击是 tap，不取样
   if (!lastHover || !lastHover.color) return;
   const max = parseInt($('maxpts').value, 10);
   if (points.length >= max) points.shift();
@@ -380,6 +385,100 @@ $('btnGoto').onclick = () => {
   const idx = selRow >= 0 ? selRow : points.length - 1;
   const m = document.querySelectorAll('.ptmark')[idx];
   if (m) { m.style.borderColor = '#ff0'; setTimeout(() => m.style.borderColor = '#ff3b30', 1200); m.scrollIntoView({ block: 'center', inline: 'center' }); }
+};
+
+// ============ 投影模式（实时操控：点击=tap 拖拽=swipe）============
+let projMode = false, projTimer = null, projDrag = null;
+$('btnProj').onclick = () => {
+  projMode = !projMode;
+  $('btnProj').classList.toggle('on', projMode);
+  if (projMode) {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; $('autoShot').checked = false; }
+    projTimer = setInterval(takeShot, 600);
+    $('result').textContent = '投影模式：点击=点按 拖拽=滑动（再点「投影」退出）';
+  } else {
+    clearInterval(projTimer); projTimer = null;
+  }
+};
+// 投影模式下拦截点击/拖拽
+$('shot').addEventListener('mousedown', (e) => {
+  if (!projMode) return;
+  const p = toLogical(e);
+  projDrag = { x: p.x, y: p.y, moved: false };
+});
+$('shot').addEventListener('mousemove', (e) => {
+  if (!projMode || !projDrag) return;
+  const p = toLogical(e);
+  if (Math.abs(p.x - projDrag.x) > 10 || Math.abs(p.y - projDrag.y) > 10) projDrag.moved = true;
+});
+$('shot').addEventListener('mouseup', async (e) => {
+  if (!projMode || !projDrag) return;
+  const p = toLogical(e);
+  if (projDrag.moved) {
+    await fetch('/api/swipe', { method: 'POST', body: JSON.stringify({ x1: projDrag.x, y1: projDrag.y, x2: p.x, y2: p.y, dur: 0.3 }) });
+  } else {
+    await fetch('/api/tap', { method: 'POST', body: JSON.stringify({ x: p.x, y: p.y }) });
+  }
+  projDrag = null;
+});
+// 投影模式下屏蔽取样点击
+$('shot').addEventListener('click', (e) => { if (projMode) e.stopImmediatePropagation(); }, true);
+
+// ============ 自动取色（读 canvas 像素：稀有颜色 + 空间分散）============
+function toBBGGRR(r, g, b) {
+  return ('0' + b.toString(16)).slice(-2).toUpperCase() +
+         ('0' + g.toString(16)).slice(-2).toUpperCase() +
+         ('0' + r.toString(16)).slice(-2).toUpperCase();
+}
+$('btnAutoPick').onclick = () => {
+  const img = $('shot');
+  if (!imgW) return;
+  const cv = document.createElement('canvas');
+  cv.width = imgW; cv.height = imgH;
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, imgW, imgH).data;
+
+  // 颜色频次统计（量化到 16 级减少噪声）
+  const freq = new Map();
+  const qstep = 16;
+  for (let i = 0; i < data.length; i += 4) {
+    const key = ((data[i] / qstep) | 0) << 16 | ((data[i + 1] / qstep) | 0) << 8 | ((data[i + 2] / qstep) | 0);
+    freq.set(key, (freq.get(key) || 0) + 1);
+  }
+
+  const max = parseInt($('maxpts').value, 10);
+  const picked = [];
+  const gridStep = Math.max(4, Math.round(imgW / 80));
+  const cands = [];
+  for (let py = gridStep; py < imgH - gridStep; py += gridStep) {
+    for (let px = gridStep; px < imgW - gridStep; px += gridStep) {
+      const i = (py * imgW + px) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const key = ((r / qstep) | 0) << 16 | ((g / qstep) | 0) << 8 | ((b / qstep) | 0);
+      cands.push({ px, py, r, g, b, score: freq.get(key) || 0 });
+    }
+  }
+  cands.sort((a, b2) => a.score - b2.score);   // 越稀有越优先
+  for (const c of cands) {
+    if (picked.length >= max) break;
+    // 与已选点：颜色距离>40 且 空间距离>20px
+    let okp = true;
+    for (const p of picked) {
+      const cd = Math.abs(c.r - p.r) + Math.abs(c.g - p.g) + Math.abs(c.b - p.b);
+      const sd = Math.hypot(c.px - p.px, c.py - p.py);
+      if (cd < 40 || sd < 20) { okp = false; break; }
+    }
+    if (okp) picked.push(c);
+  }
+  // 转逻辑坐标入取样点表
+  picked.forEach((c) => {
+    const lx = Math.round(c.px / imgW * devW), ly = Math.round(c.py / imgH * devH);
+    if (points.length >= max) points.shift();
+    points.push({ x: lx, y: ly, color: toBBGGRR(c.r, c.g, c.b), bias: '' });
+  });
+  renderPoints(); renderMarks(); genColorStr();
+  $('result').textContent = `自动取色 ${picked.length} 个点（稀有颜色+空间分散）`;
 };
 
 // ============ 三件套：框选 / 剪贴 / 图片查找 ============
@@ -494,6 +593,79 @@ genColorStr = function () {
   }
 };
 
+// ============ 投影模式（实时操控：1s 刷新 + 单击 tap + 拖拽 swipe） ============
+let castMode = false;
+let castTimer = null;
+let castDrag = null;
+
+$('btnCast').onclick = () => {
+  castMode = !castMode;
+  $('btnCast').classList.toggle('on', castMode);
+  if (castMode) {
+    castTimer = setInterval(takeShot, 1000);
+    $('result').textContent = '📺 投影模式：单击=点击设备，拖拽=滑动；再按一次退出';
+  } else {
+    clearInterval(castTimer); castTimer = null;
+    castDrag = null;
+  }
+};
+
+// 投影模式下的点击/拖拽（优先于取样点 click 处理）
+$('shot').addEventListener('mousedown', (e) => {
+  if (!castMode) return;
+  const p = toLogical(e);
+  castDrag = { x: p.x, y: p.y, t: Date.now() };
+});
+$('shot').addEventListener('mouseup', async (e) => {
+  if (!castMode || !castDrag) return;
+  const p = toLogical(e);
+  const dx = Math.abs(p.x - castDrag.x), dy = Math.abs(p.y - castDrag.y);
+  if (dx + dy < 8) {
+    await fetch('/api/tap', { method: 'POST', body: JSON.stringify({ x: castDrag.x, y: castDrag.y }) });
+    $('result').textContent = `👆 tap(${castDrag.x}, ${castDrag.y})`;
+  } else {
+    const dur = Math.min(1.5, Math.max(0.1, (Date.now() - castDrag.t) / 1000));
+    await fetch('/api/swipe', { method: 'POST', body: JSON.stringify({ x1: castDrag.x, y1: castDrag.y, x2: p.x, y2: p.y, dur }) });
+    $('result').textContent = `👉 swipe(${castDrag.x},${castDrag.y} → ${p.x},${p.y})`;
+  }
+  castDrag = null;
+});
+// 投影模式禁止取样点
+const _origClick = $('shot').onclick;
+
+// ============ 自动取色（框选范围网格采样 + 相邻去重） ============
+$('btnAutoPick').onclick = async () => {
+  if (!range) { $('result').textContent = '先用「范围」拖拽框选区域'; return; }
+  const N = parseInt($('maxpts').value, 10);
+  const cols = Math.max(2, Math.round(Math.sqrt(N * (range.x2 - range.x1) / Math.max(1, range.y2 - range.y1))));
+  const rows = Math.max(2, Math.ceil(N / cols));
+  $('result').textContent = `自动取色中（${cols}x${rows} 网格）…`;
+  const cand = [];
+  for (let r = 0; r < rows && cand.length < N * 2; r++) {
+    for (let c = 0; c < cols && cand.length < N * 2; c++) {
+      const x = Math.round(range.x1 + (c + 0.5) * (range.x2 - range.x1) / cols);
+      const y = Math.round(range.y1 + (r + 0.5) * (range.y2 - range.y1) / rows);
+      const d = await (await fetch(`/api/pixel?x=${x}&y=${y}`)).json();
+      if (d.color) cand.push({ x, y, color: d.color, bias: '' });
+    }
+  }
+  // 相邻颜色去重（通道差全 <10 视为同色，跳过后者）
+  const diff = (a, b) => {
+    const pa = parseInt(a, 16), pb = parseInt(b, 16);
+    return Math.abs((pa & 255) - (pb & 255)) + Math.abs(((pa >> 8) & 255) - ((pb >> 8) & 255)) + Math.abs(((pa >> 16) & 255) - ((pb >> 16) & 255));
+  };
+  const picked = [];
+  for (const p of cand) {
+    if (!picked.some((q) => diff(p.color, q.color) < 10)) picked.push(p);
+    if (picked.length >= N) break;
+  }
+  points = picked;
+  selRow = -1;
+  renderPoints(); renderMarks(); genColorStr();
+  $('result').textContent = `✅ 自动取色 ${picked.length} 个点（去重后）`;
+  $('result').style.color = '#4ec9b0';
+};
+
 // ============ 工具栏 ============
 $('btnMag').onclick = () => $('btnMag').classList.toggle('on');
 $('btnShot').onclick = takeShot;
@@ -512,10 +684,11 @@ $('devsel').onchange = async (e) => {
   points = []; renderPoints(); takeShot();
 };
 
-// 快捷键（对齐原版 CTRL+S 截图 / CTRL+H 清除）
+// 快捷键（对齐原版 CTRL+S 截图 / CTRL+H 清除 / CTRL+A 自动取色）
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 's') { e.preventDefault(); takeShot(); }
   if (e.ctrlKey && e.key === 'h') { e.preventDefault(); $('btnClearPts').click(); }
+  if (e.ctrlKey && e.key === 'a') { e.preventDefault(); $('btnAutoPick').click(); }
 });
 
 loadTemplates();

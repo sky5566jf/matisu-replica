@@ -248,9 +248,21 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, JSON.stringify({ ret: r[0], x: r[1], y: r[2] }));
   }
 
+  if (p === '/api/swipe' && req.method === 'POST') {
+    const b = await readBody(req);
+    const r = bridge.swipe(b.x1 | 0, b.y1 | 0, b.x2 | 0, b.y2 | 0, b.dur == null ? 0.2 : b.dur);
+    return send(res, 200, JSON.stringify({ ok: !!r }));
+  }
+
   if (p === '/api/tap' && req.method === 'POST') {
     const b = await readBody(req);
     const r = bridge.tap(b.x | 0, b.y | 0);
+    return send(res, 200, JSON.stringify({ ok: !!r }));
+  }
+
+  if (p === '/api/swipe' && req.method === 'POST') {
+    const b = await readBody(req);
+    const r = bridge.swipe(b.x1 | 0, b.y1 | 0, b.x2 | 0, b.y2 | 0, b.dur == null ? 0.3 : b.dur);
     return send(res, 200, JSON.stringify({ ok: !!r }));
   }
 
