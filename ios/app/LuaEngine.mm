@@ -247,7 +247,13 @@ static int l_findMultiColor(lua_State *L) {
 // 先按具名取、取不到再按下标兜底，两种脚本风格都能跑。
 static void maTblPush(lua_State *L, int idx, const char *key, int nth) {
     lua_pushvalue(L, idx);
-    if (key) lua_getfield(L, -1, key); else lua_rawgeti(L, -1, nth);
+    if (key) {
+        lua_getfield(L, -1, key);
+        // 具名取不到(nil)按下标兜底——数组形式 {x1,y1,...} 的脚本也能跑
+        if (nth > 0 && lua_isnil(L, -1)) { lua_pop(L, 1); lua_rawgeti(L, -1, nth); }
+    } else {
+        lua_rawgeti(L, -1, nth);
+    }
     lua_remove(L, -2);   // 弹掉 table，栈顶留下取到的值（没取到就是 nil）
 }
 static lua_Integer maTblInt(lua_State *L, int idx, const char *key, int nth, lua_Integer def) {
