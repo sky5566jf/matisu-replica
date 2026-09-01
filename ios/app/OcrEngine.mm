@@ -27,14 +27,29 @@ struct OcrCtx {
 };
 OcrCtx g;
 
-// OCR 诊断：所有失败分支必须留痕（真机 daemon stdout 是 /dev/null，只能走 NSLog 统一日志，
-// 设备上用 log show --predicate 'process == "MatisuAuto"' --last 10m 读取）
+// OCR 诊断：所有失败分支必须留痕。真机实测 Dopamine/iOS16 上 log show 抓不到该进程 NSLog，
+// 故同时写文件 /var/mobile/MatisuAuto/ocr_debug.log（SSH 直接 cat 可读）。
 static void ocrLog(const char *fmt, ...) {
     char buf[1024];
     va_list ap; va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     NSLog(@"[MatisuAuto][OCR] %s", buf);
+    @autoreleasepool {
+        NSString *line = [NSString stringWithFormat:@"[%f] %s\n",
+                          [[NSDate date] timeIntervalSince1970], buf];
+        NSString *path = @"/var/mobile/MatisuAuto/ocr_debug.log";
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+        if (!fh) {
+            [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
+            fh = [NSFileHandle fileHandleForWritingAtPath:path];
+        }
+        if (fh) {
+            [fh seekToEndOfFile];
+            [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            [fh closeFile];
+        }
+    }
 }
 static void ocrLogStatus(const OrtApi *api, const char *where, OrtStatus *st) {
     if (!st) return;
