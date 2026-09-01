@@ -488,7 +488,8 @@ static id maLuaToObj(lua_State *L, int idx) {
                 else { lua_Integer k = lua_tointeger(L, -2); if (k > maxn) maxn = k; }
                 lua_pop(L, 1);
             }
-            if (isArr && maxn == cnt) {
+            // 空表按 cjson/原版语义编成 {}（对象），不是 []
+            if (isArr && cnt > 0 && maxn == cnt) {
                 NSMutableArray *arr = [NSMutableArray arrayWithCapacity:cnt];
                 for (lua_Integer i = 1; i <= maxn; i++) {
                     lua_geti(L, idx, i);

@@ -290,22 +290,32 @@ NSString* _Nonnull MatisuFindMultiColorAll(int x1, int y1, int x2, int y2, NSStr
     int tol = (int)((1.0 - (sim <= 0 ? 0.9 : (sim > 1 ? 1 : sim))) * 255.0 + 0.5);
     MACapCtx c;
     if (!capBegin(&c)) return @"";
-    normRegion(&c, &x1, &y1, &x2, &y2);
+
+    // 按逻辑分辨率扫描：结果本就按逻辑点报告，直接遍历逻辑点、取样对应物理像素。
+    // 若遍历物理帧再 toLg 映射，2x 缩放下每个逻辑点会被 2x2 物理块重复命中 4 次。
+    // （测试机 320x568@2x 实测同一点重复 2~4 次、满屏近白色命中返回 4MB+）
+    if (x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0) { x1 = 0; y1 = 0; x2 = (int)c.lw; y2 = (int)c.lh; }
+    if (x1 < 0) x1 = 0; if (y1 < 0) y1 = 0;
+    if (x2 > (int)c.lw) x2 = (int)c.lw; if (y2 > (int)c.lh) y2 = (int)c.lh;
 
     NSMutableString *result = [NSMutableString string];
     for (int y = y1; y < y2; y++) {
+        int py0 = toPxY(&c, y);
+        if (py0 < 0 || py0 >= c.h) continue;
         for (int x = x1; x < x2; x++) {
-            if (!pxMatch(c.base + (size_t)y * c.bpr + (size_t)x * 4, first, nFirst, tol)) continue;
+            int px0 = toPxX(&c, x);
+            if (px0 < 0 || px0 >= c.w) continue;
+            if (!pxMatch(c.base + (size_t)py0 * c.bpr + (size_t)px0 * 4, first, nFirst, tol)) continue;
             BOOL all = YES;
             for (int k = 0; k < nOff; k++) {
-                int px = x + (int)lroundf(offs[k].dx * c.kx);
-                int py = y + (int)lroundf(offs[k].dy * c.ky);
+                int px = toPxX(&c, x + offs[k].dx);
+                int py = toPxY(&c, y + offs[k].dy);
                 if (px < 0 || py < 0 || px >= c.w || py >= c.h ||
                     !pxMatch(c.base + (size_t)py * c.bpr + (size_t)px * 4, &offs[k].cs, 1, tol)) { all = NO; break; }
             }
             if (all) {
                 if (result.length) [result appendString:@";"];
-                [result appendFormat:@"%d,%d", toLgX(&c, x), toLgY(&c, y)];
+                [result appendFormat:@"%d,%d", x, y];
             }
         }
     }
