@@ -56,7 +56,9 @@ static char *maReadFileCString(const char *path) {
 }
 
 /// 目标进程是否存在（按可执行文件名匹配 kinfo_proc.comm）
-static int maProcExists(const char *comm) {
+/// excludePid：排除看门狗自身 —— 看门狗与目标同二进制同名，
+/// 不排除会把"目标已死"误判成"目标在但端口未起"，白吃 bootGrace 90s 宽限。
+static int maProcExists(const char *comm, pid_t excludePid) {
     int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
     size_t len = 0;
     if (sysctl(mib, 4, NULL, &len, NULL, 0) < 0) return -1;
@@ -66,6 +68,7 @@ static int maProcExists(const char *comm) {
     int count = (int)(len / sizeof(struct kinfo_proc));
     int found = 0;
     for (int i = 0; i < count; i++) {
+        if (procs[i].kp_proc.p_pid == excludePid) continue;
         if (strcmp(procs[i].kp_proc.p_comm, comm) == 0) { found = 1; break; }
     }
     free(procs);
@@ -330,7 +333,7 @@ int MatisuWatchdogRun(int argc, char *argv[]) {
             // ---------- 2. 探活 ----------
             lastProbeOk = maProbePort(c.port, 1500);
             lastProbeAt = time(NULL);
-            int targetRunning = maProcExists(c.comm);
+            int targetRunning = maProcExists(c.comm, self);
 
             if (lastProbeOk) {
                 if (failStreak) wlog("probe ok after %d failures", failStreak);
@@ -378,7 +381,7 @@ int MatisuWatchdogRun(int argc, char *argv[]) {
                         bootWaitSince = 0;
                     } else {
                         // 目标还在但端口不通且已过宽限期 -> 先杀后拉
-                        if (maProcExists(c.comm) == 1) {
+                        if (maProcExists(c.comm, self) == 1) {
                             wlog("target alive but dead-locked, SIGKILL");
                             // 按名杀：遍历一次拿 pid
                             int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
