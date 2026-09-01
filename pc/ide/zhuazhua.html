@@ -91,7 +91,6 @@
     <div class="sep"></div>
     <button id="btnShot">截图(CTRL+S)</button>
     <label><input type="checkbox" id="autoShot"> 自动截图 2s</label>
-    <button id="btnProj">投影(实时操控)</button>
     <button id="btnCast">投影(实时操控)</button>
     <button id="btnAutoPick">自动取色(CTRL+A)</button>
     <div class="sep"></div>
@@ -110,7 +109,6 @@
       </select>
     </label>
     <div class="sep"></div>
-    <button id="btnAutoPick">自动取色(CTRL+A)</button>
     <button id="btnClearMarks">清除面板标记</button>
     <label>取色个数
       <select id="maxpts">
@@ -387,43 +385,6 @@ $('btnGoto').onclick = () => {
   if (m) { m.style.borderColor = '#ff0'; setTimeout(() => m.style.borderColor = '#ff3b30', 1200); m.scrollIntoView({ block: 'center', inline: 'center' }); }
 };
 
-// ============ 投影模式（实时操控：点击=tap 拖拽=swipe）============
-let projMode = false, projTimer = null, projDrag = null;
-$('btnProj').onclick = () => {
-  projMode = !projMode;
-  $('btnProj').classList.toggle('on', projMode);
-  if (projMode) {
-    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; $('autoShot').checked = false; }
-    projTimer = setInterval(takeShot, 600);
-    $('result').textContent = '投影模式：点击=点按 拖拽=滑动（再点「投影」退出）';
-  } else {
-    clearInterval(projTimer); projTimer = null;
-  }
-};
-// 投影模式下拦截点击/拖拽
-$('shot').addEventListener('mousedown', (e) => {
-  if (!projMode) return;
-  const p = toLogical(e);
-  projDrag = { x: p.x, y: p.y, moved: false };
-});
-$('shot').addEventListener('mousemove', (e) => {
-  if (!projMode || !projDrag) return;
-  const p = toLogical(e);
-  if (Math.abs(p.x - projDrag.x) > 10 || Math.abs(p.y - projDrag.y) > 10) projDrag.moved = true;
-});
-$('shot').addEventListener('mouseup', async (e) => {
-  if (!projMode || !projDrag) return;
-  const p = toLogical(e);
-  if (projDrag.moved) {
-    await fetch('/api/swipe', { method: 'POST', body: JSON.stringify({ x1: projDrag.x, y1: projDrag.y, x2: p.x, y2: p.y, dur: 0.3 }) });
-  } else {
-    await fetch('/api/tap', { method: 'POST', body: JSON.stringify({ x: p.x, y: p.y }) });
-  }
-  projDrag = null;
-});
-// 投影模式下屏蔽取样点击
-$('shot').addEventListener('click', (e) => { if (projMode) e.stopImmediatePropagation(); }, true);
-
 // ============ 自动取色（读 canvas 像素：稀有颜色 + 空间分散）============
 function toBBGGRR(r, g, b) {
   return ('0' + b.toString(16)).slice(-2).toUpperCase() +
@@ -632,39 +593,6 @@ $('shot').addEventListener('mouseup', async (e) => {
 });
 // 投影模式禁止取样点
 const _origClick = $('shot').onclick;
-
-// ============ 自动取色（框选范围网格采样 + 相邻去重） ============
-$('btnAutoPick').onclick = async () => {
-  if (!range) { $('result').textContent = '先用「范围」拖拽框选区域'; return; }
-  const N = parseInt($('maxpts').value, 10);
-  const cols = Math.max(2, Math.round(Math.sqrt(N * (range.x2 - range.x1) / Math.max(1, range.y2 - range.y1))));
-  const rows = Math.max(2, Math.ceil(N / cols));
-  $('result').textContent = `自动取色中（${cols}x${rows} 网格）…`;
-  const cand = [];
-  for (let r = 0; r < rows && cand.length < N * 2; r++) {
-    for (let c = 0; c < cols && cand.length < N * 2; c++) {
-      const x = Math.round(range.x1 + (c + 0.5) * (range.x2 - range.x1) / cols);
-      const y = Math.round(range.y1 + (r + 0.5) * (range.y2 - range.y1) / rows);
-      const d = await (await fetch(`/api/pixel?x=${x}&y=${y}`)).json();
-      if (d.color) cand.push({ x, y, color: d.color, bias: '' });
-    }
-  }
-  // 相邻颜色去重（通道差全 <10 视为同色，跳过后者）
-  const diff = (a, b) => {
-    const pa = parseInt(a, 16), pb = parseInt(b, 16);
-    return Math.abs((pa & 255) - (pb & 255)) + Math.abs(((pa >> 8) & 255) - ((pb >> 8) & 255)) + Math.abs(((pa >> 16) & 255) - ((pb >> 16) & 255));
-  };
-  const picked = [];
-  for (const p of cand) {
-    if (!picked.some((q) => diff(p.color, q.color) < 10)) picked.push(p);
-    if (picked.length >= N) break;
-  }
-  points = picked;
-  selRow = -1;
-  renderPoints(); renderMarks(); genColorStr();
-  $('result').textContent = `✅ 自动取色 ${picked.length} 个点（去重后）`;
-  $('result').style.color = '#4ec9b0';
-};
 
 // ============ 工具栏 ============
 $('btnMag').onclick = () => $('btnMag').classList.toggle('on');
