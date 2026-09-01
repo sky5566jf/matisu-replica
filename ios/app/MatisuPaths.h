@@ -16,6 +16,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /// 数据区根：/var/mobile/Media/<CFBundleIdentifier>（取不到 bundle id 时回退 com.matisu.auto）。
 /// 懒创建；Media 下 mobile 直接可写，iTunes 文件共享可达。
 NSString *MatisuDataRoot(void);
@@ -31,5 +35,9 @@ NSString *MatisuRunPluginDir(void);   ///< <root>/run/插件
 NSString *MatisuWorkDir(void);        ///< <root>/work
 NSString *MatisuLogDir(void);         ///< <root>/logdir
 NSString *MatisuPersistDir(void);     ///< <root>/syspersist
+
+#ifdef __cplusplus
+}
+#endif
 
 NS_ASSUME_NONNULL_END
