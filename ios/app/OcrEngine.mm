@@ -216,8 +216,6 @@ std::pair<std::string, float> ctcDecode(const float *logits, int T, int C) {
     return { text, cnt ? conf / cnt : 0.0f };
 }
 
-OrtSession *runSession(OrtSession *sess, void *unused) { return sess; }
-
 } // namespace
 
 BOOL MatisuOcrReady(void) {
