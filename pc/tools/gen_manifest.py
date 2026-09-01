@@ -66,12 +66,28 @@ def parse_bridge():
 
 def parse_ios():
     src = read('ios/app/LuaEngine.mm')
+    # 全局函数（FNS 表）
     fns = set(re.findall(r'\{\s*"([a-zA-Z_]\w*)"\s*,\s*l_\w+\s*\}', src))
-    # lua_setglobal 直注册
+    # lua_setglobal 直注册（print / jsonLib / network / cipher 等）
     fns |= set(re.findall(r'lua_setglobal\(L,\s*"(\w+)"\)', src))
-    # jsonLib.setfield
-    for m in re.finditer(r'lua_setfield\(L,\s*-2,\s*"(\w+)"\)', src):
-        fns.add('jsonLib.' + m.group(1))
+    # 模块表函数：createtable -> 若干 setfield -> setglobal("表名")
+    # 用状态机按 setglobal 归属表名，否则所有 setfield 都会被误算成 jsonLib.*
+    # （也会把 OCR 结果表的 x/y/w/h/score/text 这类字段名误当成 API）
+    tracking, pending = False, []
+    for line in src.splitlines():
+        s = line.strip()
+        if 'lua_createtable' in s:
+            tracking, pending = True, []
+        elif tracking and 'lua_setfield' in s:
+            m = re.search(r'lua_setfield\(L,\s*-2,\s*"(\w+)"\)', s)
+            if m:
+                pending.append(m.group(1))
+        elif tracking and 'lua_setglobal' in s:
+            m = re.search(r'lua_setglobal\(L,\s*"(\w+)"\)', s)
+            if m:
+                for f in pending:
+                    fns.add('%s.%s' % (m.group(1), f))
+            tracking, pending = False, []
     fns.discard('tostring')
     return fns
 

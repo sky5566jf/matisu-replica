@@ -17,6 +17,7 @@
 #import "OcrEngine.h"
 #import <UIKit/UIKit.h>
 #import <unistd.h>
+#import <stdlib.h>
 
 // lua 官方头无 extern "C" 守卫（lua.hpp 在 etc/ 未 vendor），C++ 侧自行包裹
 extern "C" {
@@ -198,6 +199,37 @@ static int l_findPicEx(lua_State *L) {
     lua_pushinteger(L, hit ? oy : -1);
     return 2;
 }
+static int l_findPicAllPoint(lua_State *L) {
+    int *xy = NULL; int n = 0;
+    int ret = MatisuFindPicAllPoint((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                    (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                                    [NSString stringWithUTF8String:luaL_checkstring(L, 5)],
+                                    luaL_optnumber(L, 6, 0.9), (int)luaL_optinteger(L, 7, 0),
+                                    &xy, &n);
+    if (!ret || n == 0) { free(xy); lua_pushnil(L); return 1; }
+    lua_newtable(L);
+    for (int i = 0; i < n; i++) {
+        lua_newtable(L);
+        lua_pushinteger(L, xy[i * 2]);     lua_rawseti(L, -2, 1);
+        lua_pushinteger(L, xy[i * 2 + 1]); lua_rawseti(L, -2, 2);
+        lua_rawseti(L, -2, i + 1);
+    }
+    free(xy);
+    return 1;
+}
+static int l_findCircle(lua_State *L) {
+    int cx = -1, cy = -1, r = -1;
+    int hit = MatisuFindCircle((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                               (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                               (int)luaL_optinteger(L, 5, 1), (int)luaL_optinteger(L, 6, 20),
+                               (int)luaL_optinteger(L, 7, 100), (int)luaL_optinteger(L, 8, 30),
+                               (int)luaL_optinteger(L, 9, 5), (int)luaL_optinteger(L, 10, 200),
+                               &cx, &cy, &r);
+    lua_pushinteger(L, hit ? cx : -1);
+    lua_pushinteger(L, hit ? cy : -1);
+    lua_pushinteger(L, hit ? r : -1);
+    return 3;
+}
 static int l_findMultiColor(lua_State *L) {
     int ox = -1, oy = -1;
     int hit = MatisuFindMultiColor((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
@@ -208,6 +240,126 @@ static int l_findMultiColor(lua_State *L) {
     lua_pushinteger(L, hit ? ox : -1);
     lua_pushinteger(L, hit ? oy : -1);
     return 2;
+}
+
+// ---------------- *T 变体：table 打包参数（原版 findColorT / cmpColorExT 等） ----------------
+// 兼容两种写法：具名字段 {x1=,y1=,x2=,y2=,color=,dir=,sim=} 或数组下标 {x1,y1,x2,y2,...}。
+// 先按具名取、取不到再按下标兜底，两种脚本风格都能跑。
+static void maTblPush(lua_State *L, int idx, const char *key, int nth) {
+    lua_pushvalue(L, idx);
+    if (key) lua_getfield(L, -1, key); else lua_rawgeti(L, -1, nth);
+    lua_remove(L, -2);   // 弹掉 table，栈顶留下取到的值（没取到就是 nil）
+}
+static lua_Integer maTblInt(lua_State *L, int idx, const char *key, int nth, lua_Integer def) {
+    maTblPush(L, idx, key, nth);
+    lua_Integer v = luaL_optinteger(L, -1, def);
+    lua_pop(L, 1);
+    return v;
+}
+static double maTblNum(lua_State *L, int idx, const char *key, int nth, double def) {
+    maTblPush(L, idx, key, nth);
+    double v = luaL_optnumber(L, -1, def);
+    lua_pop(L, 1);
+    return v;
+}
+static NSString *maTblStr(lua_State *L, int idx, const char *key, int nth, const char *def) {
+    maTblPush(L, idx, key, nth);
+    const char *s = luaL_optstring(L, -1, def);
+    NSString *r = s ? [NSString stringWithUTF8String:s] : @"";
+    lua_pop(L, 1);
+    return r;
+}
+
+static int l_findColorT(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    int ox = -1, oy = -1;
+    int hit = MatisuFindColor((int)maTblInt(L, 1, "x1", 1, 0), (int)maTblInt(L, 1, "y1", 2, 0),
+                              (int)maTblInt(L, 1, "x2", 3, 0), (int)maTblInt(L, 1, "y2", 4, 0),
+                              maTblStr(L, 1, "color", 5, ""),
+                              (int)maTblInt(L, 1, "dir", 6, 0), maTblNum(L, 1, "sim", 7, 0.9),
+                              &ox, &oy);
+    lua_pushinteger(L, hit ? ox : -1);
+    lua_pushinteger(L, hit ? oy : -1);
+    return 2;
+}
+static int l_findMultiColorT(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    int ox = -1, oy = -1;
+    int hit = MatisuFindMultiColor((int)maTblInt(L, 1, "x1", 1, 0), (int)maTblInt(L, 1, "y1", 2, 0),
+                                   (int)maTblInt(L, 1, "x2", 3, 0), (int)maTblInt(L, 1, "y2", 4, 0),
+                                   maTblStr(L, 1, "color", 5, ""),
+                                   maTblStr(L, 1, "offset", 6, ""),
+                                   (int)maTblInt(L, 1, "dir", 7, 0), maTblNum(L, 1, "sim", 8, 0.9),
+                                   &ox, &oy);
+    lua_pushinteger(L, hit ? ox : -1);
+    lua_pushinteger(L, hit ? oy : -1);
+    return 2;
+}
+static int l_findMultiColorAllT(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    NSString *r = MatisuFindMultiColorAll((int)maTblInt(L, 1, "x1", 1, 0), (int)maTblInt(L, 1, "y1", 2, 0),
+                                          (int)maTblInt(L, 1, "x2", 3, 0), (int)maTblInt(L, 1, "y2", 4, 0),
+                                          maTblStr(L, 1, "color", 5, ""),
+                                          maTblStr(L, 1, "offset", 6, ""),
+                                          maTblNum(L, 1, "sim", 7, 0.9));
+    lua_pushstring(L, r.UTF8String);
+    return 1;
+}
+static int l_cmpColorExT(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    // 入参三选一：spec 串（具名 spec / 数组 [1]），或 x+y+color 由这里拼成 "x|y|color"。
+    // 注意用 lua_type 判断而不是直接 optstring —— 数组形式下 [1] 可能是数字 x，
+    // 直接转字符串会把坐标误当成 spec。
+    NSString *spec = @"";
+    maTblPush(L, 1, "spec", 0);
+    if (lua_type(L, -1) == LUA_TSTRING) spec = [NSString stringWithUTF8String:lua_tostring(L, -1)];
+    lua_pop(L, 1);
+    if (!spec.length) {
+        maTblPush(L, 1, NULL, 1);
+        if (lua_type(L, -1) == LUA_TSTRING) spec = [NSString stringWithUTF8String:lua_tostring(L, -1)];
+        lua_pop(L, 1);
+    }
+    if (!spec.length) {
+        spec = [NSString stringWithFormat:@"%@|%@|%@",
+                maTblStr(L, 1, "x", 1, "0"),
+                maTblStr(L, 1, "y", 2, "0"),
+                maTblStr(L, 1, "color", 3, "")];
+    }
+    // sim：具名 sim -> 数组 [2] -> 数组 [4]
+    double sim = 0.9;
+    maTblPush(L, 1, "sim", 0);
+    if (!lua_isnil(L, -1)) sim = luaL_optnumber(L, -1, 0.9);
+    lua_pop(L, 1);
+    if (sim == 0.9) {
+        maTblPush(L, 1, NULL, 2);
+        if (lua_type(L, -1) == LUA_TNUMBER) sim = lua_tonumber(L, -1);
+        lua_pop(L, 1);
+        maTblPush(L, 1, NULL, 4);
+        if (lua_type(L, -1) == LUA_TNUMBER) sim = lua_tonumber(L, -1);
+        lua_pop(L, 1);
+    }
+    int r = MatisuCmpColorEx(spec, sim);
+    lua_pushinteger(L, r);
+    return 1;
+}
+
+// ---------------- 颜色工具 ----------------
+// colorDiff(c1,c2)：两色（0xRRGGBB）三通道差的绝对值和，0=完全相同，上限 765
+static int l_colorDiff(lua_State *L) {
+    unsigned int c1 = (unsigned int)luaL_checkinteger(L, 1);
+    unsigned int c2 = (unsigned int)luaL_checkinteger(L, 2);
+    int r1 = (c1 >> 16) & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = c1 & 0xFF;
+    int r2 = (c2 >> 16) & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = c2 & 0xFF;
+    lua_pushinteger(L, abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2));
+    return 1;
+}
+// colorToRGB(c) -> r,g,b
+static int l_colorToRGB(lua_State *L) {
+    unsigned int c = (unsigned int)luaL_checkinteger(L, 1);
+    lua_pushinteger(L, (c >> 16) & 0xFF);
+    lua_pushinteger(L, (c >> 8) & 0xFF);
+    lua_pushinteger(L, c & 0xFF);
+    return 3;
 }
 
 // ---------------- 网络 / 编码 / jsonLib ----------------
@@ -263,6 +415,20 @@ static int l_httpPost(lua_State *L) {
     lua_pushlstring(L, (const char *)d.bytes, (size_t)d.length);
     lua_pushinteger(L, code);
     return 2;
+}
+/// downloadFile(url, path[, timeout]) -> true/false
+static int l_download(lua_State *L) {
+    NSString *url = [NSString stringWithUTF8String:luaL_checkstring(L, 1)];
+    NSString *path = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    double timeout = luaL_optnumber(L, 3, 60);
+    NSData *d = nil; long code = 0; NSString *err = nil;
+    maHttp(@"GET", url, nil, timeout, &d, &code, &err);
+    if (!d) { lua_pushboolean(L, 0); return 1; }
+    NSError *werr = nil;
+    BOOL ok = [d writeToFile:path options:NSDataWritingAtomic error:&werr];
+    if (!ok) NSLog(@"[MatisuAuto] downloadFile 写盘失败 %@", werr.localizedDescription);
+    lua_pushboolean(L, ok);
+    return 1;
 }
 
 static int l_MD5(lua_State *L) {
@@ -649,6 +815,52 @@ static int l_runApp(lua_State *L) {
     lua_pushboolean(L, ok);
     return 1;
 }
+/// stopApp(bundleId) -> true/false：按可执行名查进程后 SIGKILL（需 root）
+static int l_stopApp(lua_State *L) {
+    BOOL ok = MatisuStopApp([NSString stringWithUTF8String:luaL_checkstring(L, 1)]);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+/// appIsRunning(bundleId) -> true/false
+static int l_appIsRunning(lua_State *L) {
+    BOOL ok = MatisuAppIsRunning([NSString stringWithUTF8String:luaL_checkstring(L, 1)]);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+/// lockScreen() -> true/false
+static int l_lockScreen(lua_State *L) {
+    lua_pushboolean(L, MatisuLockScreen());
+    return 1;
+}
+/// unLockScreen([password]) -> true/false
+/// 无密码设备：点亮后从底部上滑即可；有密码则继续注入密码并回车。
+static int l_unLockScreen(lua_State *L) {
+    const char *pwd = luaL_optstring(L, 1, NULL);
+    BOOL lit = MatisuUndimScreen();
+    usleep(350 * 1000);
+    float w = 0, h = 0;
+    maScreenSize(&w, &h);
+    if (w > 0 && h > 0) {
+        MatisuTouchSwipe(w * 0.5f, h - 10.0f, w * 0.5f, h * 0.15f, 0.35);
+    }
+    if (pwd && *pwd) {
+        usleep(900 * 1000);
+        MatisuTypeText(pwd);
+        usleep(400 * 1000);
+        MatisuKeyPressName("return");
+    }
+    lua_pushboolean(L, lit);
+    return 1;
+}
+/// keyDown(name) / keyUp(name)：按下不抬起，用于组合键（name 同 keyPress）
+static int l_keyDown(lua_State *L) {
+    MatisuKeyDownName(luaL_checkstring(L, 1));
+    return 0;
+}
+static int l_keyUp(lua_State *L) {
+    MatisuKeyUpName(luaL_checkstring(L, 1));
+    return 0;
+}
 static int l_openUrl(lua_State *L) {
     BOOL ok = MatisuOpenURL([NSString stringWithUTF8String:luaL_checkstring(L, 1)]);
     lua_pushboolean(L, ok);
@@ -845,11 +1057,21 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "cmpColorEx", l_cmpColorEx }, { "getColorNum", l_getColorNum },
         { "snapShot", l_snapShot },
         { "findPic", l_findPic }, { "findPicEx", l_findPicEx },
+        { "findPicAllPoint", l_findPicAllPoint }, { "findCircle", l_findCircle },
         { "findMultiColor", l_findMultiColor },
         { "httpGet", l_httpGet }, { "httpPost", l_httpPost },
         { "MD5", l_MD5 }, { "encodeBase64", l_encodeBase64 }, { "decodeBase64", l_decodeBase64 },
         { "readPasteboard", l_readPasteboard }, { "writePasteboard", l_writePasteboard },
         { "runApp", l_runApp }, { "openUrl", l_openUrl },
+        { "stopApp", l_stopApp }, { "appIsRunning", l_appIsRunning },
+        { "lockScreen", l_lockScreen }, { "unLockScreen", l_unLockScreen },
+        // 批次 3：按键按下/抬起（组合键）
+        { "keyDown", l_keyDown }, { "keyUp", l_keyUp },
+        // 批次 3：*T table 传参变体 + 颜色工具
+        { "findColorT", l_findColorT }, { "findMultiColorT", l_findMultiColorT },
+        { "findMultiColorAllT", l_findMultiColorAllT }, { "cmpColorExT", l_cmpColorExT },
+        { "colorDiff", l_colorDiff }, { "colorToRGB", l_colorToRGB },
+        { "downloadFile", l_download },
         // 设备信息
         { "getModel", l_getModel }, { "getDeviceName", l_getDeviceName },
         { "getSysVer", l_getSysVer }, { "getDeviceId", l_getDeviceId },
@@ -888,9 +1110,10 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
     lua_pushcfunction(L, l_jsonEncode); lua_setfield(L, -2, "encode");
     lua_pushcfunction(L, l_jsonDecode); lua_setfield(L, -2, "decode");
     lua_setglobal(L, "json");
-    lua_createtable(L, 0, 2);
+    lua_createtable(L, 0, 3);
     lua_pushcfunction(L, l_httpGet); lua_setfield(L, -2, "httpGet");
     lua_pushcfunction(L, l_httpPost); lua_setfield(L, -2, "httpPost");
+    lua_pushcfunction(L, l_download); lua_setfield(L, -2, "download");
     lua_setglobal(L, "network");
     lua_createtable(L, 0, 3);
     lua_pushcfunction(L, l_MD5); lua_setfield(L, -2, "md5");

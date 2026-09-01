@@ -1,8 +1,8 @@
 # MatisuAuto 复刻进度表（API manifest）
-> 生成: 2026-09-01T12:58:15  ｜  PC 179 / iOS 78 / Android 17 已注册
+> 生成: 2026-09-01T22:48:19  ｜  PC 179 / iOS 99 / Android 17 已注册
 
 ## 触控（全局函数）（12 个）
-**契约函数 133 个；覆盖率 PC 130/133 (97%) / iOS 42/133 (31%) / Android 17/133 (12%)**
+**契约函数 133 个；覆盖率 PC 130/133 (97%) / iOS 63/133 (47%) / Android 17/133 (12%)**
 
 > 注：仅统计 core.lua 契约函数（133 个）；文档长尾 ~570 个见 lua-api-surface.md §5。
 
@@ -18,27 +18,27 @@
 | touchUp | ✅ | ✅ | ✅ |
 | inputText | ✅ | ✅ | ✅ |
 | keyPress | ✅ | ✅ | ✅ |
-| keyDown | ✅ | — | — |
-| keyUp | ✅ | — | — |
+| keyDown | ✅ | ✅ | — |
+| keyUp | ✅ | ✅ | — |
 | setOnTouchListener | ✅ | — | — |
 
-缺口: touchMoveEx, keyDown, keyUp, setOnTouchListener
+缺口: touchMoveEx, setOnTouchListener
 
 ## 图色与找图（全局函数，颜色 BBGGRR）（25 个）
 
 | 函数 | PC | iOS | Android |
 |---|---|---|---|
 | findColor | ✅ | ✅ | ✅ |
-| findColorT | ✅ | — | — |
+| findColorT | ✅ | ✅ | — |
 | findMultiColor | ✅ | ✅ | — |
-| findMultiColorT | ✅ | — | — |
+| findMultiColorT | ✅ | ✅ | — |
 | findMultiColorAll | ✅ | ✅ | — |
-| findMultiColorAllT | ✅ | — | — |
+| findMultiColorAllT | ✅ | ✅ | — |
 | cmpColor | ✅ | ✅ | ✅ |
 | cmpColorEx | ✅ | ✅ | ✅ |
-| cmpColorExT | ✅ | — | — |
+| cmpColorExT | ✅ | ✅ | — |
 | getColorNum | ✅ | ✅ | ✅ |
-| colorDiff | ✅ | — | — |
+| colorDiff | ✅ | ✅ | — |
 | getPixelColor | ✅ | ✅ | ✅ |
 | getScreenPixel | ✅ | ✅ | — |
 | isDisplayDead | ✅ | ✅ | — |
@@ -46,15 +46,13 @@
 | releaseCapture | ✅ | ✅ | — |
 | setScreenScale | ✅ | ✅ | — |
 | snapShot | ✅ | ✅ | ✅ |
-| ocrText | ✅ | — | — |
+| ocrText | ✅ | ✅ | — |
 | findImage | ✅ | ✅ | — |
 | findPic | ✅ | ✅ | — |
 | findPicEx | ✅ | ✅ | — |
 | findPicFast | ✅ | ✅ | — |
-| findPicAllPoint | ✅ | — | — |
-| findCircle | ✅ | — | — |
-
-缺口: findColorT, findMultiColorT, findMultiColorAllT, cmpColorExT, colorDiff, ocrText, findPicAllPoint, findCircle
+| findPicAllPoint | ✅ | ✅ | — |
+| findCircle | ✅ | ✅ | — |
 
 ## 设备信息（全局函数）（26 个）
 
@@ -94,7 +92,7 @@
 | 函数 | PC | iOS | Android |
 |---|---|---|---|
 | runApp | ✅ | ✅ | — |
-| stopApp | ✅ | — | — |
+| stopApp | ✅ | ✅ | — |
 | getInstalledApk | ✅ | N/A | — |
 | getInstalledApps | — | N/A | — |
 | installApk | ✅ | N/A | — |
@@ -109,7 +107,7 @@
 | phoneCall | ✅ | N/A | — |
 | runIntent | ✅ | N/A | — |
 
-缺口: stopApp, getInstalledApps, appIsFront, scanImage, sendSms
+缺口: getInstalledApps, appIsFront, scanImage, sendSms
 
 ## 系统控制（全局函数）（17 个）
 
@@ -125,15 +123,15 @@
 | exec | ✅ | N/A | — |
 | sleep | ✅ | ✅ | ✅ |
 | mSleep | ✅ | ✅ | ✅ |
-| lockScreen | ✅ | — | — |
-| unLockScreen | ✅ | — | — |
+| lockScreen | ✅ | ✅ | — |
+| unLockScreen | ✅ | ✅ | — |
 | setBTEnable | ✅ | N/A | — |
 | setWifiEnable | ✅ | N/A | — |
 | setAirplaneMode | ✅ | N/A | — |
 | getRunEnvType | ✅ | — | — |
 | exitScript | ✅ | ✅ | — |
 
-缺口: playAudio, stopAudio, lockScreen, unLockScreen, getRunEnvType
+缺口: playAudio, stopAudio, getRunEnvType
 
 ## 交互（全局函数 + ui 动态UI 模块表）（16 个）
 
@@ -182,15 +180,15 @@
 
 | 函数 | PC | iOS | Android |
 |---|---|---|---|
-| cipher.md5 | ✅ | — | — |
-| cipher.sha1 | ✅ | — | — |
-| cipher.base64 | ✅ | — | — |
+| cipher.md5 | ✅ | ✅ | — |
+| cipher.sha1 | ✅ | ✅ | — |
+| cipher.base64 | ✅ | ✅ | — |
 | cipher.aes | ✅ | — | — |
-| network.httpGet | ✅ | — | — |
-| network.httpPost | ✅ | — | — |
-| network.download | ✅ | — | — |
-| json.encode | ✅ | — | — |
-| json.decode | ✅ | — | — |
+| network.httpGet | ✅ | ✅ | — |
+| network.httpPost | ✅ | ✅ | — |
+| network.download | ✅ | ✅ | — |
+| json.encode | ✅ | ✅ | — |
+| json.decode | ✅ | ✅ | — |
 
-缺口: cipher.md5, cipher.sha1, cipher.base64, cipher.aes, network.httpGet, network.httpPost, network.download, json.encode, json.decode
+缺口: cipher.aes
 

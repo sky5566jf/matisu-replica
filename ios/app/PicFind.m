@@ -3,6 +3,7 @@
 #import "ScreenShot.h"
 #import <UIKit/UIKit.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import <math.h>
 
 // ---------------- 模板 PNG 解码（CG -> RGBA 缓冲） ----------------
 typedef struct {
@@ -226,4 +227,217 @@ NSData* _Nullable MatisuCapturePNGRegion(int x1, int y1, int x2, int y2) {
     NSData *png = UIImagePNGRepresentation(u);
     CGImageRelease(img);
     return png;
+}
+
+// ---------------- 全部命中点（NMS） ----------------
+int MatisuFindPicAllPoint(int x1, int y1, int x2, int y2, NSString *picPath, double sim,
+                          int maxRet, int **outXY, int *outN) {
+    *outXY = NULL; *outN = 0;
+    MATemplate t0 = {0};
+    if (!loadTemplate(picPath, &t0)) return 0;
+    int sw = 0, sh = 0, bpr = 0;
+    const uint8_t *base = MatisuSurfaceLockRead(&sw, &sh, &bpr);
+    if (!base) { free(t0.rgba); return 0; }
+
+    float lw, lh; maLogicalSize(&lw, &lh);
+    float kx = (float)sw / lw, ky = (float)sh / lh;
+    int factor = MAX(1, (int)lroundf(kx));
+
+    int dw = 0, dh = 0;
+    uint8_t *small = (uint8_t *)malloc((size_t)(sw / factor) * (sh / factor) * 4);
+    shrinkFrame(base, sw, sh, bpr, factor, small, &dw, &dh);
+    MatisuSurfaceUnlockRead();
+
+    MATemplate t = {0};
+    shrinkTemplate(&t0, factor, &t);
+    free(t0.rgba);
+    if (t.w < 4 || t.h < 4) { free(small); free(t.rgba); return 0; }
+
+    int X1 = 0, Y1 = 0, X2 = dw, Y2 = dh;
+    if (!(x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0)) {
+        X1 = MAX(0, (int)lroundf(x1 * kx / factor)); Y1 = MAX(0, (int)lroundf(y1 * ky / factor));
+        X2 = MIN(dw, (int)lroundf(x2 * kx / factor)); Y2 = MIN(dh, (int)lroundf(y2 * ky / factor));
+    }
+    MAFrame f = { small, dw, dh, dw * 4 };
+
+    int x2b = MIN(X2 - t.w, f.sw - t.w), y2b = MIN(Y2 - t.h, f.sh - t.h);
+    if (x2b < X1 || y2b < Y1) { free(small); free(t.rgba); return 0; }
+
+    int step = MAX(2, MIN(t.w, t.h) >> 3);
+    int cap = 8192, nCand = 0;
+    int *cands = (int *)malloc(sizeof(int) * 2 * cap);
+    for (int y = Y1; y <= y2b; y += step) {
+        for (int x = X1; x <= x2b; x += step) {
+            // 9 点预筛
+            long pre = 0; int pc = 0;
+            for (int k = 0; k < 9; k++) {
+                int tx = (k % 3) * (t.w >> 2) + (t.w >> 3);
+                int ty = (k / 3) * (t.h >> 2) + (t.h >> 3);
+                const uint8_t *sp = f.scr + (size_t)(y + ty) * f.bpr + (size_t)(x + tx) * 4;
+                const uint8_t *tp = t.rgba + (size_t)(ty * t.w + tx) * 4;
+                pre += labs(sp[0] - tp[0]) + labs(sp[1] - tp[1]) + labs(sp[2] - tp[2]);
+                pc += 3;
+            }
+            if (pc && 1.0 - ((double)pre / pc) / 255.0 >= sim - 0.15) {
+                if (nCand < cap) { cands[nCand * 2] = x; cands[nCand * 2 + 1] = y; nCand++; }
+            }
+        }
+    }
+
+    // 精修收集
+    typedef struct { int x, y; double s; } Hit;
+    Hit *hits = (Hit *)malloc(sizeof(Hit) * (nCand + 1));
+    int nHits = 0;
+    for (int i = 0; i < nCand; i++) {
+        int cx = cands[i * 2], cy = cands[i * 2 + 1];
+        int x1r = MAX(X1, cx - step), y1r = MAX(Y1, cy - step);
+        int x2r = MIN(x2b, cx + step), y2r = MIN(y2b, cy + step);
+        for (int y = y1r; y <= y2r; y++) for (int x = x1r; x <= x2r; x++) {
+            double s = tplScoreAt(&f, &t, NULL, x, y, 0);
+            if (s >= sim) { hits[nHits].x = x; hits[nHits].y = y; hits[nHits].s = s; nHits++; break; }
+        }
+    }
+    free(cands); free(small); free(t.rgba);
+
+    if (nHits == 0) { free(hits); return 0; }
+
+    // NMS：按分数降序，minDist=模板较大边一半（缩帧坐标）
+    int minDist = MAX(t.w, t.h) / 2 + 1;
+    qsort(hits, nHits, sizeof(Hit), ^int(const void *a, const void *b) {
+        double sa = ((Hit *)a)->s, sb = ((Hit *)b)->s;
+        return sa < sb ? 1 : (sa > sb ? -1 : 0);
+    });
+    int *keep = (int *)malloc(sizeof(int) * nHits);
+    int nKeep = 0;
+    for (int i = 0; i < nHits; i++) {
+        int ok = 1;
+        for (int j = 0; j < nKeep; j++) {
+            int dx = hits[i].x - hits[keep[j]].x, dy = hits[i].y - hits[keep[j]].y;
+            if (dx * dx + dy * dy < minDist * minDist) { ok = 0; break; }
+        }
+        if (ok) keep[nKeep++] = i;
+        if (maxRet > 0 && nKeep >= maxRet) break;
+    }
+
+    int *xy = (int *)malloc(sizeof(int) * 2 * nKeep);
+    for (int i = 0; i < nKeep; i++) {
+        int h = keep[i];
+        xy[i * 2]     = (int)lroundf(hits[h].x * (double)factor / kx);
+        xy[i * 2 + 1] = (int)lroundf(hits[h].y * (double)factor / ky);
+    }
+    free(hits); free(keep);
+    *outXY = xy; *outN = nKeep;
+    return nKeep > 0 ? 1 : 0;
+}
+
+// ---------------- 霍夫圆检测 ----------------
+int MatisuFindCircle(int x1, int y1, int x2, int y2,
+                     int dp, int minDist, int p1, int p2, int minR, int maxR,
+                     int *outCx, int *outCy, int *outR) {
+    if (dp < 1) dp = 1;
+    if (minR < 1) minR = 1;
+    if (maxR < minR) maxR = minR;
+
+    int sw = 0, sh = 0, bpr = 0;
+    const uint8_t *base = MatisuSurfaceLockRead(&sw, &sh, &bpr);
+    if (!base) return 0;
+
+    float lw, lh; maLogicalSize(&lw, &lh);
+    float kx = (float)sw / lw, ky = (float)sh / lh;
+    int factor = MAX(1, (int)lroundf(kx));
+
+    int dw = 0, dh = 0;
+    uint8_t *small = (uint8_t *)malloc((size_t)(sw / factor) * (sh / factor) * 4);
+    shrinkFrame(base, sw, sh, bpr, factor, small, &dw, &dh);
+    MatisuSurfaceUnlockRead();
+
+    int X1 = 0, Y1 = 0, X2 = dw, Y2 = dh;
+    if (!(x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0)) {
+        X1 = MAX(0, (int)lroundf(x1 * kx / factor)); Y1 = MAX(0, (int)lroundf(y1 * ky / factor));
+        X2 = MIN(dw, (int)lroundf(x2 * kx / factor)); Y2 = MIN(dh, (int)lroundf(y2 * ky / factor));
+    }
+
+    int W = X2 - X1, H = Y2 - Y1;
+    if (W < 8 || H < 8) { free(small); return 0; }
+
+    // 灰度 + Sobel 梯度
+    uint8_t *gray = (uint8_t *)malloc((size_t)W * H);
+    double *gx = (double *)malloc(sizeof(double) * W * H);
+    double *gy = (double *)malloc(sizeof(double) * W * H);
+    double *mag = (double *)malloc(sizeof(double) * W * H);
+    for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+        const uint8_t *p = small + ((size_t)(Y1 + y) * dw + (X1 + x)) * 4;
+        gray[y * W + x] = (uint8_t)((p[0] * 77 + p[1] * 150 + p[2] * 29) >> 8);
+    }
+    for (int y = 1; y < H - 1; y++) for (int x = 1; x < W - 1; x++) {
+        double tl = gray[(y - 1) * W + x - 1], tc = gray[(y - 1) * W + x], tr = gray[(y - 1) * W + x + 1];
+        double ml = gray[y * W + x - 1],                                 mr = gray[y * W + x + 1];
+        double bl = gray[(y + 1) * W + x - 1], bc = gray[(y + 1) * W + x], br = gray[(y + 1) * W + x + 1];
+        double sx = (tr + 2 * mr + br) - (tl + 2 * ml + bl);
+        double sy = (bl + 2 * bc + br) - (tl + 2 * tc + tr);
+        gx[y * W + x] = sx; gy[y * W + x] = sy;
+        mag[y * W + x] = sqrt(sx * sx + sy * sy);
+    }
+
+    // 累加器（dp 降采样）
+    int AW = (W + dp - 1) / dp, AH = (H + dp - 1) / dp;
+    int *acc = (int *)calloc((size_t)AW * AH, sizeof(int));
+    double thr = (double)(p1 > 0 ? p1 : 100);
+    for (int y = 1; y < H - 1; y++) for (int x = 1; x < W - 1; x++) {
+        double m = mag[y * W + x];
+        if (m < thr) continue;
+        double sx = gx[y * W + x], sy = gy[y * W + x];
+        double len = sqrt(sx * sx + sy * sy) + 1e-6;
+        double nx = sx / len, ny = sy / len;       // 指向圆心方向（梯度朝亮侧，圆心在暗侧取反）
+        for (int r = minR / factor; r <= maxR / factor; r += 1) {
+            int vx = (int)lroundf((double)x - nx * r), vy = (int)lroundf((double)y - ny * r);
+            int ax = vx / dp, ay = vy / dp;
+            if (ax >= 0 && ax < AW && ay >= 0 && ay < AH) acc[ay * AW + ax] += 1;
+            int ux = (int)lroundf((double)x + nx * r), uy = (int)lroundf((double)y + ny * r);
+            int bx = ux / dp, by = uy / dp;
+            if (bx >= 0 && bx < AW && by >= 0 && by < AH) acc[by * AW + bx] += 1;
+        }
+    }
+
+    // 找峰值（局部最大 + 阈值）
+    int bestV = 0, bestX = 0, bestY = 0;
+    int pthr = MAX(8, (maxR / factor - minR / factor));   // 至少跨过部分半径才有意义
+    for (int y = 1; y < AH - 1; y++) for (int x = 1; x < AW - 1; x++) {
+        int v = acc[y * AW + x];
+        if (v < pthr) continue;
+        int local = 1;
+        for (int dy = -1; dy <= 1 && local; dy++) for (int dx = -1; dx <= 1; dx++)
+            if (acc[(y + dy) * AW + (x + dx)] > v) { local = 0; break; }
+        if (local && v > bestV) { bestV = v; bestX = x * dp + dp / 2; bestY = y * dp + dp / 2; }
+    }
+
+    free(gray); free(gx); free(gy); free(mag); free(acc); free(small);
+    if (bestV < pthr) return 0;
+
+    // 估半径：在最佳圆心处扫描 r，数环上边缘一致的点，取峰值
+    int bestR = (minR + maxR) / 2;  // 默认中值，缩帧坐标
+    // 以缩帧半径空间估算（不除以 factor，因 W/H 已是缩帧）
+    int rminS = minR / factor, rmaxS = maxR / factor;
+    if (rminS < 1) rminS = 1;
+    int bestRscore = -1;
+    for (int r = rminS; r <= rmaxS; r++) {
+        int cnt = 0, total = 0;
+        const int A = 24;
+        for (int k = 0; k < A; k++) {
+            double ang = 2 * M_PI * k / A;
+            int px = bestX + (int)lroundf(cos(ang) * r);
+            int py = bestY + (int)lroundf(sin(ang) * r);
+            if (px < 0 || px >= W || py < 0 || py >= H) continue;
+            total++;
+            // 环上点应是强边缘
+            if (mag[py * W + px] >= thr * 0.6) cnt++;
+        }
+        if (total && cnt * 100 / total > bestRscore) { bestRscore = cnt * 100 / total; bestR = r; }
+    }
+
+    // 缩帧 -> 逻辑点
+    *outCx = (int)lroundf(bestX * (double)factor / kx);
+    *outCy = (int)lroundf(bestY * (double)factor / ky);
+    *outR  = (int)lroundf(bestR * (double)factor / ((kx + ky) / 2));
+    return 1;
 }

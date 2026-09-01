@@ -20,13 +20,48 @@
     <true/>
 	<key>MinimumOSVersion</key>
 	<string>14.0</string>
-    <key>UIApplicationSceneManifest</key>
-    <dict>
-        <key>UIApplicationSupportsMultipleScenes</key>
-        <false/>
-    </dict>
+    <!-- 不声明 UIApplicationSceneManifest：走经典 AppDelegate 生命周期，
+         URL scheme 回调才会落到 AppDelegate 的 openURL，省掉一个 SceneDelegate -->
     <key>UILaunchScreen</key>
     <dict/>
+
+    <!-- ===== 常驻保活（对齐原版 RootService 的做法，取其中公开键部分） ===== -->
+    <!-- 后台唤醒：fetch 由系统按使用习惯调度，processing 给 BGTaskScheduler 用 -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.matisu.auto.watchdog</string>
+        <string>com.matisu.auto.refresh</string>
+    </array>
+    <!-- URL scheme：matisuauto://start | stop | restart | watchdog -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>com.matisu.auto</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>matisuauto</string>
+            </array>
+        </dict>
+    </array>
+    <!-- iTunes / 文件 App 可直接往 Documents 丢脚本，省一次 IDE 上传 -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <!-- network.httpGet/httpPost 要能访问自签/明文站点 -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
     <key>CFBundleIcons</key>
     <dict>
         <key>CFBundlePrimaryIcon</key>

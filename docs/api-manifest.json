@@ -1,8 +1,8 @@
 {
- "generated": "2026-09-01T12:58:15",
+ "generated": "2026-09-01T22:48:19",
  "summary": {
   "pc": 179,
-  "ios": 78,
+  "ios": 99,
   "android": 17
  },
  "sections": [
@@ -67,13 +67,13 @@
     {
      "name": "keyDown",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "keyUp",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -97,7 +97,7 @@
     {
      "name": "findColorT",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -109,7 +109,7 @@
     {
      "name": "findMultiColorT",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -121,7 +121,7 @@
     {
      "name": "findMultiColorAllT",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -139,7 +139,7 @@
     {
      "name": "cmpColorExT",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -151,7 +151,7 @@
     {
      "name": "colorDiff",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -199,7 +199,7 @@
     {
      "name": "ocrText",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -229,13 +229,13 @@
     {
      "name": "findPicAllPoint",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "findCircle",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     }
    ]
@@ -415,7 +415,7 @@
     {
      "name": "stopApp",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -565,13 +565,13 @@
     {
      "name": "lockScreen",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "unLockScreen",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -799,19 +799,19 @@
     {
      "name": "cipher.md5",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "cipher.sha1",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "cipher.base64",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
@@ -823,31 +823,31 @@
     {
      "name": "network.httpGet",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "network.httpPost",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "network.download",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "json.encode",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     },
     {
      "name": "json.decode",
      "pc": true,
-     "ios": false,
+     "ios": true,
      "android": false
     }
    ]
