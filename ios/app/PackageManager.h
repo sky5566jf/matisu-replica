@@ -8,6 +8,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /// 把 zip 数据解包到 destDir（目录条目自动建目录；拒绝 ".." 与绝对路径条目）。
 /// 返回写出的文件数，失败返回 -1。
 int MatisuUnzipDataToDir(NSData *zipData, NSString *destDir);
@@ -15,5 +19,9 @@ int MatisuUnzipDataToDir(NSData *zipData, NSString *destDir);
 /// 安装脚本包：name=纯文件名（如 demo.lrj），payload=zip 内容。
 /// 成功返回 YES 且 outFiles 为解出的文件数；errMsg 带失败原因。
 BOOL MatisuInstallPackage(NSString *name, NSData *payload, int *_Nullable outFiles, NSString *_Nullable *_Nullable errMsg);
+
+#ifdef __cplusplus
+}
+#endif
 
 NS_ASSUME_NONNULL_END
