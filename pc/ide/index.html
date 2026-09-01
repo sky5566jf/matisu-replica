@@ -74,6 +74,7 @@
   <button class="tb" id="btnNew">新建</button>
   <button class="tb" id="btnSave">保存</button>
   <button class="tb" id="btnDel">删除</button>
+  <button class="tb" id="btnExport">导出打包</button>
   <button class="tb primary" id="btnRun">▶ 运行(F5)</button>
   <button class="tb" id="btnSvc">常驻运行</button>
   <button class="tb danger" id="btnStop">■ 停止</button>
@@ -338,6 +339,25 @@ async function refreshState() {
 }
 $('btnState').onclick = refreshState;
 $('btnClearLog').onclick = () => { $('logout').textContent = ''; };
+
+// 导出打包：设备脚本 → 自启动 tipa
+$('btnExport').onclick = async () => {
+  if (!files.length) { log('设备上没有脚本'); return; }
+  const list = files.map((f, i) => `${i + 1}. ${f}`).join('\n');
+  const pick = prompt(`导出打包为自启动 tipa\n设备脚本：\n${list}\n\n输入要打包的编号（逗号分隔，all=全部）:`, 'all');
+  if (!pick) return;
+  const sel = pick.trim() === 'all' ? files : pick.split(',').map((s) => files[parseInt(s.trim(), 10) - 1]).filter(Boolean);
+  if (!sel.length) { log('未选择有效脚本'); return; }
+  if (!sel.includes('autorun.lua')) {
+    if (!confirm('未包含 autorun.lua——打包后不会自动启动脚本，继续？')) return;
+  }
+  const name = prompt('应用显示名:', 'Matisu脚本');
+  if (!name) return;
+  log('打包中（' + sel.join(', ') + '）…');
+  const r = await (await fetch('/api/export', { method: 'POST', body: JSON.stringify({ name, files: sel }) })).json();
+  if (r.ok) log('✅ 打包完成: ' + r.path + '\n' + r.log);
+  else log('❌ 打包失败: ' + (r.error || ''));
+};
 
 // ============ 多设备管理 ============
 async function loadDevices() {

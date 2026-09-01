@@ -191,6 +191,39 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, String(out5));
   }
 
+  if (p === '/api/export' && req.method === 'POST') {
+    // {name, files[]}：把设备脚本打包成自启动 tipa
+    const b = await readBody(req);
+    const name = String(b.name || '我的脚本').replace(/[\\/:*?"<>|]/g, '_');
+    const files = Array.isArray(b.files) ? b.files : [];
+    if (!files.length) return send(res, 400, '{"error":"未选择脚本"}');
+    // 1. 拉取脚本内容到临时目录
+    const tmpDir = path.join(os.tmpdir(), `matisu_export_${Date.now()}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    for (const f of files) {
+      let code = '';
+      if (bridge.CFG.target === 'android') {
+        const lf = path.join(LOCAL_SCRIPTS, f);
+        if (fs.existsSync(lf)) code = fs.readFileSync(lf, 'utf8');
+      } else {
+        const rb = Buffer.from(`local f = io.open("/var/mobile/MatisuAuto/scripts/${f}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
+        const out7 = iosSock('run ' + rb);
+        try { code = JSON.parse(String(out7)).output || ''; } catch (_) {}
+      }
+      fs.writeFileSync(path.join(tmpDir, f), code, 'utf8');
+    }
+    // 2. 调打包工具
+    const baseTipa = path.join(__dirname, '..', '..', 'ci_artifacts', 'matisu-auto.tipa');
+    const outTipa = path.join(__dirname, '..', '..', 'ci_artifacts', `${name}.tipa`);
+    try {
+      const out = execFileSync(PY, [path.join(__dirname, '..', 'tools', 'export_tipa.py'), baseTipa, tmpDir, outTipa, '--name', name], { encoding: 'utf8', timeout: 60000 });
+      try { fs.rmSync(tmpDir, { recursive: true }); } catch (_) {}
+      return send(res, 200, JSON.stringify({ ok: true, path: outTipa, log: out.trim() }));
+    } catch (e) {
+      return send(res, 500, JSON.stringify({ ok: false, error: String(e.message).slice(0, 300) }));
+    }
+  }
+
   if (p === '/api/svc' && req.method === 'POST') {
     // 常驻控制：{action: start|stop|state, code?}
     const b = await readBody(req);
