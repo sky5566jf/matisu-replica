@@ -11,6 +11,18 @@ typedef struct {
     uint8_t *rgba;   // w*h*4
 } MATemplate;
 
+// 找图多命中点（NMS 用）；文件级类型便于 qsort 比较器引用
+typedef struct {
+    int x, y;
+    double s;
+} MAHit;
+
+// qsort 比较器（C 函数指针，不能用 block——qsort 要的是函数指针）
+static int maHitScoreCmp(const void *a, const void *b) {
+    double sa = ((const MAHit *)a)->s, sb = ((const MAHit *)b)->s;
+    return sa < sb ? 1 : (sa > sb ? -1 : 0);
+}
+
 static BOOL loadTemplate(NSString *path, MATemplate *out) {
     NSData *d = [NSData dataWithContentsOfFile:path];
     if (!d.length) return NO;
@@ -231,7 +243,7 @@ NSData* _Nullable MatisuCapturePNGRegion(int x1, int y1, int x2, int y2) {
 
 // ---------------- 全部命中点（NMS） ----------------
 int MatisuFindPicAllPoint(int x1, int y1, int x2, int y2, NSString *picPath, double sim,
-                          int maxRet, int **outXY, int *outN) {
+                          int maxRet, int * _Nonnull * _Nonnull outXY, int * _Nonnull outN) {
     *outXY = NULL; *outN = 0;
     MATemplate t0 = {0};
     if (!loadTemplate(picPath, &t0)) return 0;
@@ -285,8 +297,7 @@ int MatisuFindPicAllPoint(int x1, int y1, int x2, int y2, NSString *picPath, dou
     }
 
     // 精修收集
-    typedef struct { int x, y; double s; } Hit;
-    Hit *hits = (Hit *)malloc(sizeof(Hit) * (nCand + 1));
+    MAHit *hits = (MAHit *)malloc(sizeof(MAHit) * (nCand + 1));
     int nHits = 0;
     for (int i = 0; i < nCand; i++) {
         int cx = cands[i * 2], cy = cands[i * 2 + 1];
@@ -303,10 +314,7 @@ int MatisuFindPicAllPoint(int x1, int y1, int x2, int y2, NSString *picPath, dou
 
     // NMS：按分数降序，minDist=模板较大边一半（缩帧坐标）
     int minDist = MAX(t.w, t.h) / 2 + 1;
-    qsort(hits, nHits, sizeof(Hit), ^int(const void *a, const void *b) {
-        double sa = ((Hit *)a)->s, sb = ((Hit *)b)->s;
-        return sa < sb ? 1 : (sa > sb ? -1 : 0);
-    });
+    qsort(hits, nHits, sizeof(MAHit), maHitScoreCmp);
     int *keep = (int *)malloc(sizeof(int) * nHits);
     int nKeep = 0;
     for (int i = 0; i < nHits; i++) {
