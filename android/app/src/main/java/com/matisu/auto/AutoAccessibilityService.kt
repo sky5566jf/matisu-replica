@@ -16,11 +16,23 @@ class AutoAccessibilityService : AccessibilityService() {
     companion object {
         /** 供宿主静态获取实例，用于从 Lua 引擎调用。 */
         var instance: AutoAccessibilityService? = null
+
+        /** 屏幕逻辑尺寸（脚本坐标系） */
+        fun displaySize(): Pair<Int, Int> {
+            val ctx = instance ?: return Pair(720, 1280)
+            val dm = ctx.resources.displayMetrics
+            // 引擎报告横屏 1280x720 设备按开发坐标（宽>高 时与 PC 桥一致）
+            return Pair(dm.widthPixels, dm.heightPixels)
+        }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        // 设备端 Lua 引擎：脚本目录 + 指令服务
+        LuaEngine.scriptDir = getExternalFilesDir("scripts")
+        ScriptServer(18183).start()
+        LuaEngine.autoRun()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -47,6 +59,39 @@ class AutoAccessibilityService : AccessibilityService() {
     fun touchDown(finger: Int, x: Int, y: Int) = tap(x, y)
     fun touchMove(finger: Int, x: Int, y: Int) {}
     fun touchUp(finger: Int, x: Int, y: Int) {}
+
+    // ---------------- 键盘 / 输入 ----------------
+    fun keyPress(name: String): Boolean {
+        val action = when (name.lowercase()) {
+            "home" -> GLOBAL_ACTION_HOME
+            "back" -> GLOBAL_ACTION_BACK
+            "recent", "recents", "app_switch" -> GLOBAL_ACTION_RECENTS
+            "notifications" -> GLOBAL_ACTION_NOTIFICATIONS
+            "power", "powerdialog" -> GLOBAL_ACTION_POWER_DIALOG
+            else -> return false
+        }
+        return performGlobalAction(action)
+    }
+
+    /** 向当前焦点输入框写文本（无障碍 ACTION_SET_TEXT） */
+    fun inputText(text: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val target = findFocusedEditable(root) ?: return false
+        val args = android.os.Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+        }
+        return target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    private fun findFocusedEditable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isFocused && node.isEditable) return node
+        for (i in 0 until node.childCount) {
+            val r = findFocusedEditable(node.getChild(i))
+            if (r != null) return r
+        }
+        return null
+    }
 
     // ---------------- UI 节点 ----------------
     fun findNodeByText(text: String): AccessibilityNodeInfo? {
