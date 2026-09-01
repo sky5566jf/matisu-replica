@@ -175,6 +175,9 @@ NSString* _Nullable MatisuFrontApp(void) {
                 if (procs) {
                     procs = [procs isKindOfClass:[NSArray class]] ? procs : nil;
                     faSet(@"fbpm_procs", @(procs ? (long)procs.count : -1L));
+                    // 权限受限时 mobile 只能看到自己（procs<=1 即 daemon 自身），
+                    // 此时下结论必错（会把自己报成前台）——跳过本层走下层。
+                    if (procs.count <= 1) procs = nil;
                     for (id p in (procs ?: @[])) {
                         BOOL fg = NO;
                         for (NSString *selName in @[@"isForeground", @"foreground", @"isActive"]) {

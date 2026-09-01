@@ -6,9 +6,10 @@ include $(THEOS)/makefiles/common.mk
 
 APPLICATION_NAME = MatisuAuto
 MatisuAuto_CFLAGS += -DLUA_USE_IOS -Wno-deprecated-declarations -Wno-module-import-in-extern-c
-MatisuAuto_FILES = main.mm AppDelegate.mm TouchInject.mm ControlServer.mm ScreenShot.m AXNodeDump.m DeviceInfo.m sthid/STHIDEventGenerator.mm LuaEngine.mm ColorFind.m PicFind.m SysUtil.m $(filter-out lua/onelua.c,$(wildcard lua/*.c))
+MatisuAuto_FILES = main.mm AppDelegate.mm MainVC.mm TouchInject.mm ControlServer.mm ScreenShot.m AXNodeDump.m DeviceInfo.m sthid/STHIDEventGenerator.mm LuaEngine.mm ColorFind.m PicFind.m SysUtil.m $(filter-out lua/onelua.c,$(wildcard lua/*.c))
 MatisuAuto_PRIVATE_FRAMEWORKS = IOKit
 MatisuAuto_FRAMEWORKS = UIKit CoreGraphics Foundation IOSurface
+MatisuAuto_RESOURCE_FILES = AppIcon60x60@2x.png AppIcon60x60@3x.png
 MatisuAuto_CODESIGN_ENTITLEMENTS = Entitlements.plist
 MatisuAuto_CFLAGS += -I../include -fobjc-arc
 MatisuAuto_LDFLAGS = -Wl,-undefined,dynamic_lookup

@@ -1,24 +1,13 @@
 #import "AppDelegate.h"
 #import "ControlServer.h"
-
-@interface AppDelegate ()
-@property (nonatomic, strong) UILabel *label;
-@end
+#import "MainVC.h"
 
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-    UIViewController *vc = [[UIViewController alloc] init];
-    vc.view.backgroundColor = [UIColor systemBackgroundColor];
-
-    self.label = [[UILabel alloc] initWithFrame:vc.view.bounds];
-    self.label.text = @"MatisuAuto\nTouch server @ :18182\n\n(Phase 0 骨架)";
-    self.label.textAlignment = NSTextAlignmentCenter;
-    self.label.numberOfLines = 0;
-    [vc.view addSubview:self.label];
-
-    self.window.rootViewController = vc;
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[MainVC alloc] init]];
+    self.window.rootViewController = nav;
     [self.window makeKeyAndVisible];
 
     // 启动局域网触控控制服务
