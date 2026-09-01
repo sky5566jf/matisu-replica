@@ -37,12 +37,12 @@ jobs:
         run: |
           ls -la ios/ocr/onnx/ 2>/dev/null || { echo "!! ios/ocr/onnx 模型未提交到仓库"; exit 1; }
 
-      # ============ 引擎模式 1/4：免越狱巨魔引擎（TrollStore tipa） ============
+      # ============ 引擎模式 1/3：免越狱巨魔引擎（TrollStore tipa） ============
       - name: Build App + package tipa (TrollStore)
         working-directory: ios/app
         run: |
           make clean
-          make FINALPACKAGE=1
+          make FINALPACKAGE=1 ARCHS=arm64
           BIN=$(find .theos/obj/MatisuAuto.app -name MatisuAuto -type f 2>/dev/null | head -1)
           [ -z "$BIN" ] && { echo "!! binary not built"; exit 1; }
           rm -rf /tmp/tipa
@@ -62,22 +62,17 @@ jobs:
           cd /tmp/tipa && zip -r "$GITHUB_WORKSPACE/matisu-auto.tipa" Payload
           echo "tipa size: $(wc -c < $GITHUB_WORKSPACE/matisu-auto.tipa) bytes"
 
-      # ============ 引擎模式 2/4：有线越狱（rootful deb） ============
+      # ============ 引擎模式 2/3：有线越狱（rootful deb） ============
       - name: Build App deb (rootful)
         working-directory: ios/app
         run: |
           chmod +x package_deb.sh
-          ./package_deb.sh rootful "arm64 arm64e" matisu-auto_rootful.deb
+          ./package_deb.sh rootful arm64 matisu-auto_rootful.deb
 
-      # ============ 引擎模式 3/4：无线越狱 arm64（rootless deb） ============
+      # ============ 引擎模式 3/3：无线越狱 arm64（rootless deb） ============
       - name: Build App deb (rootless arm64)
         working-directory: ios/app
         run: ./package_deb.sh rootless arm64 matisu-auto_rootless_arm64.deb
-
-      # ============ 引擎模式 4/4：无线越狱 arm64e（rootless deb） ============
-      - name: Build App deb (rootless arm64e)
-        working-directory: ios/app
-        run: ./package_deb.sh rootless arm64e matisu-auto_rootless_arm64e.deb
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
