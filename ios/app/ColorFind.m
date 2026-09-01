@@ -316,11 +316,16 @@ NSString* _Nonnull MatisuFindMultiColorAll(int x1, int y1, int x2, int y2, NSStr
 NSArray<NSNumber*>* _Nonnull MatisuGetScreenPixel(int x1, int y1, int x2, int y2) {
     MACapCtx c;
     if (!capBegin(&c)) return @[];
-    normRegion(&c, &x1, &y1, &x2, &y2);
+    // 原版语义：逻辑点区域，每个逻辑点 1 个像素（物理帧按 kx/ky 采样）
+    if (x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0) { x1 = 0; y1 = 0; x2 = (int)c.lw; y2 = (int)c.lh; }
     NSMutableArray *arr = [NSMutableArray arrayWithCapacity:(x2 - x1) * (y2 - y1)];
     for (int y = y1; y < y2; y++) {
+        int py = toPxY(&c, y);
+        if (py < 0 || py >= c.h) continue;
         for (int x = x1; x < x2; x++) {
-            const uint8_t *p = c.base + (size_t)y * c.bpr + (size_t)x * 4;
+            int px = toPxX(&c, x);
+            if (px < 0 || px >= c.w) continue;
+            const uint8_t *p = c.base + (size_t)py * c.bpr + (size_t)px * 4;
             [arr addObject:@((p[0] << 16) | (p[1] << 8) | p[2])];   // BBGGRR
         }
     }
