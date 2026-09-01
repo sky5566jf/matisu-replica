@@ -13,7 +13,19 @@ android {
         versionName "0.1"
     }
 
+    // 固定签名（仓库内 keystore）——CI 每次 runner 是全新环境，默认 debug
+    // keystore 随机生成导致相邻两次 CI 产物签名互斥，install -r 无法覆盖升级。
+    signingConfigs {
+        debug {
+            storeFile file('matisu-debug.keystore')
+            storePassword 'matisu123'
+            keyAlias 'matisu'
+            keyPassword 'matisu123'
+        }
+    }
+
     buildTypes {
+        debug { signingConfig signingConfigs.debug }
         release { minifyEnabled false }
     }
 
