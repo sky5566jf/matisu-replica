@@ -28,3 +28,11 @@ Thumbs.db
 
 # CI 下载产物（本地验证用，不入仓）
 ci-artifacts/
+ci_artifacts/
+
+# 本地临时/缓存
+pc/.tmp/
+__pycache__/
+*.pyc
+ci_fail*.log
+ci_log.zip
