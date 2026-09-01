@@ -55,7 +55,7 @@ keyPress("escape")   -- 关掉可能弹出的键盘/界面
 
 -- 8. P1：getScreenDirection / findPicFast / ImageUtil 内存图色
 ok("getScreenDirection 返回值域", getScreenDirection() >= 0 and getScreenDirection() <= 3, getScreenDirection())
-local ffx, ffy = findPicFast(0, 0, w, h, tp, 0.9)
+local ffx, ffy = findPicFast(0, 0, w, h, tp, 0.95)
 ok("findPicFast 找回模板", ffx ~= nil and math.abs(ffx - 60) <= 6 and math.abs(ffy - 150) <= 6,
    ffx and (ffx .. "," .. ffy) or "nil")
 local img = ImageUtil.new(tp)
