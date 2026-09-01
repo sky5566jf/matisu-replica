@@ -24,6 +24,9 @@ NSString* _Nonnull MatisuLuaDrainOutput(void);
 /// daemon 启动时调用：<数据区>/run/脚本/autorun.lua 存在则常驻执行。
 void MatisuLuaAutoRun(void);
 
+/// 启动入口脚本源码：run/entry.json 的 lc_entry 优先，退化 run/脚本/autorun.lua；都没有返回 nil。
+NSString* _Nullable MatisuEntryScriptSource(void);
+
 /// 脚本根目录（= MatisuRunScriptsDir()，mobile 可写）
 NSString* _Nonnull MatisuScriptDir(void);
 

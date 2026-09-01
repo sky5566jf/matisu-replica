@@ -1043,13 +1043,29 @@ static void syncBundledScripts(void) {
     }
 }
 
+// 启动入口解析：run/entry.json 的 lc_entry 优先（脚本包形态），
+// 没有则退化 run/脚本/autorun.lua（IDE 直传形态）。
+NSString* _Nullable MatisuEntryScriptSource(void) {
+    NSData *d = [NSData dataWithContentsOfFile:[MatisuRunDir() stringByAppendingPathComponent:@"entry.json"]];
+    if (d) {
+        id j = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+        NSString *lc = [j isKindOfClass:NSDictionary.class] ? j[@"lc_entry"] : nil;
+        if (lc.length && ![lc containsString:@".."]) {
+            NSString *src = [NSString stringWithContentsOfFile:[MatisuRunDir() stringByAppendingPathComponent:lc]
+                                                      encoding:NSUTF8StringEncoding error:nil];
+            if (src.length) return src;
+        }
+    }
+    return [NSString stringWithContentsOfFile:[MatisuScriptDir() stringByAppendingPathComponent:@"autorun.lua"]
+                                     encoding:NSUTF8StringEncoding error:nil];
+}
+
 void MatisuLuaAutoRun(void) {
     syncBundledScripts();
-    NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:@"autorun.lua"];
-    NSString *src = [NSString stringWithContentsOfFile:f encoding:NSUTF8StringEncoding error:nil];
+    NSString *src = MatisuEntryScriptSource();
     if (src.length) {
         BOOL ok = MatisuLuaStart(src);
-        NSLog(@"[MatisuAuto] autorun.lua %@", ok ? @"started" : @"start failed");
+        NSLog(@"[MatisuAuto] entry script %@", ok ? @"started" : @"start failed");
     }
 }
 

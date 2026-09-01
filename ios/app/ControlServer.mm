@@ -6,6 +6,8 @@
 #import "LuaEngine.h"
 #import "ColorFind.h"
 #import "SysUtil.h"
+#import "PackageManager.h"
+#import "MatisuPaths.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <sys/socket.h>
@@ -80,6 +82,50 @@ static NSData* queryTweak(const char *cmd, NSTimeInterval timeout) {
     return data;
 }
 
+// 从累积缓冲取出一条完整指令（malloc 返回，调用方 free）。
+// 普通指令 = 一行文本（\n 结尾，\r 可选）。
+// installpkg 为二进制帧：installpkg <b64(包名)> <size>\n<size 字节 raw zip>——
+// 帧体没收齐时返回 NULL 等更多数据；收齐则在本函数内直接处理并响应，
+// 返回空串（调用方跳过）。（老协议 4096 定长 buf + strtok 会把跨包的长行截断，
+// 且无法承载二进制，故改累积缓冲。）
+static char *MANextCommand(int cli, NSMutableData *acc) {
+    const uint8_t *bytes = acc.bytes;
+    NSUInteger len = acc.length;
+    for (NSUInteger i = 0; i < len; i++) {
+        if (bytes[i] != '\n') continue;
+        NSUInteger lineLen = (i > 0 && bytes[i - 1] == '\r') ? i - 1 : i;
+        if (lineLen > 11 && memcmp(bytes, "installpkg ", 11) == 0) {
+            NSString *hdr = [[NSString alloc] initWithBytes:bytes length:lineLen encoding:NSUTF8StringEncoding];
+            NSArray *parts = [hdr componentsSeparatedByString:@" "];
+            if (parts.count == 3) {
+                unsigned long long sz = strtoull([parts[2] UTF8String], NULL, 10);
+                if (sz > 0 && sz <= 64ULL * 1024 * 1024) {
+                    if (len < i + 1 + sz) return NULL;   // 帧体未到齐，等下一拨
+                    NSData *nameD = [[NSData alloc] initWithBase64EncodedString:parts[1] options:0];
+                    NSString *name = nameD ? [[NSString alloc] initWithData:nameD encoding:NSUTF8StringEncoding] : nil;
+                    NSData *payload = [NSData dataWithBytes:bytes + i + 1 length:(NSUInteger)sz];
+                    int files = 0; NSString *err = nil;
+                    BOOL ok = name && MatisuInstallPackage(name, payload, &files, &err);
+                    NSDictionary *r = ok ? @{ @"ok": @YES, @"files": @(files) }
+                                         : @{ @"ok": @NO, @"error": (err ?: @"bad frame") };
+                    NSData *j = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, j ? j.bytes : NULL, j ? j.length : 0);
+                    NSLog(@"[MatisuAuto] installpkg %@ -> %@", name, ok ? @"OK" : err);
+                    [acc replaceBytesInRange:NSMakeRange(0, i + 1 + (NSUInteger)sz) withBytes:NULL length:0];
+                    return strdup("");   // 已响应，调用方跳过
+                }
+            }
+            // 畸形 installpkg 头：按普通行落 unknown
+        }
+        char *line = (char *)malloc(lineLen + 1);
+        memcpy(line, bytes, lineLen);
+        line[lineLen] = 0;
+        [acc replaceBytesInRange:NSMakeRange(0, i + 1) withBytes:NULL length:0];
+        return line;
+    }
+    return NULL;
+}
+
 static void* MAServerLoop(void* arg) {
     (void)arg;
     int srv = socket(AF_INET, SOCK_STREAM, 0);
@@ -107,13 +153,16 @@ static void* MAServerLoop(void* arg) {
         // autoreleased 对象（UIImage/PNG/JSON），无 pool 会累积泄漏直至
         // jetsam per-process-limit 杀进程（真机实证 10 连发即崩）。
         @autoreleasepool {
-        while ((n = recv(cli, buf, sizeof(buf) - 1, 0)) > 0) {
-            buf[n] = 0;
-            char* line = strtok(buf, "\r\n");
-            while (line) {
+        NSMutableData *acc = [NSMutableData data];
+        while ((n = recv(cli, buf, sizeof(buf), 0)) > 0) {
+            [acc appendBytes:buf length:n];
+            for (;;) {
+                char *line = MANextCommand(cli, acc);
+                if (!line) break;
                 float x, y, x2, y2, d = 0.2f;
                 int f = 0;
-                if (sscanf(line, "tap %f %f", &x, &y) == 2) {
+                if (!line[0]) {   // installpkg 帧已在 MANextCommand 内响应
+                } else if (sscanf(line, "tap %f %f", &x, &y) == 2) {
                     MatisuTouchTap(x, y);
                     NSLog(@"[MatisuAuto] tap %.0f,%.0f", x, y);
                     sendOK(cli);
@@ -328,7 +377,7 @@ static void* MAServerLoop(void* arg) {
                     NSLog(@"[MatisuAuto] unknown cmd: %s", line);
                     sendOK(cli);
                 }
-                line = strtok(NULL, "\r\n");
+                free(line);
             }
         }
         } // @autoreleasepool
@@ -338,6 +387,8 @@ static void* MAServerLoop(void* arg) {
 }
 
 void MatisuControlServerStart(void) {
+    // 脚本相对路径基准：io.open("资源/x.png") / require 等相对路径统一相对 run/ 解析（对齐原版语义）
+    chdir(MatisuRunDir().fileSystemRepresentation);
     // 触控坐标归一化基准：digitizer HID 事件用 0~1 归一化坐标，
     // 以当前屏幕逻辑点尺寸为基准（与 PC 端下发坐标系一致）
     CGSize pts = [UIScreen mainScreen].bounds.size;

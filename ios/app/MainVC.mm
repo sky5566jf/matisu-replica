@@ -3,6 +3,7 @@
 #import "DeviceInfo.h"
 #import "Watchdog.h"
 #import "MatisuPaths.h"
+#import "LuaEngine.h"
 #import <sys/socket.h>
 #import <netinet/in.h>
 #import <arpa/inet.h>
@@ -219,9 +220,8 @@ static NSString *maAgo(id ts) {
 #pragma mark - 脚本服务
 
 - (void)onStart {
-    NSString *src = [NSString stringWithContentsOfFile:[MatisuRunScriptsDir() stringByAppendingPathComponent:@"autorun.lua"]
-                                              encoding:NSUTF8StringEncoding error:nil];
-    if (!src.length) { self.statusLabel.text = @"状态: 无 autorun.lua（先用 IDE 上传脚本）"; return; }
+    NSString *src = MatisuEntryScriptSource();   // entry.json(lc_entry) 优先，退化 autorun.lua
+    if (!src.length) { self.statusLabel.text = @"状态: 无入口脚本（先装脚本包或用 IDE 上传）"; return; }
     NSString *b64 = [[src dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
     NSData *r = maSock([@"start " stringByAppendingString:b64], 5);
     NSString *resp = r ? [[NSString alloc] initWithData:r encoding:NSUTF8StringEncoding] : @"连接失败";
