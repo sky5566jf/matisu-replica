@@ -92,7 +92,10 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify(fs.readdirSync(LOCAL_SCRIPTS).filter((f) => f.endsWith('.lua'))));
     }
     const out = iosSock('list');
-    try { JSON.parse(String(out)); return send(res, 200, String(out)); } catch (_) { return send(res, 200, '[]'); }
+    try {
+      const all = JSON.parse(String(out));
+      return send(res, 200, JSON.stringify(all.filter((f) => String(f).endsWith('.lua'))));   // 文件管理只列脚本
+    } catch (_) { return send(res, 200, '[]'); }
   }
 
   if (p === '/api/script' && req.method === 'GET') {
