@@ -535,7 +535,30 @@ NSString* _Nonnull MatisuLuaDrainOutput(void) {
     return r;
 }
 
+// 工程打包形态：app bundle 内 scripts/（安装后 /var/jb/Applications/MatisuAuto.app/scripts/）
+// 首启同步到 /var/mobile/MatisuAuto/scripts/（mobile 可写），以 bundle 内版本为准覆盖同名文件。
+static void syncBundledScripts(void) {
+    NSString *bundleDir = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"scripts"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (![fm fileExistsAtPath:bundleDir]) return;
+    NSString *dest = MatisuScriptDir();
+    NSArray *items = [fm contentsOfDirectoryAtPath:bundleDir error:nil];
+    for (NSString *name in items) {
+        NSString *src = [bundleDir stringByAppendingPathComponent:name];
+        NSString *dst = [dest stringByAppendingPathComponent:name];
+        // 以 bundle 内为准：内容不同才覆盖
+        NSData *a = [NSData dataWithContentsOfFile:src];
+        NSData *b = [NSData dataWithContentsOfFile:dst];
+        if (a && ![a isEqualToData:b]) {
+            [fm removeItemAtPath:dst error:nil];
+            [fm copyItemAtPath:src toPath:dst error:nil];
+            NSLog(@"[MatisuAuto] bundled script synced: %@", name);
+        }
+    }
+}
+
 void MatisuLuaAutoRun(void) {
+    syncBundledScripts();
     NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:@"autorun.lua"];
     NSString *src = [NSString stringWithContentsOfFile:f encoding:NSUTF8StringEncoding error:nil];
     if (src.length) {

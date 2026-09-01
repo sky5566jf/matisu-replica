@@ -78,10 +78,8 @@
   <button class="tb" id="btnSvc">常驻运行</button>
   <button class="tb danger" id="btnStop">■ 停止</button>
   <a class="tb" href="/zhuazhua" target="_blank" style="text-decoration:none;display:inline-block">截图工具(抓抓)</a>
-  <select id="devsel">
-    <option value="ios">iOS 192.69.0.38</option>
-    <option value="android">Android 192.69.0.18</option>
-  </select>
+  <select id="devsel"></select>
+  <button class="tb" id="btnDevMgr" title="设备管理">⚙</button>
 </div>
 <div id="filetabs"></div>
 
@@ -341,11 +339,40 @@ async function refreshState() {
 $('btnState').onclick = refreshState;
 $('btnClearLog').onclick = () => { $('logout').textContent = ''; };
 
+// ============ 多设备管理 ============
+async function loadDevices() {
+  const d = await (await fetch('/api/devices')).json();
+  $('devsel').innerHTML = d.devices.map((x) =>
+    `<option value="${x.id}" ${x.id === d.active ? 'selected' : ''}>${x.name} (${x.type === 'ios' ? 'iOS' : 'Android'})</option>`).join('');
+  const cur = d.devices.find((x) => x.id === d.active);
+  $('stdev').textContent = cur ? `${cur.name} ${cur.host}` : '';
+}
 $('devsel').onchange = async (e) => {
-  await fetch('/api/target', { method: 'POST', body: JSON.stringify({ target: e.target.value }) });
+  await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'switch', id: e.target.value }) });
   tabs = []; activeTab = -1; $('code').value = ''; renderTabs();
-  $('stdev').textContent = e.target.value === 'ios' ? 'iOS 192.69.0.38' : 'Android 192.69.0.18（脚本存 PC 本地）';
+  loadDevices();
   loadFiles();
+  log('切换设备: ' + e.target.selectedOptions[0].text);
+};
+$('btnDevMgr').onclick = async () => {
+  const d = await (await fetch('/api/devices')).json();
+  const cur = d.devices.find((x) => x.id === d.active);
+  const op = prompt(`设备管理（当前 ${d.devices.length} 台）\n输入: add=添加设备 / del=删除当前设备`, '');
+  if (op === 'del' && cur) {
+    if (confirm('删除设备 ' + cur.name + ' ?')) {
+      await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'delete', id: cur.id }) });
+      loadDevices(); loadFiles();
+    }
+  } else if (op === 'add') {
+    const name = prompt('设备名称:', '新设备'); if (!name) return;
+    const type = prompt('类型 (ios/android):', 'ios'); if (type !== 'ios' && type !== 'android') return;
+    const host = prompt('IP 地址:', '192.69.0.'); if (!host) return;
+    const port = parseInt(prompt('端口:', type === 'ios' ? '18182' : '5555'), 10) || (type === 'ios' ? 18182 : 5555);
+    const id = 'dev_' + Date.now();
+    await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'add', device: { id, name, type, host, port } }) });
+    await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'switch', id }) });
+    loadDevices(); loadFiles();
+  }
 };
 
 document.addEventListener('keydown', (e) => {
@@ -361,7 +388,7 @@ $('code').addEventListener('keydown', (e) => {
   }
 });
 
-$('stdev').textContent = 'iOS 192.69.0.38';
+loadDevices();
 loadFiles();
 refreshState();
 loadApis();

@@ -1,0 +1,19 @@
+{
+  "active": "iphone38",
+  "devices": [
+    {
+      "id": "iphone38",
+      "name": "iPhone SE2",
+      "type": "ios",
+      "host": "192.69.0.38",
+      "port": 18182
+    },
+    {
+      "id": "emu18",
+      "name": "Android 模拟器",
+      "type": "android",
+      "host": "192.69.0.18",
+      "port": 5555
+    }
+  ]
+}

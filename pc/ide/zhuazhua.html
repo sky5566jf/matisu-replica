@@ -78,10 +78,8 @@
 <div id="titlebar">
   <span class="tt">MatisuAuto 抓抓工具</span>
   <div id="tabs"></div>
-  <select id="devsel">
-    <option value="ios">iOS 192.69.0.38</option>
-    <option value="android">Android 192.69.0.18</option>
-  </select>
+  <select id="devsel"></select>
+  <button id="btnDevMgr" title="设备管理" style="background:#2d333b;color:#c8cdd5;border:1px solid #454c56;padding:3px 8px;border-radius:3px;cursor:pointer">⚙</button>
 </div>
 
 <div id="main">
@@ -607,9 +605,35 @@ $('btnClearMarks').onclick = () => { document.querySelectorAll('.ptmark').forEac
 $('btnDelSel').onclick = () => {
   if (selRow >= 0) { points.splice(selRow, 1); selRow = -1; renderPoints(); renderMarks(); genColorStr(); }
 };
+// ============ 多设备管理 ============
+async function loadDevices() {
+  const d = await (await fetch('/api/devices')).json();
+  $('devsel').innerHTML = d.devices.map((x) =>
+    `<option value="${x.id}" ${x.id === d.active ? 'selected' : ''}>${x.name} (${x.type === 'ios' ? 'iOS' : 'Android'})</option>`).join('');
+}
 $('devsel').onchange = async (e) => {
-  await fetch('/api/target', { method: 'POST', body: JSON.stringify({ target: e.target.value }) });
+  await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'switch', id: e.target.value }) });
   points = []; renderPoints(); takeShot();
+};
+$('btnDevMgr').onclick = async () => {
+  const d = await (await fetch('/api/devices')).json();
+  const cur = d.devices.find((x) => x.id === d.active);
+  const op = prompt(`设备管理（当前 ${d.devices.length} 台）\n输入: add=添加设备 / del=删除当前设备`, '');
+  if (op === 'del' && cur) {
+    if (confirm('删除设备 ' + cur.name + ' ?')) {
+      await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'delete', id: cur.id }) });
+      loadDevices(); takeShot();
+    }
+  } else if (op === 'add') {
+    const name = prompt('设备名称:', '新设备'); if (!name) return;
+    const type = prompt('类型 (ios/android):', 'ios'); if (type !== 'ios' && type !== 'android') return;
+    const host = prompt('IP 地址:', '192.69.0.'); if (!host) return;
+    const port = parseInt(prompt('端口:', type === 'ios' ? '18182' : '5555'), 10) || (type === 'ios' ? 18182 : 5555);
+    const id = 'dev_' + Date.now();
+    await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'add', device: { id, name, type, host, port } }) });
+    await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'switch', id }) });
+    loadDevices(); takeShot();
+  }
 };
 
 // 快捷键（对齐原版 CTRL+S 截图 / CTRL+H 清除 / CTRL+A 自动取色）
@@ -619,6 +643,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'a') { e.preventDefault(); $('btnAutoPick').click(); }
 });
 
+loadDevices();
 loadTemplates();
 takeShot();
 </script>

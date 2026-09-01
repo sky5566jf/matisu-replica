@@ -30,6 +30,31 @@ let lastScreen = null;   // 最近一次截图（裁剪/找图复用）
 const TPL_DIR = path.join(__dirname, 'templates');
 if (!fs.existsSync(TPL_DIR)) fs.mkdirSync(TPL_DIR, { recursive: true });
 
+// ---- 多设备管理 ----
+const DEVICES_FILE = path.join(__dirname, 'devices.json');
+function loadDevices() {
+  try { return JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8')); }
+  catch (_) {
+    return {
+      active: 'iphone38',
+      devices: [
+        { id: 'iphone38', name: 'iPhone SE2', type: 'ios', host: '192.69.0.38', port: 18182 },
+        { id: 'emu18', name: 'Android 模拟器', type: 'android', host: '192.69.0.18', port: 5555 },
+      ],
+    };
+  }
+}
+function saveDevices(d) { fs.writeFileSync(DEVICES_FILE, JSON.stringify(d, null, 2), 'utf8'); }
+function applyDevice(dev) {
+  if (!dev) return false;
+  bridge.CFG.target = dev.type;
+  if (dev.type === 'ios') { bridge.CFG.ios.host = dev.host; bridge.CFG.ios.port = dev.port | 0 || 18182; }
+  else { bridge.CFG.android.device = dev.host + ':' + (dev.port | 0 || 5555); }
+  return true;
+}
+// 启动时应用活动设备
+{ const d0 = loadDevices(); applyDevice(d0.devices.find((x) => x.id === d0.active) || d0.devices[0]); }
+
 function send(res, code, body, type = 'application/json') {
   res.writeHead(code, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
   res.end(body);
@@ -175,6 +200,42 @@ const server = http.createServer(async (req, res) => {
     else out6 = iosSock('state');
     if (b.action === 'state') { try { return send(res, 200, String(out6)); } catch (_) { return send(res, 200, '{}'); } }
     return send(res, 200, JSON.stringify({ ok: String(out6).trim() === 'OK' }));
+  }
+
+  // ---- 设备 CRUD ----
+  if (p === '/api/devices' && req.method === 'GET') {
+    const d = loadDevices();
+    return send(res, 200, JSON.stringify(d));
+  }
+  if (p === '/api/devices' && req.method === 'POST') {
+    // {op: add|delete|switch, device?/id?}
+    const b = await readBody(req);
+    const d = loadDevices();
+    if (b.op === 'add') {
+      const dev = b.device || {};
+      if (!dev.id || !dev.host || !dev.type) return send(res, 400, '{"error":"id/host/type 必填"}');
+      d.devices = d.devices.filter((x) => x.id !== dev.id);
+      d.devices.push(dev);
+      saveDevices(d);
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    if (b.op === 'delete') {
+      d.devices = d.devices.filter((x) => x.id !== b.id);
+      if (d.active === b.id) d.active = d.devices[0] ? d.devices[0].id : '';
+      saveDevices(d);
+      const cur = d.devices.find((x) => x.id === d.active);
+      if (cur) applyDevice(cur);
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    if (b.op === 'switch') {
+      const dev = d.devices.find((x) => x.id === b.id);
+      if (!dev) return send(res, 404, '{"error":"设备不存在"}');
+      d.active = b.id;
+      saveDevices(d);
+      applyDevice(dev);
+      return send(res, 200, JSON.stringify({ ok: true, target: dev.type }));
+    }
+    return send(res, 400, '{"error":"op 必填"}');
   }
 
   if (p === '/api/target' && req.method === 'POST') {
