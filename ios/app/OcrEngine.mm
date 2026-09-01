@@ -7,6 +7,7 @@
 #import <string>
 #import <algorithm>
 #import <cmath>
+#import <stdarg.h>
 
 // onnxruntime C API（CI 里下载 ios static xcframework 提供头文件）
 #include "onnxruntime_c_api.h"
@@ -26,6 +27,21 @@ struct OcrCtx {
 };
 OcrCtx g;
 
+// OCR 诊断：所有失败分支必须留痕（真机 daemon stdout 是 /dev/null，只能走 NSLog 统一日志，
+// 设备上用 log show --predicate 'process == "MatisuAuto"' --last 10m 读取）
+static void ocrLog(const char *fmt, ...) {
+    char buf[1024];
+    va_list ap; va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    NSLog(@"[MatisuAuto][OCR] %s", buf);
+}
+static void ocrLogStatus(const OrtApi *api, const char *where, OrtStatus *st) {
+    if (!st) return;
+    const char *msg = api ? api->GetErrorMessage(st) : "?";
+    ocrLog("%s FAILED: %s", where, msg ? msg : "?");
+}
+
 const int DET_SIDE = 960;      // det 输入边长（32 倍数）
 const int REC_H = 48;          // rec 输入高
 const float DET_THRESH = 0.3f;
@@ -43,25 +59,31 @@ std::string modelPath(const char *name) {
 bool initEngine() {
     if (g.ready) return true;
     if (!g.api) g.api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+    if (!g.api) { ocrLog("OrtGetApiBase returned null api"); return false; }
     if (!g.env) {
-        if (g.api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "matisu", &g.env) != nullptr) return false;
+        OrtStatus *est = g.api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "matisu", &g.env);
+        if (est != nullptr) { ocrLogStatus(g.api, "CreateEnv", est); g.api->ReleaseStatus(est); return false; }
     }
     OrtSessionOptions *opt = nullptr;
     g.api->CreateSessionOptions(&opt);
     g.api->SetIntraOpNumThreads(opt, 2);
-    OrtStatus *st = g.api->CreateSession(g.env, modelPath("det.onnx").c_str(), opt, &g.det);
-    if (st) { g.api->ReleaseStatus(st); g.api->ReleaseSessionOptions(opt); return false; }
-    st = g.api->CreateSession(g.env, modelPath("rec.onnx").c_str(), opt, &g.rec);
+    std::string detPath = modelPath("det.onnx");
+    OrtStatus *st = g.api->CreateSession(g.env, detPath.c_str(), opt, &g.det);
+    if (st) { ocrLogStatus(g.api, "CreateSession det", st); ocrLog("det path=%s", detPath.c_str()); g.api->ReleaseStatus(st); g.api->ReleaseSessionOptions(opt); return false; }
+    std::string recPath = modelPath("rec.onnx");
+    st = g.api->CreateSession(g.env, recPath.c_str(), opt, &g.rec);
     g.api->ReleaseSessionOptions(opt);
-    if (st) { g.api->ReleaseStatus(st); return false; }
+    if (st) { ocrLogStatus(g.api, "CreateSession rec", st); ocrLog("rec path=%s", recPath.c_str()); g.api->ReleaseStatus(st); return false; }
     // 字典
-    NSString *dictStr = [NSString stringWithContentsOfFile:@(modelPath("dict.txt").c_str())
+    std::string dictPath = modelPath("dict.txt");
+    NSString *dictStr = [NSString stringWithContentsOfFile:@(dictPath.c_str())
                                                   encoding:NSUTF8StringEncoding error:nil];
-    if (!dictStr) return false;
+    if (!dictStr) { ocrLog("dict load FAILED path=%s", dictPath.c_str()); return false; }
     for (NSString *line in [dictStr componentsSeparatedByString:@"\n"]) {
         if (line.length) g.dict.push_back(line.UTF8String);
     }
     g.ready = !g.dict.empty();
+    ocrLog("init ok, dict=%zu entries", g.dict.size());
     return g.ready;
 }
 
@@ -227,11 +249,11 @@ BOOL MatisuOcrReady(void) {
 
 NSArray<MAOcrItem*>* MatisuOcrRegion(int x1, int y1, int x2, int y2) {
     NSMutableArray<MAOcrItem*> *result = [NSMutableArray array];
-    if (!initEngine()) return result;
+    if (!initEngine()) { ocrLog("initEngine failed, OCR unavailable"); return result; }
 
     std::vector<uint8_t> rgba;
     int w = 0, h = 0;
-    if (!grabFrame(rgba, w, h)) return result;
+    if (!grabFrame(rgba, w, h)) { ocrLog("grabFrame FAILED"); return result; }
 
     // 区域归一
     if (x1 == 0 && y1 == 0 && x2 == 0 && y2 == 0) { x1 = 0; y1 = 0; x2 = w; y2 = h; }
@@ -275,7 +297,7 @@ NSArray<MAOcrItem*>* MatisuOcrRegion(int x1, int y1, int x2, int y2) {
     }
     OrtStatus *st = g.api->Run(g.det, nullptr, detInNames, (const OrtValue *const *)&detIn, 1,
                                detOutNames, 1, &detOut);
-    if (st) { g.api->ReleaseStatus(st); goto cleanup0; }
+    if (st) { ocrLogStatus(g.api, "det Run", st); g.api->ReleaseStatus(st); goto cleanup0; }
     {
         float *prob = nullptr;
         g.api->GetTensorMutableData(detOut, (void **)&prob);
@@ -289,6 +311,7 @@ NSArray<MAOcrItem*>* MatisuOcrRegion(int x1, int y1, int x2, int y2) {
         g.api->ReleaseTensorTypeAndShapeInfo(tsi);
 
         auto boxes = postprocessDet(prob, pw, ph, w, h);
+        ocrLog("frame %dx%d det %dx%d -> %zu boxes", w, h, pw, ph, boxes.size());
 
         // ---- rec ----
         for (const auto &b : boxes) {
@@ -307,7 +330,7 @@ NSArray<MAOcrItem*>* MatisuOcrRegion(int x1, int y1, int x2, int y2) {
             char *on2 = nullptr; g.api->SessionGetOutputName(g.rec, 0, alloc, &on2); routNames[0] = on2;
             OrtValue *rout = nullptr;
             st = g.api->Run(g.rec, nullptr, rinNames, (const OrtValue *const *)&rin_t, 1, routNames, 1, &rout);
-            if (st) { g.api->ReleaseStatus(st); g.api->ReleaseValue(rin_t); continue; }
+            if (st) { ocrLogStatus(g.api, "rec Run", st); g.api->ReleaseStatus(st); g.api->ReleaseValue(rin_t); continue; }
             float *logits = nullptr;
             g.api->GetTensorMutableData(rout, (void **)&logits);
             OrtTensorTypeAndShapeInfo *rti = nullptr;
