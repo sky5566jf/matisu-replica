@@ -14,6 +14,7 @@
 #import "ColorFind.h"
 #import "PicFind.h"
 #import "SysUtil.h"
+#import "OcrEngine.h"
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 
@@ -589,6 +590,50 @@ static int l_restartScript(lua_State *L) {
     return luaL_error(L, "__MATISU_RESTART__");
 }
 
+// ---------------- OCR（PP-OCRv6 small 内置） ----------------
+// ocrText(x1,y1,x2,y2) -> 纯文本（换行分隔）；区域 0,0,0,0=全屏
+static int l_ocrText(lua_State *L) {
+    NSArray<MAOcrItem*> *items = MatisuOcrRegion((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                                 (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0));
+    NSMutableArray *texts = [NSMutableArray arrayWithCapacity:items.count];
+    for (MAOcrItem *it in items) [texts addObject:it.text];
+    lua_pushstring(L, [texts componentsJoinedByString:@"\n"].UTF8String);
+    return 1;
+}
+// ocrTextEx(x1,y1,x2,y2) -> {{text=,x=,y=,w=,h=,score=}, ...}
+static int l_ocrTextEx(lua_State *L) {
+    NSArray<MAOcrItem*> *items = MatisuOcrRegion((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                                 (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0));
+    lua_createtable(L, (int)items.count, 0);
+    [items enumerateObjectsUsingBlock:^(MAOcrItem *it, NSUInteger i, BOOL *stop) {
+        lua_createtable(L, 0, 6);
+        lua_pushstring(L, it.text.UTF8String); lua_setfield(L, -2, "text");
+        lua_pushinteger(L, it.x); lua_setfield(L, -2, "x");
+        lua_pushinteger(L, it.y); lua_setfield(L, -2, "y");
+        lua_pushinteger(L, it.w); lua_setfield(L, -2, "w");
+        lua_pushinteger(L, it.h); lua_setfield(L, -2, "h");
+        lua_pushnumber(L, it.score); lua_setfield(L, -2, "score");
+        lua_seti(L, -2, (lua_Integer)i + 1);
+    }];
+    return 1;
+}
+// findStr(x1,y1,x2,y2, text) -> x,y（命中首行中心）；未命中 -1,-1
+static int l_findStr(lua_State *L) {
+    NSString *needle = [NSString stringWithUTF8String:luaL_checkstring(L, 5)];
+    NSArray<MAOcrItem*> *items = MatisuOcrRegion((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                                 (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0));
+    for (MAOcrItem *it in items) {
+        if ([it.text containsString:needle]) {
+            lua_pushinteger(L, it.x + it.w / 2);
+            lua_pushinteger(L, it.y + it.h / 2);
+            return 2;
+        }
+    }
+    lua_pushinteger(L, -1);
+    lua_pushinteger(L, -1);
+    return 2;
+}
+
 static int l_readPasteboard(lua_State *L) {
     NSString *s = MatisuReadPasteboard();
     lua_pushstring(L, s.UTF8String);
@@ -829,6 +874,8 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "rnd", l_rnd }, { "vibrate", l_vibrate },
         // findPic 家族别名（findPicFast/findImage 设备端实现同 findPic，本就近零成本）
         { "findPicFast", l_findPic }, { "findImage", l_findPic },
+        // OCR（PP-OCRv6 small 内置）
+        { "ocrText", l_ocrText }, { "ocrTextEx", l_ocrTextEx }, { "findStr", l_findStr },
         { NULL, NULL },
     };
     // jsonLib 表（encode/decode）

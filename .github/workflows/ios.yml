@@ -25,6 +25,18 @@ jobs:
         run: |
           make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 
+      # ============ OCR 依赖：onnxruntime iOS 静态库 + PP-OCRv6 模型 ============
+      - name: Fetch onnxruntime iOS static lib
+        run: |
+          mkdir -p ios/ort
+          curl -sL "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.17.1/onnxruntime.xcframework-1.17.1.tar.bz2" -o /tmp/ort.tar.bz2
+          tar xjf /tmp/ort.tar.bz2 -C ios/ort
+          ls ios/ort/onnxruntime.xcframework/ios-arm64/
+
+      - name: Fetch PP-OCRv6 models (onnx)
+        run: |
+          ls -la ios/ocr/onnx/ 2>/dev/null || { echo "!! ios/ocr/onnx 模型未提交到仓库"; exit 1; }
+
       # ============ 引擎模式 1/4：免越狱巨魔引擎（TrollStore tipa） ============
       - name: Build App + package tipa (TrollStore)
         working-directory: ios/app
@@ -34,9 +46,11 @@ jobs:
           BIN=$(find .theos/obj/MatisuAuto.app -name MatisuAuto -type f 2>/dev/null | head -1)
           [ -z "$BIN" ] && { echo "!! binary not built"; exit 1; }
           rm -rf /tmp/tipa
-          mkdir -p /tmp/tipa/Payload/MatisuAuto.app
+          mkdir -p /tmp/tipa/Payload/MatisuAuto.app/ocr
           cp "$BIN" /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto
           cp Info.plist Entitlements.plist /tmp/tipa/Payload/MatisuAuto.app/
+          cp AppIcon60x60@2x.png AppIcon60x60@3x.png /tmp/tipa/Payload/MatisuAuto.app/ 2>/dev/null || true
+          cp ../ocr/onnx/det.onnx ../ocr/onnx/rec.onnx ../ocr/onnx/dict.txt /tmp/tipa/Payload/MatisuAuto.app/ocr/
           LDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)
           if [ -n "$LDID" ]; then
             "$LDID" -SEntitlements.plist /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto && echo "signed with ldid"
@@ -44,7 +58,7 @@ jobs:
             echo "!! ldid not found; TrollStore will re-sign on install"
           fi
           echo "== tipa app contents =="
-          ls -la /tmp/tipa/Payload/MatisuAuto.app
+          ls -la /tmp/tipa/Payload/MatisuAuto.app /tmp/tipa/Payload/MatisuAuto.app/ocr
           cd /tmp/tipa && zip -r "$GITHUB_WORKSPACE/matisu-auto.tipa" Payload
           echo "tipa size: $(wc -c < $GITHUB_WORKSPACE/matisu-auto.tipa) bytes"
 
