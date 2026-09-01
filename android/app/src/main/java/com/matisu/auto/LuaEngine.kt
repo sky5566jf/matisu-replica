@@ -103,6 +103,54 @@ object LuaEngine {
                 return LuaValue.varargsOf(LuaValue.valueOf(w), LuaValue.valueOf(h))
             }
         })
+        // ---------------- 图色系（帧源 ProjectionService） ----------------
+        g.set("getPixelColor", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val c = ColorFind.getPixel(args.checkint(1), args.checkint(2))
+                if (c < 0) return NIL
+                val type = if (args.narg() >= 3) args.checkint(3) else 0
+                return if (type == 1) LuaValue.valueOf(c)
+                else LuaValue.valueOf(String.format("%06X", c and 0xFFFFFF))
+            }
+        })
+        g.set("findColor", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val (x, y) = ColorFind.findColor(
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0),
+                    args.checkjstring(5), args.optint(6, 0), args.optdouble(7, 0.9))
+                return LuaValue.varargsOf(LuaValue.valueOf(x), LuaValue.valueOf(y))
+            }
+        })
+        g.set("cmpColor", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                return LuaValue.valueOf(ColorFind.cmpColor(
+                    args.checkint(1), args.checkint(2), args.checkjstring(3), args.optdouble(4, 0.9)))
+            }
+        })
+        g.set("cmpColorEx", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                return LuaValue.valueOf(ColorFind.cmpColorEx(args.checkjstring(1), args.optdouble(2, 0.9)))
+            }
+        })
+        g.set("getColorNum", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                return LuaValue.valueOf(ColorFind.getColorNum(
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0),
+                    args.checkjstring(5), args.optdouble(6, 0.9)))
+            }
+        })
+        g.set("snapShot", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val path = args.checkjstring(1)
+                val f = ProjectionService.latestFrame() ?: return NIL
+                return try {
+                    java.io.FileOutputStream(path).use { out ->
+                        f.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    LuaValue.valueOf(path)
+                } catch (e: Exception) { NIL }
+            }
+        })
         g.set("sleep", object : OneArgFunction() {
             override fun call(s: LuaValue): LuaValue {
                 Thread.sleep((s.checkdouble() * 1000).toLong())

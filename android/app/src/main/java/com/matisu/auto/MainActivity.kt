@@ -2,26 +2,46 @@ package com.matisu.auto
 
 import android.app.Activity
 import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 
 class MainActivity : Activity() {
 
+    companion object { private const val REQ_PROJECTION = 1001 }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // TODO(Phase 1+): 接入 luaj，加载 common/lua-api/core.lua，运行用户脚本：
-        //   val g = JsePlatform.standardGlobals()
-        //   g.load(File("core.lua")).call()
-        //   g.load(File("demo.lua")).call()
-        // 并把 AutoAccessibilityService 的触控/节点方法桥接为 Lua 的 touch.* / node.*
 
         if (!isAccessibilityEnabled()) {
             Toast.makeText(this, "请先开启 MatisuAuto 无障碍服务", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        } else {
-            Toast.makeText(this, "MatisuAuto 已就绪 (Phase 0)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 无障碍就绪 → 请求投屏授权（图色帧源；授权弹窗由无障碍服务自动点「立即开始」）
+        requestProjection()
+    }
+
+    private fun requestProjection() {
+        val mpm = getSystemService(MediaProjectionManager::class.java)
+        // 异步等无障碍服务起来后自动点授权按钮
+        AutoAccessibilityService.pendingAutoAcceptProjection = true
+        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_PROJECTION)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_PROJECTION) {
+            if (resultCode == RESULT_OK && data != null) {
+                ProjectionService.resultCode = resultCode
+                ProjectionService.resultData = data
+                startForegroundService(Intent(this, ProjectionService::class.java))
+                Toast.makeText(this, "MatisuAuto 已就绪（图色帧源已启动）", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "投屏授权被拒：图色功能不可用（触控/脚本仍可用）", Toast.LENGTH_LONG).show()
+            }
+            finish()
         }
     }
 

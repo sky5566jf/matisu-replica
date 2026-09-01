@@ -17,6 +17,9 @@ class AutoAccessibilityService : AccessibilityService() {
         /** 供宿主静态获取实例，用于从 Lua 引擎调用。 */
         var instance: AutoAccessibilityService? = null
 
+        /** MainActivity 置位：有投屏授权弹窗待自动接受 */
+        @Volatile var pendingAutoAcceptProjection = false
+
         /** 屏幕逻辑尺寸（脚本坐标系） */
         fun displaySize(): Pair<Int, Int> {
             val ctx = instance ?: return Pair(720, 1280)
@@ -35,8 +38,28 @@ class AutoAccessibilityService : AccessibilityService() {
         LuaEngine.autoRun()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // 投屏授权弹窗自动点「立即开始」（自服务闭环，无需人工）
+        if (!pendingAutoAcceptProjection) return
+        val root = rootInActiveWindow ?: return
+        val btn = findButtonText(root, listOf("立即开始", "Start now", "开始", "START NOW"))
+        if (btn != null) {
+            btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            pendingAutoAcceptProjection = false
+        }
+    }
     override fun onInterrupt() {}
+
+    private fun findButtonText(node: AccessibilityNodeInfo?, texts: List<String>): AccessibilityNodeInfo? {
+        if (node == null) return null
+        val t = node.text?.toString()
+        if (t != null && texts.any { t.contains(it, ignoreCase = true) } && node.isClickable) return node
+        for (i in 0 until node.childCount) {
+            val r = findButtonText(node.getChild(i), texts)
+            if (r != null) return r
+        }
+        return null
+    }
 
     // ---------------- 触控：基于 dispatchGesture（API 24+） ----------------
     // 注：dispatchGesture 需在主线程调用。
