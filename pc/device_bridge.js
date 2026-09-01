@@ -1046,7 +1046,10 @@ function getSimSerialNumber() { warn('getSimSerialNumber', 'adb 无权读取 ICC
 // ============================================================ 应用管理
 
 function runApp(pkg, component, bySuper) {
-  if (!isAndroid()) { warn('runApp', 'iOS 待设备侧接入'); return false; }
+  if (!isAndroid()) {
+    const out = iosSock('openapp ' + String(pkg));
+    return out ? String(out).trim() === 'OK' : false;
+  }
   if (component) {
     const cmd = `am start -n ${pkg}/${component}`;
     return (bySuper && hasRoot()) ? suSh(cmd) !== null : adbRun(['shell', cmd]);
@@ -1106,7 +1109,10 @@ function installApk(p) {
 }
 
 function readPasteboard() {
-  if (!isAndroid()) return '';
+  if (!isAndroid()) {
+    const out = iosSock('getclipboard');
+    return out ? String(out) : '';
+  }
   const r = sh('cmd clipboard get-text', 8000);
   if (r && !/Unknown command|Exception/i.test(r)) return r.replace(/\r?\n$/, '');
   warn('readPasteboard', '设备不支持 cmd clipboard（需 API 29+ 或设备侧助手），返回空');
@@ -1114,11 +1120,25 @@ function readPasteboard() {
 }
 
 function writePasteboard(str) {
-  if (!isAndroid()) return false;
+  if (!isAndroid()) {
+    const b64 = Buffer.from(String(str == null ? '' : str), 'utf8').toString('base64');
+    const out = iosSock('setclipboard ' + b64);
+    return out ? String(out).trim() === 'OK' : false;
+  }
   const r = sh(`cmd clipboard set-text '${String(str).replace(/'/g, "'\\''")}'`, 8000);
   if (r !== null && !/Unknown command|Exception/i.test(r)) return true;
   warn('writePasteboard', '设备不支持 cmd clipboard（需 API 29+ 或设备侧助手）');
   return false;
+}
+
+/** openUrl：iOS 走 daemon openurl 指令（LSApplicationWorkspace），Android am start VIEW */
+function openUrl(url) {
+  if (!isAndroid()) {
+    const b64 = Buffer.from(String(url), 'utf8').toString('base64');
+    const out = iosSock('openurl ' + b64);
+    return out ? String(out).trim() === 'OK' : false;
+  }
+  return adbRun(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', String(url)]);
 }
 
 function phoneCall(num) { return adbRun(['shell', 'am', 'start', '-a', 'android.intent.action.CALL', '-d', `tel:${num}`]); }
@@ -1428,7 +1448,7 @@ module.exports = {
   getDeviceId, getWifiMac, getBatteryLevel, getPackageName, getSubscriberId, getSimSerialNumber,
   // 应用
   runApp, stopApp, appIsRunning, frontAppName, appIsFront, getCurrentActivity,
-  getInstalledApk, installApk, readPasteboard, writePasteboard, phoneCall, runIntent,
+  getInstalledApk, installApk, readPasteboard, writePasteboard, openUrl, phoneCall, runIntent,
   // 系统
   exec, vibrate, lockScreen, unLockScreen, setBTEnable, setWifiEnable, setAirplaneMode, getRunEnvType,
   // 交互

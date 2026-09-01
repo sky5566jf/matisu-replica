@@ -480,6 +480,7 @@ function jsAppIsFront(L) { lua.lua_pushboolean(L, bridge.appIsFront(str(L, 1)) ?
 function jsAppIsRunning(L) { lua.lua_pushboolean(L, bridge.appIsRunning(str(L, 1)) ? 1 : 0); return 1; }
 function jsGetCurrentActivity(L) { lua.lua_pushstring(L, to_luastring(bridge.getCurrentActivity() || '')); return 1; }
 function jsReadPasteboard(L) { lua.lua_pushstring(L, to_luastring(bridge.readPasteboard() || '')); return 1; }
+function jsOpenUrl(L) { lua.lua_pushboolean(L, bridge.openUrl(str(L, 1)) ? 1 : 0); return 1; }
 function jsWritePasteboard(L) { bridge.writePasteboard(str(L, 1)); return 0; }
 function jsPhoneCall(L) { bridge.phoneCall(str(L, 1)); return 0; }
 function jsRunIntent(L) { const t = lua.lua_istable(L, 1) ? luaValToJs(L, 1) : {}; bridge.runIntent(t.action, t.uri); return 0; }
@@ -628,6 +629,7 @@ regGlobal('appIsFront', jsAppIsFront);
 regGlobal('appIsRunning', jsAppIsRunning);
 regGlobal('getCurrentActivity', jsGetCurrentActivity);
 regGlobal('readPasteboard', jsReadPasteboard);
+regGlobal('openUrl', jsOpenUrl);
 regGlobal('writePasteboard', jsWritePasteboard);
 regGlobal('phoneCall', jsPhoneCall);
 regGlobal('runIntent', jsRunIntent);

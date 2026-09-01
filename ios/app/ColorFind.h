@@ -21,6 +21,10 @@ int MatisuCmpColor(int x, int y, NSString *colorSpec, double sim);
 /// 区域颜色计数。
 int MatisuGetColorNum(int x1, int y1, int x2, int y2, NSString *colorSpec, double sim);
 
+/// 多点找色：先在区域找 first_color 锚点，再核对 offset 串（"dx|dy|color[-偏色],..."）。
+/// 全部偏移点命中才算一组，命中返回 1 并写锚点逻辑坐标。
+int MatisuFindMultiColor(int x1, int y1, int x2, int y2, NSString *firstColor, NSString *offsetColor, int dir, double sim, int *outX, int *outY);
+
 #ifdef __cplusplus
 }
 #endif

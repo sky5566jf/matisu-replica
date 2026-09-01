@@ -5,6 +5,7 @@
 #import "DeviceInfo.h"
 #import "LuaEngine.h"
 #import "ColorFind.h"
+#import "SysUtil.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <sys/socket.h>
@@ -280,6 +281,25 @@ static void* MAServerLoop(void* arg) {
                     char resp[16];
                     int rl = snprintf(resp, sizeof(resp), "%d\n", n);
                     sendLE(cli, resp, (size_t)rl);
+                } else if (strcmp(line, "getclipboard") == 0) {
+                    NSString *cb = MatisuReadPasteboard();
+                    NSData *d = [cb dataUsingEncoding:NSUTF8StringEncoding];
+                    sendLE(cli, d.bytes, d.length);
+                } else if (strncmp(line, "setclipboard ", 13) == 0 && line[13]) {
+                    NSData *d = [[NSData alloc] initWithBase64EncodedString:@(line + 13) options:0];
+                    NSString *t = d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"";
+                    MatisuWritePasteboard(t ?: @"");
+                    sendOK(cli);
+                } else if (strncmp(line, "openapp ", 8) == 0 && line[8]) {
+                    BOOL ok = MatisuOpenApp(@(line + 8));
+                    const char *resp = ok ? "OK\n" : "FAIL\n";
+                    sendLE(cli, resp, strlen(resp));
+                } else if (strncmp(line, "openurl ", 8) == 0 && line[8]) {
+                    NSData *d = [[NSData alloc] initWithBase64EncodedString:@(line + 8) options:0];
+                    NSString *u = d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : nil;
+                    BOOL ok = u && MatisuOpenURL(u);
+                    const char *resp = ok ? "OK\n" : "FAIL\n";
+                    sendLE(cli, resp, strlen(resp));
                 } else if (strcmp(line, "frontapp") == 0) {
                     NSData *d = queryTweak("frontapp", 3.0);    // 优先 SpringBoard tweak（全系统可见）
                     if (!d) {

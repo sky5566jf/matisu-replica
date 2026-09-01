@@ -201,3 +201,68 @@ int MatisuGetColorNum(int x1, int y1, int x2, int y2, NSString *colorSpec, doubl
     capEnd(&c);
     return cnt;
 }
+
+// ---------------- 多点找色（锚点 + 偏移点组） ----------------
+typedef struct { int dx, dy; MAColorSpec cs; } MAOffsetPt;
+
+int MatisuFindMultiColor(int x1, int y1, int x2, int y2, NSString *firstColor, NSString *offsetColor, int dir, double sim, int *outX, int *outY) {
+    MAColorSpec first[MA_MAX_COLORS];
+    int nFirst = parseMulti(firstColor, first);
+    if (nFirst <= 0) return 0;
+
+    // 解析偏移点
+    NSArray *segs = [offsetColor componentsSeparatedByString:@","];
+    MAOffsetPt offs[32];
+    int nOff = 0;
+    for (NSString *seg in segs) {
+        if (nOff >= 32) break;
+        NSArray *a = [seg componentsSeparatedByString:@"|"];
+        if (a.count < 3) continue;
+        offs[nOff].dx = [a[0] intValue];
+        offs[nOff].dy = [a[1] intValue];
+        NSString *colorPart = [(NSArray *)[a subarrayWithRange:NSMakeRange(2, a.count - 2)] componentsJoinedByString:@"|"];
+        if (parseOne(colorPart, &offs[nOff].cs)) nOff++;
+    }
+
+    int tol = (int)((1.0 - (sim <= 0 ? 0.9 : (sim > 1 ? 1 : sim))) * 255.0 + 0.5);
+    MACapCtx c;
+    if (!capBegin(&c)) return 0;
+    normRegion(&c, &x1, &y1, &x2, &y2);
+
+    int bestX = -1, bestY = -1;
+    long bestScore = -1;
+    double bestD = 1e18;
+    double cx0 = c.w / 2.0, cy0 = c.h / 2.0;
+
+    for (int y = y1; y < y2; y++) {
+        for (int x = x1; x < x2; x++) {
+            if (!pxMatch(c.base + (size_t)y * c.bpr + (size_t)x * 4, first, nFirst, tol)) continue;
+            // 核对全部偏移点
+            BOOL all = YES;
+            for (int k = 0; k < nOff; k++) {
+                int px = x + (int)lroundf(offs[k].dx * c.kx);
+                int py = y + (int)lroundf(offs[k].dy * c.ky);
+                if (px < 0 || py < 0 || px >= c.w || py >= c.h ||
+                    !pxMatch(c.base + (size_t)py * c.bpr + (size_t)px * 4, &offs[k].cs, 1, tol)) { all = NO; break; }
+            }
+            if (!all) continue;
+            if (dir == 0) { bestX = x; bestY = y; goto done; }
+            long score;
+            if (dir == 2) score = (long)y * c.w + x;
+            else if (dir == 3) score = (long)y * c.w + (c.w - x);
+            else if (dir == 4) score = (long)(c.h - y) * c.w + x;
+            else {
+                double d = (x - cx0) * (x - cx0) + (y - cy0) * (y - cy0);
+                if (d < bestD) { bestD = d; bestX = x; bestY = y; }
+                continue;
+            }
+            if (score > bestScore) { bestScore = score; bestX = x; bestY = y; }
+        }
+    }
+done:
+    capEnd(&c);
+    if (bestX < 0) return 0;
+    if (outX) *outX = toLgX(&c, bestX);
+    if (outY) *outY = toLgY(&c, bestY);
+    return 1;
+}
