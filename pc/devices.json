@@ -1,0 +1,19 @@
+{
+  "target": "ios",
+  "ios": {
+    "host": "192.69.0.38",
+    "port": 18182,
+    "w": 375,
+    "h": 667,
+    "name": "iPhone SE2 (iOS 16.1.1)"
+  },
+  "android": {
+    "host": "192.69.0.18",
+    "port": 5555,
+    "w": 1280,
+    "h": 720,
+    "name": "Android Emulator",
+    "adb": "C:/Users/Administrator/.qoderworkcn/workspace/mqsshftg3n38hfyc/android-sdk/platform-tools/adb.exe",
+    "device": "192.69.0.18:5555"
+  }
+}

@@ -189,7 +189,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ code: outR ? String(outR) : '' }));
     }
     // iOS：经 run 指令读设备文件内容
-    const rb = Buffer.from(`local f = io.open("/var/mobile/MatisuAuto/scripts/${name}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
+    const rb = Buffer.from(`local f = io.open("/var/mobile/Media/com.matisu.auto/run/脚本/${name}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
     const out2 = iosSock('run ' + rb);
     try { const d = JSON.parse(String(out2)); return send(res, 200, JSON.stringify({ code: d.output || '' })); }
     catch (_) { return send(res, 200, '{"code":""}'); }
@@ -244,7 +244,7 @@ const server = http.createServer(async (req, res) => {
         const outR2 = await engineSock('readfile ' + f);
         code = outR2 ? String(outR2) : '';
       } else {
-        const rb = Buffer.from(`local f = io.open("/var/mobile/MatisuAuto/scripts/${f}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
+        const rb = Buffer.from(`local f = io.open("/var/mobile/Media/com.matisu.auto/run/脚本/${f}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
         const out7 = iosSock('run ' + rb);
         try { code = JSON.parse(String(out7)).output || ''; } catch (_) {}
       }

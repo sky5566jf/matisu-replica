@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MatisuAuto Phase 1 验证报告</title>
+<style>
+  :root{ --bg:#0f1419; --card:#1a2230; --acc:#4aa3ff; --ok:#3ddc84; --warn:#ffb454; --txt:#e6edf3; --mut:#8b98a9; }
+  body{ margin:0; font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--txt); line-height:1.6; }
+  .wrap{ max-width:960px; margin:0 auto; padding:28px 20px 60px; }
+  h1{ font-size:24px; margin:0 0 4px; } h2{ font-size:18px; margin:32px 0 12px; border-left:4px solid var(--acc); padding-left:10px; }
+  .sub{ color:var(--mut); margin-bottom:18px; }
+  .card{ background:var(--card); border:1px solid #243042; border-radius:12px; padding:16px 18px; margin:12px 0; }
+  .ok{ color:var(--ok); } .warn{ color:var(--warn); } .mut{ color:var(--mut); }
+  table{ width:100%; border-collapse:collapse; margin:8px 0; font-size:14px; }
+  th,td{ text-align:left; padding:8px 10px; border-bottom:1px solid #243042; }
+  th{ color:var(--mut); font-weight:600; }
+  code{ background:#0c1118; padding:2px 6px; border-radius:5px; color:#9fd0ff; font-size:13px; }
+  pre{ background:#0c1118; padding:12px 14px; border-radius:10px; overflow:auto; font-size:13px; color:#cfe8ff; }
+  .pill{ display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600; }
+  .pill.ok{ background:rgba(61,220,132,.15); color:var(--ok); }
+  .pill.warn{ background:rgba(255,180,84,.15); color:var(--warn); }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media(max-width:720px){ .grid{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MatisuAuto · Phase 1 验证报告</h1>
+  <div class="sub">PC Lua 引擎桥接真实设备 — 统一 API 落地（2026-08-30）</div>
+
+  <div class="card">
+    <p><b>目标：</b>让 PC 端 Lua 脚本（fengari 5.1 VM）通过 <code>core.lua</code> 统一 API 真正驱动两台测试设备，
+    而非仅打印调用。iOS 走局域网 8182 控制服务，Android 走 adb。</p>
+    <p class="ok">✅ 端到端验证通过：iOS 真机全流程触控后应用存活无崩溃；Android 模拟器同等驱动成功。</p>
+  </div>
+
+  <h2>1. 架构与数据流</h2>
+  <div class="card">
+    <pre>Lua 脚本 (demo.lua)
+   │  调用 touch.tap / device.* / network.* / cipher.* / json.*
+   ▼
+core.lua 统一 API（被宿主覆盖为真实实现）
+   ▼
+runner.js (fengari C 回调)
+   ▼
+device_bridge.js ── 按 target 路由 ──┬─ iOS  : TCP 192.69.0.38:8182 → ControlServer → MatisuTouch* → IOKit HID
+                                     └─ Android: adb -s 192.69.0.18:5555 shell input tap/swipe</pre>
+  </div>
+
+  <h2>2. 统一 API 覆盖情况</h2>
+  <table>
+    <tr><th>命名空间</th><th>状态</th><th>实现</th></tr>
+    <tr><td><code>touch.*</code></td><td><span class="pill ok">真实</span></td><td>tap/doubleTap/longPress/swipe/touchDown·Move·Up → 设备</td></tr>
+    <tr><td><code>device.*</code></td><td><span class="pill ok">真实</span></td><td>sleep / getScreenSize / getOSType / getDeviceName（截图等留待设备侧）</td></tr>
+    <tr><td><code>network.*</code></td><td><span class="pill ok">真实</span></td><td>httpGet / httpPost / download（curl）</td></tr>
+    <tr><td><code>cipher.*</code></td><td><span class="pill ok">真实</span></td><td>md5 / sha1 / base64（Node crypto；aes 待 Phase 3）</td></tr>
+    <tr><td><code>json.*</code></td><td><span class="pill ok">真实</span></td><td>encode / decode（fengari 表 ↔ JS 对象）</td></tr>
+    <tr><td><code>color.*</code></td><td><span class="pill warn">桩</span></td><td>findColor/findImage/ocr… 待 Phase 3 设备侧图色回传</td></tr>
+    <tr><td><code>node.*</code></td><td><span class="pill warn">桩</span></td><td>findNode/dump… 待 Phase 3 设备侧 UI 树回传</td></tr>
+  </table>
+
+  <h2>3. 真机验证证据</h2>
+  <div class="grid">
+    <div class="card">
+      <b class="ok">iOS @ 192.69.0.38</b><br>
+      <span class="mut">iPhone SE2 / iOS 16.1.1 / rootless+TrollStore</span>
+      <pre>[touch] tap(187, 333) -> ios
+[touch] swipe(80,500)->(295,500) 0.3s -> ios
+[touch] doubleTap(187, 220) -> ios
+[touch] longPress(187, 450, 800ms) -> ios
+[touch] touchDown(0, 100, 300) -> ios
+[touch] touchMove(0, 220, 300) -> ios
+[touch] touchUp(0, 220, 300) -> ios</pre>
+      <span class="ok">✓ 无 [bridge][ios] 失败日志（设备接受全部连接）</span><br>
+      <span class="ok">✓ 应用 pid 3752 仍存活，今日无新崩溃</span>
+    </div>
+    <div class="card">
+      <b class="ok">Android @ 192.69.0.18:5555</b><br>
+      <span class="mut">模拟器（已 root，adb 在线）</span>
+      <pre>MATISU_TARGET=android node runner.js
+[touch] tap(540, 1200) -> android
+[touch] swipe(300,1000)->(800,1000) 0.3s -> android</pre>
+      <span class="ok">✓ adb input tap/swipe 下发成功</span>
+    </div>
+  </div>
+
+  <h2>4. 关键修复点</h2>
+  <div class="card">
+    <ul>
+      <li><b>JSON 数字变字符串：</b>fengari 的 <code>lua_isstring</code> 对数字也返回 true，编码须先判 <code>lua_isnumber</code>，否则 <code>1</code> 会变成 <code>"1"</code>（已修）。</li>
+      <li><b>目标切换优先级：</b><code>MATISU_TARGET</code> 环境变量须高于 <code>devices.json</code> 的 target 字段（已修）。</li>
+      <li>坐标用 <code>lua_tonumber</code> 保留小数（屏幕点）。</li>
+    </ul>
+  </div>
+
+  <h2>5. 如何运行</h2>
+  <div class="card">
+    <pre># 默认 iOS 目标
+cd replica/pc
+NODE_PATH="C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules" node runner.js
+
+# 切到 Android 目标
+MATISU_TARGET=android NODE_PATH=... node runner.js demo.lua</pre>
+    <p class="mut">设备参数在 <code>pc/devices.json</code>；目标也可在文件里改 <code>target</code> 字段。</p>
+  </div>
+
+  <h2>6. 下一步（Phase 2 / 3）</h2>
+  <div class="card">
+    <ul>
+      <li><code>color.*</code>（找色/找图/OCR）与 <code>node.*</code>（UI 节点查询）需设备侧像素 / 无障碍树回传 —— 属 Phase 3 iOS Runtime / Android MVP。</li>
+      <li>PC IDE（Phase 2）可在本引擎上加脚本编辑 / 调试 UI。</li>
+      <li>iOS 可见点击验证：需设备<strong>解锁</strong>后观察屏幕响应（注入本身已验证不崩溃）。</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

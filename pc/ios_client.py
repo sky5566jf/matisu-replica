@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MatisuAuto iOS 控制客户端：向设备 8182 端口发送触控指令。
+"""MatisuAuto iOS 控制客户端：向设备 18182 端口发送触控指令。
 
 用法:
   python ios_client.py tap 100 200
@@ -10,9 +10,10 @@
 """
 import socket
 import sys
+import os
 
-HOST = "192.69.0.38"
-PORT = 8182
+HOST = os.environ.get("MATISU_IOS_HOST", "192.69.0.38")
+PORT = int(os.environ.get("MATISU_IOS_PORT", "18182"))
 
 
 def send(cmd: str):

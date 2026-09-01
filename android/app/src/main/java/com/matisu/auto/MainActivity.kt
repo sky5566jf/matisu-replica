@@ -46,11 +46,13 @@ class MainActivity : Activity() {
     }
 
     private fun isAccessibilityEnabled(): Boolean {
-        val id = "$packageName/.AutoAccessibilityService"
+        // settings 里可能是缩写（pkg/.Service）或展开（pkg/pkg.Service）形式，两种都认
+        val short = "$packageName/.AutoAccessibilityService"
+        val full = "$packageName/$packageName.AutoAccessibilityService"
         val enabled = Settings.Secure.getString(
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
-        return enabled.contains(id)
+        return enabled.contains(short) || enabled.contains(full)
     }
 }

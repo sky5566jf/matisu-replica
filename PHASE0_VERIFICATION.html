@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MatisuAuto 复刻 · Phase 0 真机验证报告</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; background: #f5f6f8; color: #1c1c1e; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 22px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .ok { color: #16a34a; font-weight: 700; }
+  .bad { color: #dc2626; font-weight: 700; }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: #047857; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td, th { text-align: left; padding: 7px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  th { color: #6b7280; font-weight: 600; }
+  code { background: #f3f4f6; padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 8px; overflow:auto; font-size: 12px; }
+  .step { font-size: 13px; line-height: 1.7; }
+  .muted { color: #6b7280; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MatisuAuto 复刻 · Phase 0 真机验证报告</h1>
+  <div class="sub">自研复刻「懒人精灵 / LuaRunner」自动化平台 · 状态：iOS + Android 两端骨架均已在真机跑通</div>
+
+  <div class="card">
+    <h2>✅ 结论：两端骨架已真机验证通过</h2>
+    <table>
+      <tr><th style="width:140px">平台</th><th>构建</th><th>部署</th><th>核心能力验证</th></tr>
+      <tr>
+        <td><b>iOS</b> (iPhone SE2, iOS 16.1.1, rootless+TrollStore)</td>
+        <td><span class="ok">OK</span> GitHub Actions Theos 真编译</td>
+        <td><span class="ok">OK</span> .tipa 装 TrollStore</td>
+        <td><span class="ok">OK</span> 8182 触控控制服务 + HID 注入</td>
+      </tr>
+      <tr>
+        <td><b>Android</b> (模拟器 192.69.0.18:5555, root)</td>
+        <td><span class="ok">OK</span> Gradle 真编译</td>
+        <td><span class="ok">OK</span> APK 安装</td>
+        <td><span class="ok">OK</span> 无障碍服务已启用</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>🐞 iOS 修复的两个关键 Bug</h2>
+    <div class="step">
+      <p><b>1. tipa 缺 Info.plist（安装静默失败）</b><br>
+      CI 误把 Theos 的 <code>.theos/obj/MatisuAuto.app</code>（仅含二进制）打包进 tipa。改为从源码
+      <code>Info.plist</code> + <code>Entitlements.plist</code> 组装，并用 <code>ldid</code> 签名（含
+      <code>com.apple.private.hid.client</code> 等关键 entitlement）。</p>
+      <p><b>2. App 启动即崩溃（DYLD SIGABRT）</b><br>
+      <code>ios/app/Makefile</code> 的 <code>MatisuAuto_FILES</code> 漏列 <code>ControlServer.mm</code>，
+      导致 <code>MatisuControlServerStart()</code> 未被编译进二进制。配合 app 上的
+      <code>-Wl,-undefined,dynamic_lookup</code>，dyld 在启动期报
+      <code>symbol not found in flat namespace '_MatisuControlServerStart'</code> 而崩溃。<br>
+      崩溃日志定位：<code>/var/mobile/Library/Logs/CrashReporter/MatisuAuto-*.ips</code> →
+      <code>termination.namespace=DYLD</code>。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📲 iOS 真机验证步骤与证据</h2>
+    <div class="step">
+      <p><span class="tag">deploy</span> SFTP 上传 <code>matisu-auto.tipa</code> → <code>/var/mobile/matisu-auto.tipa</code></p>
+      <p><span class="tag">install</span> <code>echo 12345678 | sudo -S .../TrollStore.app/trollstorehelper install /var/mobile/matisu-auto.tipa</code><br>
+      → ldid 状态 0，entitlements 校验通过</p>
+      <p><span class="tag">launch</span> <code>/var/jb/usr/bin/uiopen 'app-id://com.matisu.auto'</code> → RC=0</p>
+      <p><span class="tag">verify</span> 进程存活（pid 3752）+ PC <code>socket.connect(192.69.0.38, 8182)</code> = <b>CONNECTED</b></p>
+      <p><span class="tag">inject</span> PC 下发 <code>tap 100 200</code> 与 <code>swipe 100 400 300 400 0.3</code> 均成功，应用未崩溃
+      → 证明 IOKit 私有 HID 符号运行期解析成功、触控注入链路打通。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💻 PC 控制客户端用法</h2>
+    <pre>cd replica/pc
+python ios_client.py tap 100 200            # 点按 (屏幕点)
+python ios_client.py swipe 100 400 300 400 0.3
+python ios_client.py down 0 100 200
+python ios_client.py move 0 150 250
+python ios_client.py up 0 150 250</pre>
+    <p class="muted">设备 IP 默认 192.69.0.38，端口 8182。坐标使用屏幕点(points)，非像素。</p>
+  </div>
+
+  <div class="card">
+    <h2>⏭️ 下一步（Phase 1）</h2>
+    <div class="step">
+      <ul>
+        <li>把 fengari (Lua 5.1 VM) 接入两端，作为脚本执行引擎。</li>
+        <li>在 Lua API 中暴露触控 / 图色 / UI 查询接口（对齐 <code>replica/common/lua-api/core.lua</code> 契约）。</li>
+        <li>Android 侧：无障碍服务接 Lua 指令桥；iOS 侧：8182 服务接 Lua 指令桥。</li>
+        <li><b>建议</b>：把 iPhone 解锁后跑一次可见点击，确认 HID 事件真正作用于 UI（锁屏下注入不报错但可能不触发响应）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="muted">生成于 Phase 0 收尾 · 仓库 sky5566jf/matisu-replica · 关键提交：3bbbc37（修复 ControlServer.mm），ios.yml（修复 tipa 打包）</p>
+</div>
+</body>
+</html>

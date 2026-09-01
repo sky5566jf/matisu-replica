@@ -21,10 +21,10 @@ void MatisuLuaStop(void);
 BOOL MatisuLuaRunning(void);
 /// 取走常驻脚本累计 print 输出（线程安全，取后清空）。
 NSString* _Nonnull MatisuLuaDrainOutput(void);
-/// daemon 启动时调用：/var/mobile/MatisuAuto/scripts/autorun.lua 存在则常驻执行。
+/// daemon 启动时调用：<数据区>/run/脚本/autorun.lua 存在则常驻执行。
 void MatisuLuaAutoRun(void);
 
-/// 脚本根目录（mobile 可写）
+/// 脚本根目录（= MatisuRunScriptsDir()，mobile 可写）
 NSString* _Nonnull MatisuScriptDir(void);
 
 #ifdef __cplusplus

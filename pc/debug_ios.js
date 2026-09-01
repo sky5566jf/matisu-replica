@@ -1,0 +1,12 @@
+process.env.MATISU_TARGET = 'ios';
+process.env.MATISU_IOS_HOST = '127.0.0.1';
+process.env.MATISU_IOS_PORT = '18183';
+const bridge = require('./device_bridge');
+const all = bridge.nodeQuery([], 'all');
+console.log('nodeQuery(all) len =', Array.isArray(all) ? all.length : 'NOT ARRAY', all ? JSON.stringify(all).slice(0, 300) : '');
+const click = bridge.nodeQuery([{ k: 'clickable', v: true, m: 'eq' }], 'all');
+console.log('clickable(true) len =', Array.isArray(click) ? click.length : click);
+if (Array.isArray(click) && click.length) console.log('first clickable:', JSON.stringify(click[0]).slice(0, 200));
+const one = bridge.nodeQuery([{ k: 'clickable', v: true, m: 'eq' }], 'one');
+console.log('one =', one ? JSON.stringify(one).slice(0, 200) : null);
+console.log('getPixelColor(120,220)=', bridge.getPixelColor(120, 220));

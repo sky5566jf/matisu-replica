@@ -15,6 +15,7 @@
 #import "PicFind.h"
 #import "SysUtil.h"
 #import "OcrEngine.h"
+#import "MatisuPaths.h"
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 #import <stdlib.h>
@@ -648,8 +649,8 @@ static int l_getScreenResolution(lua_State *L) {
     return 1;
 }
 
-// ---------------- 日志控制台（设备端 log.txt） ----------------
-static NSString *maLogPath(void) { return @"/var/mobile/MatisuAuto/log.txt"; }
+// ---------------- 日志控制台（设备端 logdir/log.txt） ----------------
+static NSString *maLogPath(void) { return [MatisuLogDir() stringByAppendingPathComponent:@"log.txt"]; }
 static void maLogAppend(NSString *level, NSString *msg) {
     @autoreleasepool {
         NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
@@ -926,9 +927,7 @@ static NSMutableString *gSvcOut = nil;
 static NSLock *gSvcOutLock = nil;
 
 NSString* _Nonnull MatisuScriptDir(void) {
-    NSString *dir = @"/var/mobile/MatisuAuto/scripts";
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-    return dir;
+    return MatisuRunScriptsDir();   // <root>/run/脚本（路径中心统一收口）
 }
 
 // 常驻 state 的 print 走共享输出（加锁）
@@ -1023,7 +1022,7 @@ NSString* _Nonnull MatisuLuaDrainOutput(void) {
 }
 
 // 工程打包形态：app bundle 内 scripts/（安装后 /var/jb/Applications/MatisuAuto.app/scripts/）
-// 首启同步到 /var/mobile/MatisuAuto/scripts/（mobile 可写），以 bundle 内版本为准覆盖同名文件。
+// 首启同步到 <数据区>/run/脚本/（mobile 可写），以 bundle 内版本为准覆盖同名文件。
 static void syncBundledScripts(void) {
     NSString *bundleDir = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"scripts"];
     NSFileManager *fm = [NSFileManager defaultManager];

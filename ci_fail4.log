@@ -1,0 +1,655 @@
+﻿2026-08-31T05:13:33.2840940Z Current runner version: '2.336.0'
+2026-08-31T05:13:33.2907680Z ##[group]Runner Image Provisioner
+2026-08-31T05:13:33.2909690Z Hosted Compute Agent
+2026-08-31T05:13:33.2910710Z Version: 20260707.563
+2026-08-31T05:13:33.2911890Z Commit: 02667638d2b423fbc733a8e32a88b44996a3ba6e
+2026-08-31T05:13:33.2913350Z Build Date: 2026-07-07T19:33:50Z
+2026-08-31T05:13:33.2914710Z Worker ID: {fcdd0456-5863-46ff-a788-967945de455e}
+2026-08-31T05:13:33.2915950Z Azure Region: westus
+2026-08-31T05:13:33.2916930Z ##[endgroup]
+2026-08-31T05:13:33.2920260Z ##[group]Operating System
+2026-08-31T05:13:33.2923890Z macOS
+2026-08-31T05:13:33.2924890Z 26.5.2
+2026-08-31T05:13:33.2925750Z 25F84
+2026-08-31T05:13:33.2926950Z ##[endgroup]
+2026-08-31T05:13:33.2927970Z ##[group]Runner Image
+2026-08-31T05:13:33.2929020Z Image: macos-26-arm64
+2026-08-31T05:13:33.2930000Z Version: 20260728.0273.1
+2026-08-31T05:13:33.2933300Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20260728.0273/images/macos/macos-26-arm64-Readme.md
+2026-08-31T05:13:33.2934510Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20260728.0273
+2026-08-31T05:13:33.2935210Z ##[endgroup]
+2026-08-31T05:13:33.2938810Z ##[group]GITHUB_TOKEN Permissions
+2026-08-31T05:13:33.2943870Z Contents: read
+2026-08-31T05:13:33.2944980Z Metadata: read
+2026-08-31T05:13:33.2945950Z Packages: read
+2026-08-31T05:13:33.2946910Z ##[endgroup]
+2026-08-31T05:13:33.2952010Z Secret source: Actions
+2026-08-31T05:13:33.2953940Z Prepare workflow directory
+2026-08-31T05:13:33.3471440Z Prepare all required actions
+2026-08-31T05:13:33.3570080Z Getting action download info
+2026-08-31T05:13:33.8012640Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-08-31T05:13:34.2953210Z Download action repository 'waruhachi/theos-action@v2.4.6' (SHA:9c45aeddc8a587a7b9d4a17d107e6a68b9bc910e)
+2026-08-31T05:13:34.6911980Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-08-31T05:13:35.0210490Z Getting action download info
+2026-08-31T05:13:35.1690230Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-08-31T05:13:35.4650490Z Complete job name: build
+2026-08-31T05:13:35.6150800Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-31T05:13:35.6160720Z ##[group]Run actions/checkout@v4
+2026-08-31T05:13:35.6161280Z with:
+2026-08-31T05:13:35.6161640Z   repository: sky5566jf/matisu-replica
+2026-08-31T05:13:35.6164780Z   token: ***
+2026-08-31T05:13:35.6165120Z   ssh-strict: true
+2026-08-31T05:13:35.6165450Z   ssh-user: git
+2026-08-31T05:13:35.6165790Z   persist-credentials: true
+2026-08-31T05:13:35.6166140Z   clean: true
+2026-08-31T05:13:35.6166470Z   sparse-checkout-cone-mode: true
+2026-08-31T05:13:35.6166940Z   fetch-depth: 1
+2026-08-31T05:13:35.6167260Z   fetch-tags: false
+2026-08-31T05:13:35.6167600Z   show-progress: true
+2026-08-31T05:13:35.6167970Z   lfs: false
+2026-08-31T05:13:35.6168330Z   submodules: false
+2026-08-31T05:13:35.6168660Z   set-safe-directory: true
+2026-08-31T05:13:35.6169040Z   allow-unsafe-pr-checkout: false
+2026-08-31T05:13:35.6170210Z ##[endgroup]
+2026-08-31T05:13:36.6170920Z Syncing repository: sky5566jf/matisu-replica
+2026-08-31T05:13:36.6173030Z ##[group]Getting Git version info
+2026-08-31T05:13:36.6173780Z Working directory is '/Users/runner/work/matisu-replica/matisu-replica'
+2026-08-31T05:13:36.6176330Z [command]/opt/homebrew/bin/git version
+2026-08-31T05:13:36.6659900Z git version 2.55.0
+2026-08-31T05:13:36.6882120Z ##[endgroup]
+2026-08-31T05:13:36.6899230Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/b3404dcd-4c47-48e0-be22-744247ad7866/.gitconfig'
+2026-08-31T05:13:36.6904740Z Temporarily overriding HOME='/Users/runner/work/_temp/b3404dcd-4c47-48e0-be22-744247ad7866' before making global git config changes
+2026-08-31T05:13:36.6910070Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-31T05:13:36.6911400Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/matisu-replica/matisu-replica
+2026-08-31T05:13:36.6958980Z Deleting the contents of '/Users/runner/work/matisu-replica/matisu-replica'
+2026-08-31T05:13:36.6963560Z ##[group]Initializing the repository
+2026-08-31T05:13:36.6975920Z [command]/opt/homebrew/bin/git init /Users/runner/work/matisu-replica/matisu-replica
+2026-08-31T05:13:36.7549900Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-31T05:13:36.7595870Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-31T05:13:36.7608820Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-31T05:13:36.7609840Z hint: call:
+2026-08-31T05:13:36.7610600Z hint:
+2026-08-31T05:13:36.7611330Z hint: 	git config --global init.defaultBranch <name>
+2026-08-31T05:13:36.7612010Z hint:
+2026-08-31T05:13:36.7613650Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-31T05:13:36.7622590Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-31T05:13:36.7623530Z hint:
+2026-08-31T05:13:36.7624230Z hint: 	git branch -m <name>
+2026-08-31T05:13:36.7624860Z hint:
+2026-08-31T05:13:36.7625640Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-31T05:13:36.7627030Z Initialized empty Git repository in /Users/runner/work/matisu-replica/matisu-replica/.git/
+2026-08-31T05:13:36.7629510Z [command]/opt/homebrew/bin/git remote add origin https://github.com/sky5566jf/matisu-replica
+2026-08-31T05:13:36.8072660Z ##[endgroup]
+2026-08-31T05:13:36.8074120Z ##[group]Disabling automatic garbage collection
+2026-08-31T05:13:36.8075360Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-08-31T05:13:36.8237960Z ##[endgroup]
+2026-08-31T05:13:36.8537970Z ##[group]Setting up auth
+2026-08-31T05:13:36.8571520Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-31T05:13:36.8587550Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-31T05:13:37.0718100Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-31T05:13:37.0891830Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-31T05:13:37.2751870Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-31T05:13:37.3058750Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-31T05:13:37.4093690Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-31T05:13:37.4244140Z ##[endgroup]
+2026-08-31T05:13:37.4245570Z ##[group]Fetching the repository
+2026-08-31T05:13:37.4251170Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +63d13873d45440e2b0f2a9c82d9cbf822d31dedb:refs/remotes/origin/main
+2026-08-31T05:13:37.9901680Z From https://github.com/sky5566jf/matisu-replica
+2026-08-31T05:13:37.9914860Z  * [new ref]         63d13873d45440e2b0f2a9c82d9cbf822d31dedb -> origin/main
+2026-08-31T05:13:37.9919040Z ##[endgroup]
+2026-08-31T05:13:37.9920310Z ##[group]Determining the checkout info
+2026-08-31T05:13:37.9935760Z ##[endgroup]
+2026-08-31T05:13:37.9938370Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-08-31T05:13:38.0056560Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-31T05:13:38.0206690Z ##[group]Checking out the ref
+2026-08-31T05:13:38.0217850Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-08-31T05:13:38.0840350Z Switched to a new branch 'main'
+2026-08-31T05:13:38.0944760Z branch 'main' set up to track 'origin/main'.
+2026-08-31T05:13:38.1258170Z ##[endgroup]
+2026-08-31T05:13:38.1567700Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-08-31T05:13:38.1573440Z 63d13873d45440e2b0f2a9c82d9cbf822d31dedb
+2026-08-31T05:13:38.2241940Z ##[group]Run waruhachi/theos-action@v2.4.6
+2026-08-31T05:13:38.2242970Z with:
+2026-08-31T05:13:38.2243960Z   theos-src: theos/theos
+2026-08-31T05:13:38.2244840Z   theos-branch: master
+2026-08-31T05:13:38.2245530Z   sdks-src: theos/sdks
+2026-08-31T05:13:38.2246230Z   sdks-branch: master
+2026-08-31T05:13:38.2246980Z   libgcuniversal: false
+2026-08-31T05:13:38.2247990Z   libgcuniversal-src: MrGcGamer/LibGcUniversalDocumentation
+2026-08-31T05:13:38.2249220Z   libgcuniversal-branch: master
+2026-08-31T05:13:38.2249950Z   altlist: false
+2026-08-31T05:13:38.2250710Z   altlist-src: opa334/AltList
+2026-08-31T05:13:38.2251420Z   altlist-branch: main
+2026-08-31T05:13:38.2252080Z ##[endgroup]
+2026-08-31T05:13:38.2418810Z ##[start-action display=Adding Theos Environment Variables;id=__waruhachi_theos-action.__run]
+2026-08-31T05:13:38.2552930Z ##[group]Run echo "THEOS=/Users/runner/work/matisu-replica/matisu-replica/theos" >> $GITHUB_ENV
+2026-08-31T05:13:38.2558290Z [36;1mecho "THEOS=/Users/runner/work/matisu-replica/matisu-replica/theos" >> $GITHUB_ENV[0m
+2026-08-31T05:13:38.2654270Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-31T05:13:38.2655260Z ##[endgroup]
+2026-08-31T05:13:38.3393650Z ##[end-action id=__waruhachi_theos-action.__run;outcome=success;conclusion=success;duration_ms=97]
+2026-08-31T05:13:38.3400780Z ##[start-action display=Generate Cache Key;id=__waruhachi_theos-action.cache-key]
+2026-08-31T05:13:38.3446960Z ##[group]Run set -euo pipefail
+2026-08-31T05:13:38.3447850Z [36;1mset -euo pipefail[0m
+2026-08-31T05:13:38.3448540Z [36;1m[0m
+2026-08-31T05:13:38.3449610Z [36;1mtheos_sha=$(gh api -H 'Accept: application/vnd.github.sha' /repos/theos/theos/commits/master)[0m
+2026-08-31T05:13:38.3451330Z [36;1msdks_sha=$(gh api -H 'Accept: application/vnd.github.sha' /repos/theos/sdks/commits/master)[0m
+2026-08-31T05:13:38.3452560Z [36;1m[0m
+2026-08-31T05:13:38.3453160Z [36;1mif [[ "false" == 'true' ]]; then[0m
+2026-08-31T05:13:38.3454710Z [36;1m  libgc_sha=$(gh api -H 'Accept: application/vnd.github.sha' /repos/MrGcGamer/LibGcUniversalDocumentation/commits/master)[0m
+2026-08-31T05:13:38.3475220Z [36;1melse[0m
+2026-08-31T05:13:38.3477380Z [36;1m  libgc_sha="none"[0m
+2026-08-31T05:13:38.3481130Z [36;1mfi[0m
+2026-08-31T05:13:38.3482860Z [36;1m[0m
+2026-08-31T05:13:38.3486820Z [36;1mif [[ "false" == 'true' ]]; then[0m
+2026-08-31T05:13:38.3490190Z [36;1m  altlist_sha=$(gh api -H 'Accept: application/vnd.github.sha' /repos/opa334/AltList/commits/main)[0m
+2026-08-31T05:13:38.3493630Z [36;1melse[0m
+2026-08-31T05:13:38.3495120Z [36;1m  altlist_sha="none"[0m
+2026-08-31T05:13:38.3496940Z [36;1mfi[0m
+2026-08-31T05:13:38.3498440Z [36;1m[0m
+2026-08-31T05:13:38.3502680Z [36;1mecho "key=theos/theos-master-$theos_sha|theos/sdks-master-$sdks_sha|MrGcGamer/LibGcUniversalDocumentation-master-$libgc_sha|opa334/AltList-main-$altlist_sha" >> $GITHUB_OUTPUT[0m
+2026-08-31T05:13:38.3608660Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-31T05:13:38.3610960Z env:
+2026-08-31T05:13:38.3612890Z   THEOS: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:13:38.3631400Z   GH_TOKEN: ***
+2026-08-31T05:13:38.3633310Z ##[endgroup]
+2026-08-31T05:13:39.4533930Z ##[end-action id=__waruhachi_theos-action.cache-key;outcome=success;conclusion=success;duration_ms=1112]
+2026-08-31T05:13:39.4548520Z ##[start-action display=Install dependencies;id=__waruhachi_theos-action.__run_2]
+2026-08-31T05:13:39.4604940Z ##[group]Run set -euo pipefail
+2026-08-31T05:13:39.4605270Z [36;1mset -euo pipefail[0m
+2026-08-31T05:13:39.4605580Z [36;1m[0m
+2026-08-31T05:13:39.4605800Z [36;1mbrew install make ldid[0m
+2026-08-31T05:13:39.4607610Z [36;1mecho "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH[0m
+2026-08-31T05:13:39.4660910Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-31T05:13:39.4661390Z env:
+2026-08-31T05:13:39.4662180Z   THEOS: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:13:39.4663490Z ##[endgroup]
+2026-08-31T05:13:44.2628860Z ##[warning]The following taps are not trusted:
+  aws/tap
+
+Homebrew is currently ignoring formulae, casks and commands from these taps because tap trust is required.
+
+Untap them with:
+  brew untap aws/tap
+Trust specific formulae, casks and commands with:
+  brew trust --formula <user>/<tap>/<formula>
+  brew trust --cask <user>/<tap>/<cask>
+  brew trust --command <user>/<tap>/<command>
+Whole-tap trust is broader and includes all current and future formulae,
+casks and commands from the listed taps. Trust whole taps with:
+  brew trust aws/tap
+To disable trust checks:
+  export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
+This is not recommended and will be removed in a later release.
+For more information, see:
+  https://docs.brew.sh/Tap-Trust
+2026-08-31T05:13:45.0665370Z [34m==>[0m [1mWould install 2 formulae:[0m
+2026-08-31T05:13:45.0749420Z make ldid
+2026-08-31T05:13:45.0752280Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/make/manifests/4.4.1-1[0m
+2026-08-31T05:13:45.4568180Z [34m==>[0m [1mDownloading https://ghcr.io/v2/homebrew/core/ldid/manifests/2.1.5_1-1[0m
+2026-08-31T05:13:45.6646970Z [34m==>[0m [1mWould install 1 dependency for ldid:[0m
+2026-08-31T05:13:45.6647390Z libplist
+2026-08-31T05:13:45.6650880Z [32m==>[0m [1mFetching downloads for: [32mmake[39m and [32mldid[39m[0m
+2026-08-31T05:13:45.9737020Z ✔︎ Bottle Manifest libplist (2.7.0)
+2026-08-31T05:13:45.9993660Z ✔︎ Bottle make (4.4.1)
+2026-08-31T05:13:46.0328340Z ✔︎ Bottle ldid (2.1.5_1)
+2026-08-31T05:13:46.0903670Z ✔︎ Bottle libplist (2.7.0)
+2026-08-31T05:13:46.0938930Z [34m==>[0m [1mPouring make--4.4.1.arm64_tahoe.bottle.1.tar.gz[0m
+2026-08-31T05:13:46.3049040Z [34m==>[0m [1mCaveats[0m
+2026-08-31T05:13:46.3056370Z GNU "make" has been installed as "gmake".
+2026-08-31T05:13:46.3061800Z If you need to use it as "make", you can add a "gnubin" directory
+2026-08-31T05:13:46.3063350Z to your PATH from your bashrc like:
+2026-08-31T05:13:46.3067120Z 
+2026-08-31T05:13:46.3068050Z     PATH="/opt/homebrew/opt/make/libexec/gnubin:$PATH"
+2026-08-31T05:13:46.3069550Z [34m==>[0m [1mSummary[0m
+2026-08-31T05:13:46.3093700Z 🍺  /opt/homebrew/Cellar/make/4.4.1: 17 files, 1.3MB
+2026-08-31T05:13:46.3425430Z [32m==>[0m [1mInstalling ldid dependency: [32mlibplist[39m[0m
+2026-08-31T05:13:46.3536170Z [34m==>[0m [1mPouring libplist--2.7.0.arm64_tahoe.bottle.tar.gz[0m
+2026-08-31T05:13:46.4368830Z 🍺  /opt/homebrew/Cellar/libplist/2.7.0: 32 files, 605.5KB
+2026-08-31T05:13:46.4371830Z [32m==>[0m [1mInstalling [32mldid[39m[0m
+2026-08-31T05:13:46.4374870Z [34m==>[0m [1mPouring ldid--2.1.5_1.arm64_tahoe.bottle.1.tar.gz[0m
+2026-08-31T05:13:46.5314210Z 🍺  /opt/homebrew/Cellar/ldid/2.1.5_1: 6 files, 271KB
+2026-08-31T05:13:46.5323330Z [32m==>[0m [1mCaveats[0m
+2026-08-31T05:13:46.5324970Z [34m==>[0m [1mmake[0m
+2026-08-31T05:13:46.5326480Z GNU "make" has been installed as "gmake".
+2026-08-31T05:13:46.5327850Z If you need to use it as "make", you can add a "gnubin" directory
+2026-08-31T05:13:46.5329340Z to your PATH from your bashrc like:
+2026-08-31T05:13:46.5330360Z 
+2026-08-31T05:13:46.5331040Z     PATH="/opt/homebrew/opt/make/libexec/gnubin:$PATH"
+2026-08-31T05:13:46.6206590Z ##[end-action id=__waruhachi_theos-action.__run_2;outcome=success;conclusion=success;duration_ms=7165]
+2026-08-31T05:13:46.6216700Z ##[start-action display=Theos Cache;id=__waruhachi_theos-action.theos-cache]
+2026-08-31T05:13:46.6318200Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-31T05:13:46.6328720Z ##[group]Run actions/cache@v4
+2026-08-31T05:13:46.6329950Z with:
+2026-08-31T05:13:46.6330390Z   path: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:13:46.6332020Z   key: theos/theos-master-5280bd038207e14f8bd76f5417aa2fe641c03228|theos/sdks-master-0222fd5413cf4b9af096f37b4621afa2688572f7|MrGcGamer/LibGcUniversalDocumentation-master-none|opa334/AltList-main-none
+2026-08-31T05:13:46.6332800Z   enableCrossOsArchive: false
+2026-08-31T05:13:46.6333140Z   fail-on-cache-miss: false
+2026-08-31T05:13:46.6333370Z   lookup-only: false
+2026-08-31T05:13:46.6333600Z   save-always: false
+2026-08-31T05:13:46.6333780Z env:
+2026-08-31T05:13:46.6334160Z   THEOS: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:13:46.6400660Z ##[endgroup]
+2026-08-31T05:13:46.8672860Z (node:6297) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-31T05:13:46.8675870Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-31T05:13:47.2054470Z Cache hit for: theos/theos-master-5280bd038207e14f8bd76f5417aa2fe641c03228|theos/sdks-master-0222fd5413cf4b9af096f37b4621afa2688572f7|MrGcGamer/LibGcUniversalDocumentation-master-none|opa334/AltList-main-none
+2026-08-31T05:13:47.2155410Z (node:6297) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-31T05:13:48.5074260Z Received 0 of 224393996 (0.0%), 0.0 MBs/sec
+2026-08-31T05:13:49.5090650Z Received 75497472 of 224393996 (33.6%), 35.8 MBs/sec
+2026-08-31T05:13:50.5111470Z Received 134217728 of 224393996 (59.8%), 42.5 MBs/sec
+2026-08-31T05:13:51.5137970Z Received 205520896 of 224393996 (91.6%), 48.8 MBs/sec
+2026-08-31T05:13:51.8897160Z Received 224393996 of 224393996 (100.0%), 48.7 MBs/sec
+2026-08-31T05:13:51.8905400Z Cache Size: ~214 MB (224393996 B)
+2026-08-31T05:13:51.9045200Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/8af8769f-0b72-4dba-b0ba-bb20254870c9/cache.tzst -P -C /Users/runner/work/matisu-replica/matisu-replica --delay-directory-restore --use-compress-program unzstd
+2026-08-31T05:14:17.4341100Z Cache restored successfully
+2026-08-31T05:14:17.4997080Z Cache restored from key: theos/theos-master-5280bd038207e14f8bd76f5417aa2fe641c03228|theos/sdks-master-0222fd5413cf4b9af096f37b4621afa2688572f7|MrGcGamer/LibGcUniversalDocumentation-master-none|opa334/AltList-main-none
+2026-08-31T05:14:17.5308040Z ##[end-action id=__waruhachi_theos-action.theos-cache;outcome=success;conclusion=success;duration_ms=30908]
+2026-08-31T05:14:17.5316650Z ##[start-action display=Setup Theos;id=__waruhachi_theos-action.__actions_checkout]
+2026-08-31T05:14:17.5348170Z ##[end-action id=__waruhachi_theos-action.__actions_checkout;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:17.5351180Z ##[start-action display=Setup SDKs;id=__waruhachi_theos-action.__actions_checkout_2]
+2026-08-31T05:14:17.5357890Z ##[end-action id=__waruhachi_theos-action.__actions_checkout_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:17.5360490Z ##[start-action display=Setup LibGcUniversal;id=__waruhachi_theos-action.__actions_checkout_3]
+2026-08-31T05:14:17.5370650Z ##[end-action id=__waruhachi_theos-action.__actions_checkout_3;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:17.5373680Z ##[start-action display=Install LibGcUniversal;id=__waruhachi_theos-action.__run_3]
+2026-08-31T05:14:17.5380760Z ##[end-action id=__waruhachi_theos-action.__run_3;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:17.5383410Z ##[start-action display=Setup AltList;id=__waruhachi_theos-action.__actions_checkout_4]
+2026-08-31T05:14:17.5390470Z ##[end-action id=__waruhachi_theos-action.__actions_checkout_4;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:17.5393290Z ##[start-action display=Install AltList;id=__waruhachi_theos-action.__run_4]
+2026-08-31T05:14:17.5404920Z ##[end-action id=__waruhachi_theos-action.__run_4;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:17.5407600Z ##[start-action display=Update Theos;id=__waruhachi_theos-action.__run_5]
+2026-08-31T05:14:17.5510220Z ##[group]Run $THEOS/bin/update-theos
+2026-08-31T05:14:17.5524250Z [36;1m$THEOS/bin/update-theos[0m
+2026-08-31T05:14:17.8495920Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-08-31T05:14:17.8497160Z env:
+2026-08-31T05:14:17.8497490Z   THEOS: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:14:17.8498010Z ##[endgroup]
+2026-08-31T05:14:19.2619200Z From https://github.com/theos/theos
+2026-08-31T05:14:19.2620490Z  * [new branch]      dhowett/dev/experimental-rebased -> origin/dhowett/dev/experimental-rebased
+2026-08-31T05:14:19.2627020Z  * [new branch]      dhowett/dev/instance-target -> origin/dhowett/dev/instance-target
+2026-08-31T05:14:19.2627650Z  * [new branch]      dhowett/dev/syntel    -> origin/dhowett/dev/syntel
+2026-08-31T05:14:19.2628230Z  * [new branch]      dhowett/dev/testing   -> origin/dhowett/dev/testing
+2026-08-31T05:14:19.2629190Z  * [new branch]      kabiroberai/arch-schemas -> origin/kabiroberai/arch-schemas
+2026-08-31T05:14:19.2629820Z  * [new branch]      kirb/break-stuff      -> origin/kirb/break-stuff
+2026-08-31T05:14:19.2630480Z  * [new branch]      kirb/experimental/uikitformac-support -> origin/kirb/experimental/uikitformac-support
+2026-08-31T05:14:19.2631510Z  * [new branch]      kirb/rootless         -> origin/kirb/rootless
+2026-08-31T05:14:19.2632220Z  * [new branch]      kirb/unfinished/better-troubleshoot -> origin/kirb/unfinished/better-troubleshoot
+2026-08-31T05:14:19.2632850Z  * [new branch]      legacy                -> origin/legacy
+2026-08-31T05:14:19.2633650Z  * [new branch]      libhooker-rpaths      -> origin/libhooker-rpaths
+2026-08-31T05:14:19.2634300Z  * [new branch]      orion                 -> origin/orion
+2026-08-31T05:14:19.2634730Z  * [new branch]      orion-dev             -> origin/orion-dev
+2026-08-31T05:14:19.2635380Z  * [new branch]      uroboro-minor-changes -> origin/uroboro-minor-changes
+2026-08-31T05:14:19.2636060Z  * [new tag]         1.0.0                 -> 1.0.0
+2026-08-31T05:14:19.2636490Z  * [new tag]         2.0.0                 -> 2.0.0
+2026-08-31T05:14:19.2636920Z  * [new tag]         2.1.0                 -> 2.1.0
+2026-08-31T05:14:19.2637270Z  * [new tag]         2.1.1                 -> 2.1.1
+2026-08-31T05:14:19.2637760Z  * [new tag]         2.2                   -> 2.2
+2026-08-31T05:14:19.2638330Z  * [new tag]         2.3                   -> 2.3
+2026-08-31T05:14:19.2638720Z  * [new tag]         2.4                   -> 2.4
+2026-08-31T05:14:19.2639080Z  * [new tag]         2.5                   -> 2.5
+2026-08-31T05:14:19.5630010Z Fetching submodule vendor/dm.pl
+2026-08-31T05:14:20.0785110Z Fetching submodule vendor/logos
+2026-08-31T05:14:20.0787120Z Fetching submodule vendor/include
+2026-08-31T05:14:20.1971940Z Fetching submodule vendor/orion
+2026-08-31T05:14:20.3626700Z Fetching submodule vendor/lib
+2026-08-31T05:14:20.3743090Z Fetching submodule vendor/templates
+2026-08-31T05:14:20.3962220Z Fetching submodule vendor/nic
+2026-08-31T05:14:21.0872210Z From https://github.com/theos/nic
+2026-08-31T05:14:21.0926290Z  * branch            12db01f67994a232f8282f3ae0d0b61314ce0230 -> FETCH_HEAD
+2026-08-31T05:14:21.0930860Z  * branch            1f2e89d4acb805a81503ac3ea4c7115ca55f75a1 -> FETCH_HEAD
+2026-08-31T05:14:21.1047600Z  * branch            28d562c54f2d335a5f392191e7d2e8f08aca88fa -> FETCH_HEAD
+2026-08-31T05:14:21.1059050Z  * branch            40464a39bfb31306521212936dbae3406ef4822c -> FETCH_HEAD
+2026-08-31T05:14:21.1061830Z  * branch            6585e1e2d29bcd2452e14f8e92e62c76a1909554 -> FETCH_HEAD
+2026-08-31T05:14:21.1073500Z  * branch            794d210f81198c6aef4f0ab8d04bd74ffe149f51 -> FETCH_HEAD
+2026-08-31T05:14:21.1080110Z  * branch            8f065ac109706335661a6f8e9edfeacdbff0d80e -> FETCH_HEAD
+2026-08-31T05:14:21.1087720Z  * branch            941bbf0173e3c9674331715f433c1ae6f9156362 -> FETCH_HEAD
+2026-08-31T05:14:21.1165190Z  * branch            fd02465ca53cdb3bb07b4ff723c517e9a808641c -> FETCH_HEAD
+2026-08-31T05:14:21.1169870Z  * branch            fe9f859d3aaba987ed19ef52dbfb57bc02a4973d -> FETCH_HEAD
+2026-08-31T05:14:21.1184760Z Fetching submodule vendor/swift-support
+2026-08-31T05:14:21.1193520Z From https://github.com/theos/swift-support
+2026-08-31T05:14:21.1204100Z  * branch            0093a4ebcc9027c383c5d56d35a4d418d4592658 -> FETCH_HEAD
+2026-08-31T05:14:21.1208570Z  * branch            019861f92a7ff16d422a63911e2313c877e1b828 -> FETCH_HEAD
+2026-08-31T05:14:21.1260220Z  * branch            0205d5ab2d73fa52a1d9ff3eba0612c4e08c1003 -> FETCH_HEAD
+2026-08-31T05:14:21.1283540Z  * branch            26d567b27545ed5830775ae8a487bdf4d67ff4b5 -> FETCH_HEAD
+2026-08-31T05:14:21.1340360Z  * branch            2b9346b2e48a72e534d667cd45f83749ae278a15 -> FETCH_HEAD
+2026-08-31T05:14:21.1348540Z  * branch            2ca7b66fc689058636242fe898b76df73e4d5609 -> FETCH_HEAD
+2026-08-31T05:14:21.1457790Z  * branch            3b0005b557331b5df67913b98d003ec1e87d78bd -> FETCH_HEAD
+2026-08-31T05:14:21.1518800Z  * branch            43055290ede755acbd186c398cae72dc4f12247d -> FETCH_HEAD
+2026-08-31T05:14:21.1579510Z  * branch            5d427efa62c1bbb137e00e51f378d031b1d15699 -> FETCH_HEAD
+2026-08-31T05:14:21.1580330Z  * branch            69b5d150a05272fc6273eaa3801c47d06d7f2813 -> FETCH_HEAD
+2026-08-31T05:14:21.1581060Z  * branch            7ca75d0edc2ba7cc6f2928333d617292ac4683dd -> FETCH_HEAD
+2026-08-31T05:14:21.1581700Z  * branch            86dd8e6a8dd9eac1195dbdacdc7e79a5c532d1f9 -> FETCH_HEAD
+2026-08-31T05:14:21.1582290Z  * branch            b9b4ef3ed1d6a48b5e9e52db2eb27c5c9de35da9 -> FETCH_HEAD
+2026-08-31T05:14:21.1583180Z  * branch            bb1ad344db2df5f099335cd6bff6045f71b8438c -> FETCH_HEAD
+2026-08-31T05:14:21.1585390Z  * branch            c630ca8723ed631f896e10484934c336a26b83be -> FETCH_HEAD
+2026-08-31T05:14:21.1586870Z  * branch            d9af6143ccc1bbd316b898def3fef732f87d9653 -> FETCH_HEAD
+2026-08-31T05:14:21.1588460Z  * branch            fd6ff75bb620a4754f124381f0d7bce9bba79ca2 -> FETCH_HEAD
+2026-08-31T05:14:21.2325130Z From https://github.com/theos/orion
+2026-08-31T05:14:21.2326460Z  * branch            0031cd86865084f8e491182772a10e749cfc4e67 -> FETCH_HEAD
+2026-08-31T05:14:21.2328060Z  * branch            06cb86f32e73e48241afa29df0861f55991cca61 -> FETCH_HEAD
+2026-08-31T05:14:21.2329140Z  * branch            152dd53a25de653c4870a808ddfefb7e625b3294 -> FETCH_HEAD
+2026-08-31T05:14:21.2330280Z  * branch            17357242fb4e60c60d3b86b260fba0a8b75cb11d -> FETCH_HEAD
+2026-08-31T05:14:21.2331410Z  * branch            1cd69055ca503b2c6334f64211d3bc937fca4fc0 -> FETCH_HEAD
+2026-08-31T05:14:21.2332490Z  * branch            225c463b57b268fcc02380c40356b585682bd67a -> FETCH_HEAD
+2026-08-31T05:14:21.2333610Z  * branch            2e4d368231e88c797ab9879f8c018a50f4e25209 -> FETCH_HEAD
+2026-08-31T05:14:21.2334740Z  * branch            335ba6eff3bedf06d2745aacca73cd9612dfa314 -> FETCH_HEAD
+2026-08-31T05:14:21.2335870Z  * branch            3b7c6dc91fe5ede50c475f7f4f1a9c70ab5289db -> FETCH_HEAD
+2026-08-31T05:14:21.2337010Z  * branch            3da7f4e5127e37e33fb6e4bc7de0e51768fbbc60 -> FETCH_HEAD
+2026-08-31T05:14:21.2338070Z  * branch            42ea032b7ee01cea0121cbcecd47b998db3ce136 -> FETCH_HEAD
+2026-08-31T05:14:21.2339270Z  * branch            485f5cc6f945035afc64027157e2f5cfa7c7059d -> FETCH_HEAD
+2026-08-31T05:14:21.2340420Z  * branch            4a80d885e83a049b59cf90c81e40286eed160f08 -> FETCH_HEAD
+2026-08-31T05:14:21.2341490Z  * branch            52c0c12b34fc358f04bc3052b82b72c2dfe2f42d -> FETCH_HEAD
+2026-08-31T05:14:21.2342650Z  * branch            5a0bc2c9b87f2171b3c58bf3688cc89f39cfe4e7 -> FETCH_HEAD
+2026-08-31T05:14:21.2345290Z  * branch            67b3c2a59e016a9951d471e7c9f1852203091753 -> FETCH_HEAD
+2026-08-31T05:14:21.2346720Z  * branch            6f8ed1a59e70d7bf7dc5080ef7579ba2b9c975b0 -> FETCH_HEAD
+2026-08-31T05:14:21.2348130Z  * branch            78df9785cc985260fb6eb2371876f5d8a3f180c8 -> FETCH_HEAD
+2026-08-31T05:14:21.2349860Z  * branch            79b3835410a6f4be2c913334acb2b6a0055d3708 -> FETCH_HEAD
+2026-08-31T05:14:21.2350950Z  * branch            9e7333bb9d529b4c41a43248fbdb5d2daf69cb0f -> FETCH_HEAD
+2026-08-31T05:14:21.2353190Z  * branch            9eb6b9de83071ef7063c8d52545c87acd43e50ed -> FETCH_HEAD
+2026-08-31T05:14:21.2353780Z  * branch            ae9fbf2f3a242506d79a49776f578f055a9ebf3c -> FETCH_HEAD
+2026-08-31T05:14:21.2354330Z  * branch            b0349d6d540c956239148a95d05bea6dc559d8f7 -> FETCH_HEAD
+2026-08-31T05:14:21.2354830Z  * branch            b4946bb467b450e04be7e25f8dcb5ed55349e2cc -> FETCH_HEAD
+2026-08-31T05:14:21.2355310Z  * branch            b799eda1f1e86469db859df5384fb91094b52aed -> FETCH_HEAD
+2026-08-31T05:14:21.2355870Z  * branch            b828e186278a3d29a5a10c5f3dea128e5d413a31 -> FETCH_HEAD
+2026-08-31T05:14:21.2356400Z  * branch            cea8f533e199ba62cc543b9f44971bb295f9e8d2 -> FETCH_HEAD
+2026-08-31T05:14:21.2356870Z  * branch            d4bc4a55170df50c137945923b381af13c1f7f34 -> FETCH_HEAD
+2026-08-31T05:14:21.2357480Z  * branch            e37259fe10493ae95fa0d823b5f1469a26dc56db -> FETCH_HEAD
+2026-08-31T05:14:21.2357910Z  * branch            e7a029a6bb37424cd9a4c474cb71d3f2a9071d66 -> FETCH_HEAD
+2026-08-31T05:14:21.2358460Z  * branch            e8267b7324a2ff9e4a1d9ac0e618a1ee91573ec7 -> FETCH_HEAD
+2026-08-31T05:14:21.3484890Z Fetching submodule vendor/orion/fishhook
+2026-08-31T05:14:22.1300190Z From https://github.com/facebook/fishhook
+2026-08-31T05:14:22.1325070Z  * branch            8ef82f0711494ecc78d16bf6ce76f5ad92e5f67b -> FETCH_HEAD
+2026-08-31T05:14:22.1723960Z From https://github.com/theos/templates
+2026-08-31T05:14:22.1725840Z  * branch            022f31fd3457c8a0c181cd23b59c2980ca4d36b2 -> FETCH_HEAD
+2026-08-31T05:14:22.2056380Z  * branch            0886f5a8ebb6f0e142f9e9a8a8924370939d1146 -> FETCH_HEAD
+2026-08-31T05:14:22.2058440Z  * branch            09894865a641bae0b67456a6df6475df8d8a6ac7 -> FETCH_HEAD
+2026-08-31T05:14:22.2314530Z  * branch            11488a997e6dc1ac4a5ae8612ab46a6e45394709 -> FETCH_HEAD
+2026-08-31T05:14:22.2428120Z  * branch            1576043fbcea15b79a9b7931d93266fc1aedbecc -> FETCH_HEAD
+2026-08-31T05:14:22.2530080Z  * branch            300ee0f33196f55ec7a7bb02b05910974216b831 -> FETCH_HEAD
+2026-08-31T05:14:22.2631720Z  * branch            349468fc3d8f84cd38080f80f99bfe49a1ddc162 -> FETCH_HEAD
+2026-08-31T05:14:22.2733910Z  * branch            3a20da8b1c61ec888ae1a926af3065366094ee77 -> FETCH_HEAD
+2026-08-31T05:14:22.2835890Z  * branch            49defb6d052709417bc61e4c0c8f732639b28c1e -> FETCH_HEAD
+2026-08-31T05:14:22.2937920Z  * branch            4c75fa2361f67deb4fe6c554e010cb1aaa48ca3d -> FETCH_HEAD
+2026-08-31T05:14:22.3040640Z  * branch            5917b9947fbb3099df3c48e1001a3d8b17a8e55a -> FETCH_HEAD
+2026-08-31T05:14:22.3143470Z  * branch            645bcd195b44e076474e097990bea47bcb3ed772 -> FETCH_HEAD
+2026-08-31T05:14:22.3245380Z  * branch            7d98646871281e5b71e280e8f80d3fc27b69aeef -> FETCH_HEAD
+2026-08-31T05:14:22.3347710Z  * branch            7e6b80d6f98c8b1ad4ab05b2e8bc659741d26d02 -> FETCH_HEAD
+2026-08-31T05:14:22.3434860Z  * branch            8af2906bf6f6dd13d97302405316bd8a5419a265 -> FETCH_HEAD
+2026-08-31T05:14:22.3536790Z  * branch            8d1a9f5a42ae2a48435303ea8fb07c3c1ccbd9d2 -> FETCH_HEAD
+2026-08-31T05:14:22.3638650Z  * branch            8d9599b9054c93319ed35b35b3a826e437931904 -> FETCH_HEAD
+2026-08-31T05:14:22.3739950Z  * branch            a22176f8b1a1759fec55a3b62c8200cc751f1638 -> FETCH_HEAD
+2026-08-31T05:14:22.3841210Z  * branch            b3afce164abdeda0c9b1aa69fdc2f9fec0673792 -> FETCH_HEAD
+2026-08-31T05:14:22.3942520Z  * branch            b68586f216239fe73f74326b59b1e66cd0a1b664 -> FETCH_HEAD
+2026-08-31T05:14:22.4045690Z  * branch            da6a60b1d3f6bf4b7398000448209cd505eb1a74 -> FETCH_HEAD
+2026-08-31T05:14:22.4148610Z  * branch            e3c1d67b1e8faae69b37fb525bd7f2c435ef9dab -> FETCH_HEAD
+2026-08-31T05:14:22.4251750Z  * branch            efc61c3afeee514482f1702ffd5f6c07d14ecd2e -> FETCH_HEAD
+2026-08-31T05:14:22.4354200Z  * branch            f466826075cc2acbd755ca096f4fdf7a82a27922 -> FETCH_HEAD
+2026-08-31T05:14:22.4456410Z From https://github.com/theos/dm.pl
+2026-08-31T05:14:22.4558900Z  * branch            08d522b0b0723c2eff72505bf7cd9ae69614c0c0 -> FETCH_HEAD
+2026-08-31T05:14:22.4660390Z  * branch            2f1417d7db30bba7ba58c4275e07b02521f52aa3 -> FETCH_HEAD
+2026-08-31T05:14:22.4761870Z  * branch            34471b945dd5865544f0cf0c7d1a3151e6aa4c06 -> FETCH_HEAD
+2026-08-31T05:14:22.4823820Z  * branch            3726df3e714e8189c23cb7e0c5505f0dbae2f88f -> FETCH_HEAD
+2026-08-31T05:14:22.4887270Z  * branch            431955c2e5a2ca5e62ae773ef7036b1df14c80d7 -> FETCH_HEAD
+2026-08-31T05:14:22.4928250Z  * branch            4699b543fdb9d3ebacde0b23db38322d27f20974 -> FETCH_HEAD
+2026-08-31T05:14:22.5015560Z  * branch            4d3e455f632f77bbf500e03c3670b7cd951f546f -> FETCH_HEAD
+2026-08-31T05:14:22.5108720Z  * branch            5b64eb9355f965f8ab0ffbe8c5ec92b0c8316432 -> FETCH_HEAD
+2026-08-31T05:14:22.5114270Z  * branch            88d9005b0dbbfaf6d6e2f4948079e96c7b281957 -> FETCH_HEAD
+2026-08-31T05:14:22.5132340Z  * branch            892a7c7266055a93013ab81002a8adcb578a2b25 -> FETCH_HEAD
+2026-08-31T05:14:22.5135070Z  * branch            9462015e0f7e82f51b6df05bd223a484a6988042 -> FETCH_HEAD
+2026-08-31T05:14:22.5138050Z  * branch            9723deb8b99cd7aa071ec1fad310df2ff80d1cf2 -> FETCH_HEAD
+2026-08-31T05:14:22.5139420Z  * branch            af6fcc8ebfef5fc4c31d65b52556474409b2ed97 -> FETCH_HEAD
+2026-08-31T05:14:22.5139990Z  * branch            b4f1d815d73a75edb5691ef0634e2264513a3ec8 -> FETCH_HEAD
+2026-08-31T05:14:22.5140570Z  * branch            b77a3775a95b6929f5c2c44475eb1d0965e073f1 -> FETCH_HEAD
+2026-08-31T05:14:22.5141110Z From https://github.com/theos/lib
+2026-08-31T05:14:22.5141510Z  * branch            013ea40121136f36ed67e6bd7dcc1b99613daa98 -> FETCH_HEAD
+2026-08-31T05:14:22.5143320Z  * branch            07909619e8911d3ae14b07b9514a8209fe8e57cb -> FETCH_HEAD
+2026-08-31T05:14:22.5143980Z  * branch            113e0cd132df53649a6bbee2572b2d39fd2beaa1 -> FETCH_HEAD
+2026-08-31T05:14:22.5144780Z  * branch            1144e7b79effdcbdf3c0f2626bde3340365d6c41 -> FETCH_HEAD
+2026-08-31T05:14:22.5145530Z  * branch            126a2dd4852ad435991bd8ac761ac56ec39869f2 -> FETCH_HEAD
+2026-08-31T05:14:22.5146160Z  * branch            1397f8278d240a27482cbb94dda541ad9a57fd65 -> FETCH_HEAD
+2026-08-31T05:14:22.5146870Z  * branch            18dbcbc41f9c95b8c7eaedc553fddfdd6201fd4b -> FETCH_HEAD
+2026-08-31T05:14:22.5147550Z  * branch            194675ae21925e7e3efd71d0056222f79ea04aa7 -> FETCH_HEAD
+2026-08-31T05:14:22.5148250Z  * branch            1eef222ea55cc5fb3b52435465b06f9b7d6dfba9 -> FETCH_HEAD
+2026-08-31T05:14:22.5150670Z  * branch            2b6ab0c074c976d757dff0b4ecfc0efd0b5cdd1d -> FETCH_HEAD
+2026-08-31T05:14:22.5151400Z  * branch            306eba89a20109cd37c878f008ef99c4eb8ae88d -> FETCH_HEAD
+2026-08-31T05:14:22.5152470Z  * branch            34bb72035653a4abb6594be0a976cc766fcdc9c2 -> FETCH_HEAD
+2026-08-31T05:14:22.5159710Z  * branch            3b9ec52b8d4150cfe372e946c7e18f4ea4cada66 -> FETCH_HEAD
+2026-08-31T05:14:22.5160710Z  * branch            4047e8cd5e2fa602c6e38412dc7c197eacfbca50 -> FETCH_HEAD
+2026-08-31T05:14:22.5161410Z  * branch            41b5b0d1ccdc483eb87b9c721e337c9f9548f456 -> FETCH_HEAD
+2026-08-31T05:14:22.5162080Z  * branch            4648559115ed390c528d450c0d4b76689c579f2b -> FETCH_HEAD
+2026-08-31T05:14:22.5162740Z  * branch            53ff05006e9a35c03787f05e3b4cdd44ff224452 -> FETCH_HEAD
+2026-08-31T05:14:22.5163470Z  * branch            617dcfcbb6b7c28f9a565de872c8c993dbfe13ea -> FETCH_HEAD
+2026-08-31T05:14:22.5164090Z  * branch            639633b40f1b3e0b9cedfad7ec1feab2e5432033 -> FETCH_HEAD
+2026-08-31T05:14:22.5165500Z  * branch            6e3233aa73e67723cba49f89cabcfe3b2dca6ad9 -> FETCH_HEAD
+2026-08-31T05:14:22.5166170Z  * branch            6e454510fa71fe6015f8e4febf44945308c014d3 -> FETCH_HEAD
+2026-08-31T05:14:22.5167500Z  * branch            6e55e932c719f5ef42ac20e7e31d28169d5593fd -> FETCH_HEAD
+2026-08-31T05:14:22.5168190Z  * branch            845205b1bafbb45a50fa4d5f3f29da097b433b7c -> FETCH_HEAD
+2026-08-31T05:14:22.5168890Z  * branch            85494d2d30520edb9bbdf3c4066352811c8884d5 -> FETCH_HEAD
+2026-08-31T05:14:22.5170160Z  * branch            8b7f487ee82d6a1357432ab2599f617ce8e5a82e -> FETCH_HEAD
+2026-08-31T05:14:22.5170860Z  * branch            8df1bccbc66922d7b5d7b7c86d18dadc1d87ef91 -> FETCH_HEAD
+2026-08-31T05:14:22.5171630Z  * branch            92f4e8ddb1a49654181f0414c3eff031cc876bcc -> FETCH_HEAD
+2026-08-31T05:14:22.5172250Z  * branch            a27acf42f7d72eb8d7cf52ecf504d1d871155680 -> FETCH_HEAD
+2026-08-31T05:14:22.5174770Z  * branch            b1d502cc632ec349f8e2b3df9d7630bad64fd25e -> FETCH_HEAD
+2026-08-31T05:14:22.5175330Z  * branch            bc2fee541beb43e92db1c1558db3f34ec584efb8 -> FETCH_HEAD
+2026-08-31T05:14:22.5175940Z  * branch            c15cf4f84cf4e8d294bac94aebf7ff0329e27f3f -> FETCH_HEAD
+2026-08-31T05:14:22.5176410Z  * branch            c3b877651f50c4f683b9e02dc3e36dad551f5472 -> FETCH_HEAD
+2026-08-31T05:14:22.5176940Z  * branch            cae351458c00f823d9ff9acb4695ce65d337671d -> FETCH_HEAD
+2026-08-31T05:14:22.5177480Z  * branch            cd9b1d660c48529c9ae8a84becf5bcd147a350de -> FETCH_HEAD
+2026-08-31T05:14:22.5177950Z  * branch            d4570cd03387bd9add3ba00449af11b49b1c8160 -> FETCH_HEAD
+2026-08-31T05:14:22.5178470Z  * branch            df713f0dcd6efaa0ac9800844a895180ef74b483 -> FETCH_HEAD
+2026-08-31T05:14:22.5179010Z  * branch            e66cb6851ea6d5b62898d322b02ce82def1148be -> FETCH_HEAD
+2026-08-31T05:14:22.5180450Z  * branch            edb99bc316b019b8579103f189282bf10289e88a -> FETCH_HEAD
+2026-08-31T05:14:22.5221650Z  * branch            eeaecc08b2ce111dd056fc2232c1a41be7091a7e -> FETCH_HEAD
+2026-08-31T05:14:22.5223820Z  * branch            ef66c7316d186eddfdf4d0cb12a0a35cee41b3fe -> FETCH_HEAD
+2026-08-31T05:14:22.5225090Z  * branch            f2a857a00e038df3a92a1c85d4e93b65a30cd7e9 -> FETCH_HEAD
+2026-08-31T05:14:22.5226360Z  * branch            fd6b6e58b23b5b2f8f4e5c3757604a73bfdec7ea -> FETCH_HEAD
+2026-08-31T05:14:22.5227630Z  * branch            ffeb5055506be882b0732f99673b9ff31795ba7b -> FETCH_HEAD
+2026-08-31T05:14:22.5228750Z  * branch            ffec3480ec8016ebb9b13a09017807b62f5c9156 -> FETCH_HEAD
+2026-08-31T05:14:22.5229850Z From https://github.com/theos/headers
+2026-08-31T05:14:22.5230980Z  * branch            03c20cce033cfb9eafcb9ecf21c6eaaf0c26a7da -> FETCH_HEAD
+2026-08-31T05:14:22.5232180Z  * branch            05405174749d912f7726121fcb5f27de73af0f08 -> FETCH_HEAD
+2026-08-31T05:14:22.5233360Z  * branch            09a80f652d65b1caba560d8f50ad4c584d45d6a1 -> FETCH_HEAD
+2026-08-31T05:14:22.5234420Z  * branch            0be47c237ef990d2d5c099e81d51f5c49cfe21ac -> FETCH_HEAD
+2026-08-31T05:14:22.5235700Z  * branch            10c212801ce4ba99ff410b62637c7d50c3f6a37f -> FETCH_HEAD
+2026-08-31T05:14:22.5237350Z  * branch            159a952c71bba3e7e3ae68b16d29c7fc549f5cdc -> FETCH_HEAD
+2026-08-31T05:14:22.5238020Z  * branch            1bb142b515f5ff7c0b8e8f7ae173616e8cf2705e -> FETCH_HEAD
+2026-08-31T05:14:22.5238560Z  * branch            1c6404be46f71071eb7d33b2ce30de30895bc2be -> FETCH_HEAD
+2026-08-31T05:14:22.5239470Z  * branch            1c8c6efb030ff7221d97b8d4864847851aba9a67 -> FETCH_HEAD
+2026-08-31T05:14:22.5239980Z  * branch            1fbaaf37d263538ee3e19aa2a78a2fd66f63b241 -> FETCH_HEAD
+2026-08-31T05:14:22.5240550Z  * branch            27f17e2c2413d8f18d5d580f30bb0f67159d89be -> FETCH_HEAD
+2026-08-31T05:14:22.5241180Z  * branch            28df0feeba0cdb768852e13920ad599c2375c96a -> FETCH_HEAD
+2026-08-31T05:14:22.5241760Z  * branch            2c1421a4d6d24a9f930ad74924e628e95d383682 -> FETCH_HEAD
+2026-08-31T05:14:22.5242430Z  * branch            30aabe179bb275646086a6249953a9f617395dcb -> FETCH_HEAD
+2026-08-31T05:14:22.5259880Z  * branch            387230da73d43e19fff86a8b6cd5d3193ad99c9f -> FETCH_HEAD
+2026-08-31T05:14:22.5260330Z  * branch            3998ff8c46acecb3c13dd8a65999111f41464357 -> FETCH_HEAD
+2026-08-31T05:14:22.5260790Z  * branch            3ae47e085e9b4dc72613c99503f81f9d8ce093a6 -> FETCH_HEAD
+2026-08-31T05:14:22.5261300Z  * branch            3d2c25b9f1202b5d97c374e64b719e7b2e565e8a -> FETCH_HEAD
+2026-08-31T05:14:22.5262430Z  * branch            3f26abfa9d7f4d5c0185cf4c99e60086b9ad9ca9 -> FETCH_HEAD
+2026-08-31T05:14:22.5263000Z  * branch            49424c3ed7e5545bd53c3250cea9fa45b2fabdd6 -> FETCH_HEAD
+2026-08-31T05:14:22.5263580Z  * branch            4c7409e29260a7c47a27d52531a0ebc4bc034e72 -> FETCH_HEAD
+2026-08-31T05:14:22.5264040Z  * branch            4daa96661264879b6545a14ac936bca51d8afd7f -> FETCH_HEAD
+2026-08-31T05:14:22.5264720Z  * branch            521fa5563c7d6a6bf881d6cc7b36841c35e5e0d2 -> FETCH_HEAD
+2026-08-31T05:14:22.5265280Z  * branch            55c97299b7064afd07f6acddeccb3154dd1ee69f -> FETCH_HEAD
+2026-08-31T05:14:22.5265690Z  * branch            56bfc22d38c0cfbbbd9317ce9bf58e7915166c59 -> FETCH_HEAD
+2026-08-31T05:14:22.5266160Z  * branch            5c13703c2c210a4347fc75dc87031e9cc597626d -> FETCH_HEAD
+2026-08-31T05:14:22.5266510Z  * branch            609a308c1333ac3c409307fdd5ae2071981e4242 -> FETCH_HEAD
+2026-08-31T05:14:22.5266990Z  * branch            64ba1fb3425ee69d568baa5bb59d22e8b04908af -> FETCH_HEAD
+2026-08-31T05:14:22.5267360Z  * branch            6611d3b2c22527283cdcf81cb6c81327fbdcbaff -> FETCH_HEAD
+2026-08-31T05:14:22.5267850Z  * branch            69fcaa7d2ecfbb6b2ecd38646f0ff3c9135cabc4 -> FETCH_HEAD
+2026-08-31T05:14:22.5268360Z  * branch            6afc5085a16f51a36d0b49b45eaeeb09a13eb810 -> FETCH_HEAD
+2026-08-31T05:14:22.5268920Z  * branch            6ee8506035aa5e48e76b423c89d66a4c7406e050 -> FETCH_HEAD
+2026-08-31T05:14:22.5269380Z  * branch            6f59e8391b27b169067656601acbed30f4f205cc -> FETCH_HEAD
+2026-08-31T05:14:22.5269940Z  * branch            77d639826e51e3f40517cfd96c616127a514e941 -> FETCH_HEAD
+2026-08-31T05:14:22.5270410Z  * branch            79dd09fd14441e0e74394c5651de2a7ed0a60ffd -> FETCH_HEAD
+2026-08-31T05:14:22.5270800Z  * branch            80bd5638d9e8e2437997f33f9f92f08f0e2705b7 -> FETCH_HEAD
+2026-08-31T05:14:22.5271220Z  * branch            80da6b2d0bbe3806b9f6c8b6e43eca29c4c066d4 -> FETCH_HEAD
+2026-08-31T05:14:22.5271610Z  * branch            819f49385304805f9a81e4210ae392c620505ea8 -> FETCH_HEAD
+2026-08-31T05:14:22.5272100Z  * branch            85ffc75138a5fefce0b699b9e16fa514cb7ffc5c -> FETCH_HEAD
+2026-08-31T05:14:22.5272530Z  * branch            889f159f6dd834ac35e193387b823539045cd374 -> FETCH_HEAD
+2026-08-31T05:14:22.5272900Z  * branch            8fec425716958c1b709c0459d7f6762b73b2e291 -> FETCH_HEAD
+2026-08-31T05:14:22.5273260Z  * branch            9220e3de07a7e24a50bf668796793d9bca5ad4c8 -> FETCH_HEAD
+2026-08-31T05:14:22.5273690Z  * branch            9a50a89c6d0a92693427579dd0e4b46565d5d0de -> FETCH_HEAD
+2026-08-31T05:14:22.5274050Z  * branch            9f00c9663aff892b512f87666dbfbf8fe4943e84 -> FETCH_HEAD
+2026-08-31T05:14:22.5274470Z  * branch            a322ffce6b029caff5ce43e53678d276b2d86ff4 -> FETCH_HEAD
+2026-08-31T05:14:22.5274860Z  * branch            aa509d29c41b7d27b201a9f477f0cb4e34dad108 -> FETCH_HEAD
+2026-08-31T05:14:22.5275280Z  * branch            ad10b0115808b53cf825e034bc22d66af3481cfc -> FETCH_HEAD
+2026-08-31T05:14:22.5275640Z  * branch            ad80ca22becd0748e1f11729b8f88d5c17206178 -> FETCH_HEAD
+2026-08-31T05:14:22.5276000Z  * branch            b0b5198bc97bc56668f7fc071ae47a8a9f1e1b10 -> FETCH_HEAD
+2026-08-31T05:14:22.5276440Z  * branch            b6ab96de6ba747eb7dd623d47c8865dd674f11fc -> FETCH_HEAD
+2026-08-31T05:14:22.5276830Z  * branch            b875591e9b780872861d143cf973c142aace9bdb -> FETCH_HEAD
+2026-08-31T05:14:22.5277240Z  * branch            bf8ff89cfa235410ac374e27fadee73982d44296 -> FETCH_HEAD
+2026-08-31T05:14:22.5277660Z  * branch            c9f56473e9f2c7b72a2555963c49b7b7579acfbb -> FETCH_HEAD
+2026-08-31T05:14:22.5279190Z  * branch            d09634a4dedb6be617f3b576102fc16b9403ba5e -> FETCH_HEAD
+2026-08-31T05:14:22.5279570Z  * branch            e61600418fe6fe07f8e30c2c0d0c002ba31b99d1 -> FETCH_HEAD
+2026-08-31T05:14:22.5279950Z  * branch            e8a358066f7426c285684aeaaff8ff23b3dd6b61 -> FETCH_HEAD
+2026-08-31T05:14:22.5280370Z  * branch            ea1b95dba9530d2017907ec7542d309215d84e15 -> FETCH_HEAD
+2026-08-31T05:14:22.5281120Z  * branch            ea969daefb5026b3aaed326b2db2fac80e410df0 -> FETCH_HEAD
+2026-08-31T05:14:22.5281520Z  * branch            f3e596d896bae8f07c43cfb00ef55bf6224b4cdc -> FETCH_HEAD
+2026-08-31T05:14:22.5281910Z  * branch            f3eef2127548c631b325a0b28c907cc59b1716ac -> FETCH_HEAD
+2026-08-31T05:14:22.5282390Z  * branch            f82d323a5a50b4d6e3a21bce0aa20b0e531b118d -> FETCH_HEAD
+2026-08-31T05:14:22.9693660Z From https://github.com/theos/logos
+2026-08-31T05:14:22.9694330Z  * branch            06726377b5603d03d7deb6c9bdd7b718ad1a63a4 -> FETCH_HEAD
+2026-08-31T05:14:22.9694820Z  * branch            067802d95eb531006087d66f8a7b067e5d6bf237 -> FETCH_HEAD
+2026-08-31T05:14:22.9695520Z  * branch            0aeaca09cb193a3fb9fb461ae972252585f5c0c8 -> FETCH_HEAD
+2026-08-31T05:14:22.9696010Z  * branch            170f048edea7014debf8d628e7da495f5dbe4ea4 -> FETCH_HEAD
+2026-08-31T05:14:22.9696480Z  * branch            197cb80c634a403bf812594f4adc9c7fc354271f -> FETCH_HEAD
+2026-08-31T05:14:22.9696960Z  * branch            1fa39ebd22e4421eaa778e7dfb0f5d4b02c6f9f4 -> FETCH_HEAD
+2026-08-31T05:14:22.9697380Z  * branch            404fed419a566c4d68fae1110a18fce63c85d619 -> FETCH_HEAD
+2026-08-31T05:14:22.9697830Z  * branch            40ec61ef0d699ccd6b10dfd5511ede6213a9a278 -> FETCH_HEAD
+2026-08-31T05:14:22.9698380Z  * branch            4f35cb65b1bc96ef1d7c9633ef0f6129f0e4036c -> FETCH_HEAD
+2026-08-31T05:14:22.9698860Z  * branch            57c507eb9ef2da5765b1b7aab785c032b117d56a -> FETCH_HEAD
+2026-08-31T05:14:22.9699330Z  * branch            5f1138cf79cc546e8cde64c93a1dab74b9918c3c -> FETCH_HEAD
+2026-08-31T05:14:22.9700010Z  * branch            62814c1d7dbc9158a0f231ded9edc07f94debe23 -> FETCH_HEAD
+2026-08-31T05:14:22.9700530Z  * branch            75623490073e68e457fe6680462d11c217d29341 -> FETCH_HEAD
+2026-08-31T05:14:22.9703050Z  * branch            75b6c2e81c08c1efff4a4e558ce2e245a8956d10 -> FETCH_HEAD
+2026-08-31T05:14:22.9703610Z  * branch            76488dfebd541dbd128994bc12c4647d8182c220 -> FETCH_HEAD
+2026-08-31T05:14:22.9704080Z  * branch            7b81c55f97ac7dbd6696ebb4cb36b83900960964 -> FETCH_HEAD
+2026-08-31T05:14:22.9704500Z  * branch            81cf08c23f886df2fb1db1d9ce9d87a2edadcceb -> FETCH_HEAD
+2026-08-31T05:14:22.9704870Z  * branch            886885b273d38092687616c83ec5f452c3b2e965 -> FETCH_HEAD
+2026-08-31T05:14:22.9705240Z  * branch            90051eb040590c25ea66f2dd886d72b8148e8801 -> FETCH_HEAD
+2026-08-31T05:14:22.9705610Z  * branch            a54760ea60acf45fa48267b9fb344c0317d9351c -> FETCH_HEAD
+2026-08-31T05:14:22.9706020Z  * branch            a733c99539ed9ef2a3914528d8c5522dc2396789 -> FETCH_HEAD
+2026-08-31T05:14:22.9706410Z  * branch            ac2070c812f70579879a2b91ca77cb578c795c7b -> FETCH_HEAD
+2026-08-31T05:14:22.9706780Z  * branch            c7d1cdbdc36880714dd9052d4f63f9c2a7bc102a -> FETCH_HEAD
+2026-08-31T05:14:22.9707140Z  * branch            c920e6bb00854f6e2efe903def4aa87295d58627 -> FETCH_HEAD
+2026-08-31T05:14:22.9707500Z  * branch            d57afb4417bca9198c5b165a7a4a07934add5c8b -> FETCH_HEAD
+2026-08-31T05:14:22.9707880Z  * branch            e8a95e7ea3554d7ec2fabed3bb84d8e5b19898f4 -> FETCH_HEAD
+2026-08-31T05:14:22.9708260Z  * branch            ecd39a797b2d17b6583b782fd661068b30eff61f -> FETCH_HEAD
+2026-08-31T05:14:22.9708610Z  * branch            fd66169442a26c3609254a6f83ee383a154ddb8c -> FETCH_HEAD
+2026-08-31T05:14:22.9879750Z Already up to date.
+2026-08-31T05:14:23.3223840Z 
+2026-08-31T05:14:23.3226600Z [0;36m==> [1;36mNotice:[m Visit https://github.com/theos/theos/commits/master to view recent changes.
+2026-08-31T05:14:23.3243900Z ##[end-action id=__waruhachi_theos-action.__run_5;outcome=success;conclusion=success;duration_ms=5783]
+2026-08-31T05:14:23.3318800Z ##[group]Run make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+2026-08-31T05:14:23.3319270Z [36;1mmake clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless[0m
+2026-08-31T05:14:23.3387040Z shell: /bin/bash -e {0}
+2026-08-31T05:14:23.3387250Z env:
+2026-08-31T05:14:23.3387530Z   THEOS: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:14:23.3387860Z ##[endgroup]
+2026-08-31T05:14:34.2352650Z [0;36m==> [1;39mCleaning…[m
+2026-08-31T05:14:34.5288490Z [1;31m> [1;3;39mMaking all for tweak MatisuAuto…[m
+2026-08-31T05:14:37.8464820Z [0;31m==> [1;39mPreprocessing Tweak.xm…[m
+2026-08-31T05:14:37.8469980Z [0;31m==> [1;39mPreprocessing Tweak.xm…[m
+2026-08-31T05:14:39.4734090Z [0;32m==> [1;39mCompiling ../src/MatisuTouch.m (arm64e)…[m
+2026-08-31T05:14:39.4735070Z [0;32m==> [1;39mCompiling ../src/MatisuTouch.m (arm64)…[m
+2026-08-31T05:14:42.5752240Z [0;32m==> [1;39mCompiling Tweak.xm (arm64e)…[m
+2026-08-31T05:14:42.5820950Z [0;32m==> [1;39mCompiling Tweak.xm (arm64)…[m
+2026-08-31T05:14:43.4857640Z ld: warning: -undefined dynamic_lookup is deprecated on iOS
+2026-08-31T05:14:43.4858590Z [0;33m==> [1;39mLinking tweak MatisuAuto (arm64)…[m
+2026-08-31T05:14:43.4922880Z ld: warning: -multiply_defined is obsolete
+2026-08-31T05:14:43.4924090Z [0;34m==> [1;39mGenerating debug symbols for MatisuAuto…[m
+2026-08-31T05:14:43.4969700Z ld: warning: -undefined dynamic_lookup is deprecated on iOS
+2026-08-31T05:14:43.4971160Z ld: warning: -multiply_defined is obsolete
+2026-08-31T05:14:43.4971970Z [0;34m==> [1;39mStripping MatisuAuto (arm64)…[m
+2026-08-31T05:14:43.4987460Z [0;33m==> [1;39mLinking tweak MatisuAuto (arm64e)…[m
+2026-08-31T05:14:43.4997140Z [0;34m==> [1;39mGenerating debug symbols for MatisuAuto…[m
+2026-08-31T05:14:43.4999980Z [0;34m==> [1;39mStripping MatisuAuto (arm64e)…[m
+2026-08-31T05:14:43.5079830Z [0;34m==> [1;39mMerging tweak MatisuAuto…[m
+2026-08-31T05:14:43.5615990Z [0;34m==> [1;39mSigning MatisuAuto…[m
+2026-08-31T05:14:43.8630580Z [1;31m> [1;3;39mMaking stage for tweak MatisuAuto…[m
+2026-08-31T05:14:45.5949890Z dm.pl: building package `com.matisu.auto:iphoneos-arm64' in `./packages/com.matisu.auto_0.1.0_iphoneos-arm64.deb'
+2026-08-31T05:14:45.6774090Z ##[group]Run make clean
+2026-08-31T05:14:45.6776650Z [36;1mmake clean[0m
+2026-08-31T05:14:45.6777250Z [36;1mmake package FINALPACKAGE=1[0m
+2026-08-31T05:14:45.6778730Z [36;1m# Theos only puts the compiled binary in .theos/obj/MatisuAuto.app.[0m
+2026-08-31T05:14:45.6779840Z [36;1m# Assemble the full .app manually from the binary + source plist/entitlements[0m
+2026-08-31T05:14:45.6780550Z [36;1m# so the tipa is always a valid, signed bundle (Info.plist + HID entitlements).[0m
+2026-08-31T05:14:45.6781660Z [36;1mBIN=$(find .theos/obj/MatisuAuto.app -name MatisuAuto -type f 2>/dev/null | head -1)[0m
+2026-08-31T05:14:45.6783350Z [36;1m[ -z "$BIN" ] && { echo "!! binary not built"; exit 1; }[0m
+2026-08-31T05:14:45.6783850Z [36;1mrm -rf /tmp/tipa[0m
+2026-08-31T05:14:45.6784720Z [36;1mmkdir -p /tmp/tipa/Payload/MatisuAuto.app[0m
+2026-08-31T05:14:45.6785620Z [36;1mcp "$BIN" /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto[0m
+2026-08-31T05:14:45.6786770Z [36;1mcp Info.plist Entitlements.plist /tmp/tipa/Payload/MatisuAuto.app/[0m
+2026-08-31T05:14:45.6787480Z [36;1mLDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)[0m
+2026-08-31T05:14:45.6788460Z [36;1mif [ -n "$LDID" ]; then[0m
+2026-08-31T05:14:45.6791200Z [36;1m  "$LDID" -SEntitlements.plist /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto && echo "signed with ldid"[0m
+2026-08-31T05:14:45.6792160Z [36;1melse[0m
+2026-08-31T05:14:45.6793310Z [36;1m  echo "!! ldid not found; TrollStore will re-sign on install"[0m
+2026-08-31T05:14:45.6794750Z [36;1mfi[0m
+2026-08-31T05:14:45.6796800Z [36;1mecho "== tipa app contents =="[0m
+2026-08-31T05:14:45.6798760Z [36;1mls -la /tmp/tipa/Payload/MatisuAuto.app[0m
+2026-08-31T05:14:45.6799820Z [36;1mcd /tmp/tipa && zip -r "$GITHUB_WORKSPACE/matisu-auto.tipa" Payload[0m
+2026-08-31T05:14:45.6800740Z [36;1mecho "tipa size: $(wc -c < $GITHUB_WORKSPACE/matisu-auto.tipa) bytes"[0m
+2026-08-31T05:14:45.6963650Z shell: /bin/bash -e {0}
+2026-08-31T05:14:45.6963950Z env:
+2026-08-31T05:14:45.6964450Z   THEOS: /Users/runner/work/matisu-replica/matisu-replica/theos
+2026-08-31T05:14:45.6964890Z ##[endgroup]
+2026-08-31T05:14:47.0574600Z [0;36m==> [1;39mCleaning…[m
+2026-08-31T05:14:48.4276530Z [1;31m> [1;3;39mMaking all for application MatisuAuto…[m
+2026-08-31T05:14:52.8197380Z [0;32m==> [1;39mCompiling main.mm (arm64)…[m
+2026-08-31T05:14:52.9617320Z [0;32m==> [1;39mCompiling main.mm (arm64e)…[m
+2026-08-31T05:14:52.9840420Z [1mTouchInject.mm:27:43: [0m[0;1;31merror: [0m[1mproperty '_unjailedReferenceBoundsInPixels' not found on object of type 'UIScreen *'[0m
+2026-08-31T05:14:52.9841350Z [0;32m==> [1;39mCompiling TouchInject.mm (arm64)…[m
+2026-08-31T05:14:52.9964740Z    27 |         CGSize px = [UIScreen mainScreen]._unjailedReferenceBoundsInPixels.size;[0m
+2026-08-31T05:14:52.9967180Z       | [0;1;32m                                          ^
+2026-08-31T05:14:53.0097610Z [0m[1mTouchInject.mm:56:18: [0m[0;1;31merror: [0m[1mno visible @interface for 'STHIDEventGenerator' declares the selector 'touchDownAtPoints:touchCount:'[0m
+2026-08-31T05:14:53.0225670Z    56 |         [MAGen() touchDownAtPoints:&gPts[finger] touchCount:1];[0m
+2026-08-31T05:14:53.0357590Z       | [0;1;32m         ~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-08-31T05:14:53.0489670Z [0m[1mTouchInject.mm:77:14: [0m[0;1;31merror: [0m[1mno visible @interface for 'STHIDEventGenerator' declares the selector 'liftUpAtPoints:touchCount:'[0m
+2026-08-31T05:14:53.0606230Z    77 |     [MAGen() liftUpAtPoints:&pt touchCount:1];[0m
+2026-08-31T05:14:53.0718130Z       | [0;1;32m     ~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-08-31T05:14:53.0824180Z [0m3 errors generated.
+2026-08-31T05:14:53.0824610Z [0;32m==> [1;39mCompiling AppDelegate.mm (arm64)…[m
+2026-08-31T05:14:53.0930190Z make[3]: *** [/Users/runner/work/matisu-replica/matisu-replica/theos/makefiles/instance/rules.mk:313: /Users/runner/work/matisu-replica/matisu-replica/ios/app/.theos/obj/arm64/TouchInject.mm.bcd70028.o] Error 1
+2026-08-31T05:14:53.1027780Z make[3]: *** Waiting for unfinished jobs....
+2026-08-31T05:14:53.1129630Z make[2]: *** [/Users/runner/work/matisu-replica/matisu-replica/theos/makefiles/instance/application.mk:50: /Users/runner/work/matisu-replica/matisu-replica/ios/app/.theos/obj/arm64/MatisuAuto.app/MatisuAuto] Error 2
+2026-08-31T05:14:53.1229190Z make[2]: *** Waiting for unfinished jobs....
+2026-08-31T05:14:53.1427480Z [0;32m==> [1;39mCompiling AppDelegate.mm (arm64e)…[m
+2026-08-31T05:14:53.1728700Z [1mTouchInject.mm:27:43: [0m[0;1;31merror: [0m[1mproperty '_unjailedReferenceBoundsInPixels' not found on object of type 'UIScreen *'[0m
+2026-08-31T05:14:53.1729820Z [0;32m==> [1;39mCompiling TouchInject.mm (arm64e)…[m
+2026-08-31T05:14:53.1830370Z    27 |         CGSize px = [UIScreen mainScreen]._unjailedReferenceBoundsInPixels.size;[0m
+2026-08-31T05:14:53.1932760Z       | [0;1;32m                                          ^
+2026-08-31T05:14:53.2033250Z [0m[1mTouchInject.mm:56:18: [0m[0;1;31merror: [0m[1mno visible @interface for 'STHIDEventGenerator' declares the selector 'touchDownAtPoints:touchCount:'[0m
+2026-08-31T05:14:53.2134160Z    56 |         [MAGen() touchDownAtPoints:&gPts[finger] touchCount:1];[0m
+2026-08-31T05:14:53.2236080Z       | [0;1;32m         ~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-08-31T05:14:53.2323290Z [0m[1mTouchInject.mm:77:14: [0m[0;1;31merror: [0m[1mno visible @interface for 'STHIDEventGenerator' declares the selector 'liftUpAtPoints:touchCount:'[0m
+2026-08-31T05:14:53.2325170Z [0;32m==> [1;39mCompiling ControlServer.mm (arm64e)…[m
+2026-08-31T05:14:53.2333580Z    77 |     [MAGen() liftUpAtPoints:&pt touchCount:1];[0m
+2026-08-31T05:14:53.2334610Z       | [0;1;32m     ~~~~~~~ ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-08-31T05:14:53.2335520Z [0m3 errors generated.
+2026-08-31T05:14:53.2337410Z make[3]: *** [/Users/runner/work/matisu-replica/matisu-replica/theos/makefiles/instance/rules.mk:312: /Users/runner/work/matisu-replica/matisu-replica/ios/app/.theos/obj/arm64e/TouchInject.mm.3510d680.o] Error 1
+2026-08-31T05:14:53.2339800Z make[3]: *** Waiting for unfinished jobs....
+2026-08-31T05:14:54.8471690Z [0;32m==> [1;39mCompiling ScreenShot.m (arm64e)…[m
+2026-08-31T05:14:54.8474600Z make[2]: *** [/Users/runner/work/matisu-replica/matisu-replica/theos/makefiles/instance/application.mk:50: /Users/runner/work/matisu-replica/matisu-replica/ios/app/.theos/obj/arm64e/MatisuAuto.app/MatisuAuto] Error 2
+2026-08-31T05:14:54.8481240Z make[1]: *** [/Users/runner/work/matisu-replica/matisu-replica/theos/makefiles/instance/application.mk:41: internal-application-all_] Error 2
+2026-08-31T05:14:54.8490630Z make: *** [/Users/runner/work/matisu-replica/matisu-replica/theos/makefiles/master/rules.mk:146: MatisuAuto.all.application.variables] Error 2
+2026-08-31T05:14:54.8526980Z ##[error]Process completed with exit code 2.
+2026-08-31T05:14:54.8818100Z Post job cleanup.
+2026-08-31T05:14:54.8873870Z ##[start-action display=Theos Cache;id=__edcc2039-db00-4aa3-a2f9-60c7df12ec36.theos-cache]
+2026-08-31T05:14:54.8877770Z ##[end-action id=__edcc2039-db00-4aa3-a2f9-60c7df12ec36.theos-cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-08-31T05:14:54.9234040Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-31T05:14:54.9235100Z Post job cleanup.
+2026-08-31T05:14:55.3892300Z [command]/opt/homebrew/bin/git version
+2026-08-31T05:14:55.4292950Z git version 2.55.0
+2026-08-31T05:14:55.4347060Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/15d789fa-c7db-45ca-a1e8-7fd36052f715/.gitconfig'
+2026-08-31T05:14:55.4432530Z Temporarily overriding HOME='/Users/runner/work/_temp/15d789fa-c7db-45ca-a1e8-7fd36052f715' before making global git config changes
+2026-08-31T05:14:55.4466400Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-31T05:14:55.4468730Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/matisu-replica/matisu-replica
+2026-08-31T05:14:55.4554820Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-31T05:14:55.4684020Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-31T05:14:55.6034880Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-31T05:14:55.6105880Z http.https://github.com/.extraheader
+2026-08-31T05:14:55.6115400Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-08-31T05:14:55.6207150Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-31T05:14:55.7515730Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-31T05:14:55.7836060Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-31T05:14:55.9543180Z Cleaning up orphan processes
+2026-08-31T05:14:56.5703850Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

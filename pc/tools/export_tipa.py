@@ -7,7 +7,7 @@
 # 原理:
 #   1. 解包基础 tipa（Payload/MatisuAuto.app）
 #   2. 注入脚本到 MatisuAuto.app/scripts/（daemon 首启自动同步到
-#      /var/mobile/MatisuAuto/scripts/ 并跑 autorun.lua）
+#      /var/mobile/Media/com.matisu.auto/run/脚本/ 并跑 autorun.lua）
 #   3. 改 CFBundleDisplayName（保持 bundle id 不变，避免 LaunchDaemon/路径连锁）
 #   4. 重新 zip 成 tipa（TrollStore 安装即部署）
 import sys

@@ -2,6 +2,7 @@
 // 结构：det(DB) → 框 → rec(LightSVTR+CTC) → 文本。标准 PP-OCR 后处理。
 #import "OcrEngine.h"
 #import "ScreenShot.h"
+#import "MatisuPaths.h"
 #import <UIKit/UIKit.h>
 #import <vector>
 #import <string>
@@ -28,7 +29,7 @@ struct OcrCtx {
 OcrCtx g;
 
 // OCR 诊断：所有失败分支必须留痕。真机实测 Dopamine/iOS16 上 log show 抓不到该进程 NSLog，
-// 故同时写文件 /var/mobile/MatisuAuto/ocr_debug.log（SSH 直接 cat 可读）。
+// 故同时写文件 <数据区>/logdir/ocr_debug.log（SSH 直接 cat 可读）。
 static void ocrLog(const char *fmt, ...) {
     char buf[1024];
     va_list ap; va_start(ap, fmt);
@@ -38,7 +39,7 @@ static void ocrLog(const char *fmt, ...) {
     @autoreleasepool {
         NSString *line = [NSString stringWithFormat:@"[%f] %s\n",
                           [[NSDate date] timeIntervalSince1970], buf];
-        NSString *path = @"/var/mobile/MatisuAuto/ocr_debug.log";
+        NSString *path = [MatisuLogDir() stringByAppendingPathComponent:@"ocr_debug.log"];
         NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
         if (!fh) {
             [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
@@ -64,8 +65,8 @@ const float DET_BOX_THRESH = 0.5f;
 const float DET_UNCLIP = 1.6f;
 
 std::string modelPath(const char *name) {
-    // 模型放 app bundle ocr/ 或 /var/mobile/MatisuAuto/ocr/（后者优先，方便单独更新）
-    NSString *p1 = [@"/var/mobile/MatisuAuto/ocr/" stringByAppendingString:@(name)];
+    // 模型放 app bundle ocr/ 或 <数据区>/ocr/（后者优先，方便单独更新）
+    NSString *p1 = [MatisuOcrDir() stringByAppendingString:@(name)];
     if ([[NSFileManager defaultManager] fileExistsAtPath:p1]) return p1.UTF8String;
     NSString *p2 = [[[NSBundle mainBundle] bundlePath] stringByAppendingFormat:@"/ocr/%s", name];
     return p2.UTF8String;

@@ -2,6 +2,7 @@
 #import "MainVC.h"
 #import "DeviceInfo.h"
 #import "Watchdog.h"
+#import "MatisuPaths.h"
 #import <sys/socket.h>
 #import <netinet/in.h>
 #import <arpa/inet.h>
@@ -218,7 +219,7 @@ static NSString *maAgo(id ts) {
 #pragma mark - 脚本服务
 
 - (void)onStart {
-    NSString *src = [NSString stringWithContentsOfFile:@"/var/mobile/MatisuAuto/scripts/autorun.lua"
+    NSString *src = [NSString stringWithContentsOfFile:[MatisuRunScriptsDir() stringByAppendingPathComponent:@"autorun.lua"]
                                               encoding:NSUTF8StringEncoding error:nil];
     if (!src.length) { self.statusLabel.text = @"状态: 无 autorun.lua（先用 IDE 上传脚本）"; return; }
     NSString *b64 = [[src dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
@@ -297,11 +298,11 @@ static NSString *maAgo(id ts) {
 
 - (void)openLogs {
     [self.navigationController pushViewController:
-        [[FileListVC alloc] initWithDir:@"/var/mobile/MatisuAuto" title:@"日志目录"] animated:YES];
+        [[FileListVC alloc] initWithDir:MatisuLogDir() title:@"日志目录"] animated:YES];
 }
 - (void)openWork {
     [self.navigationController pushViewController:
-        [[FileListVC alloc] initWithDir:@"/var/mobile/MatisuAuto/scripts" title:@"工作目录"] animated:YES];
+        [[FileListVC alloc] initWithDir:MatisuRunScriptsDir() title:@"工作目录"] animated:YES];
 }
 @end
 

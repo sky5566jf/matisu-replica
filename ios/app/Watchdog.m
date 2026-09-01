@@ -10,6 +10,7 @@
 //   6. 重启节流：两次重启间隔 < minInterval 则本轮跳过，避免打满 CPU 的崩溃循环
 //   7. stopFlag 语义停止：存在时不拉起，区别于被 jetsam 杀掉
 #import "Watchdog.h"
+#import "MatisuPaths.h"
 
 #import <sys/socket.h>
 #import <sys/sysctl.h>
@@ -115,17 +116,14 @@ static int maProbePort(int port, int timeoutMs) {
 /// 若各算各的会出现"app 写 A、看门狗读 B"的状态不一致）。
 static NSString *gRuntimeOverride = nil;
 
-/// 优先用共享目录 /var/mobile/MatisuAuto（root 部署，PC 端与脚本都认这里）；
-/// 沙箱场景（TrollStore 无共享写权限）回退到 app 的 Library 目录。
+/// 优先用数据区根目录（/var/mobile/Media/<bundle id>，PC 端与脚本都认这里）；
+/// 沙箱场景（无共享写权限）回退到 app 的 Library 目录。
 static NSString *maRuntimeDir(void) {
     static NSString *cached = nil;
     if (gRuntimeOverride) return gRuntimeOverride;
     if (cached) return cached;
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *shared = @"/var/mobile/MatisuAuto";
-    if (![fm fileExistsAtPath:shared]) {
-        [fm createDirectoryAtPath:shared withIntermediateDirectories:YES attributes:nil error:nil];
-    }
+    NSString *shared = MatisuDataRoot();
     if ([fm isWritableFileAtPath:shared]) {
         cached = shared;
     } else {
