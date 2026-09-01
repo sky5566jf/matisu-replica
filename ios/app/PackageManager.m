@@ -97,20 +97,21 @@ int MatisuUnzipDataToDir(NSData *zipData, NSString *destDir) {
 
 #pragma mark - 包安装
 
+static BOOL maPkgFail(NSString **errMsg, NSString *m) { if (errMsg) *errMsg = m; return NO; }
+
 BOOL MatisuInstallPackage(NSString *name, NSData *payload, int *outFiles, NSString **errMsg) {
     if (outFiles) *outFiles = 0;
-    NSString *fail = ^NSString *(NSString *m) { if (errMsg) *errMsg = m; return m; };
     // 包名必须是纯文件名（无路径分隔符）
     if (!name.length || [name containsString:@"/"] || [name containsString:@"\\"] || [name containsString:@".."]) {
-        fail(@"bad package name"); return NO;
+        return maPkgFail(errMsg, @"bad package name");
     }
-    if (!payload.length) { fail(@"empty payload"); return NO; }
+    if (!payload.length) return maPkgFail(errMsg, @"empty payload");
 
     NSFileManager *fm = [NSFileManager defaultManager];
 
     // 1. 包原样落 script/
     NSString *pkgPath = [MatisuScriptPkgDir() stringByAppendingPathComponent:name];
-    if (![payload writeToFile:pkgPath atomically:YES]) { fail(@"write package failed"); return NO; }
+    if (![payload writeToFile:pkgPath atomically:YES]) return maPkgFail(errMsg, @"write package failed");
 
     // 2. 清空 run/（新包=整个工程替换，对齐原版语义）
     NSString *runDir = MatisuRunDir();
@@ -120,7 +121,7 @@ BOOL MatisuInstallPackage(NSString *name, NSData *payload, int *outFiles, NSStri
 
     // 3. 解包进 run/
     int n = MatisuUnzipDataToDir(payload, runDir);
-    if (n < 0) { fail(@"unzip failed (bad zip or truncated)"); return NO; }
+    if (n < 0) return maPkgFail(errMsg, @"unzip failed (bad zip or truncated)");
 
     // 4. 资源/*.rc 二次解包到 资源/ 同级（rc 本身是 zip：res/x.png → 资源/res/x.png）
     NSString *resDir = MatisuRunResDir();
