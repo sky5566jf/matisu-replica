@@ -34,6 +34,8 @@
   #shotwrap { position: relative; display: inline-block; line-height: 0; box-shadow: 0 0 12px #000; }
   #shot { max-width: none; cursor: crosshair; }
   .ptmark { position: absolute; width: 11px; height: 11px; border: 2px solid #ff3b30; border-radius: 50%; transform: translate(-5px, -5px); pointer-events: none; font-size: 8px; color: #ff3b30; text-align: center; line-height: 8px; }
+  #selrect { position: absolute; border: 1px dashed #4ec9b0; background: rgba(78,201,176,.12); display: none; pointer-events: none; z-index: 4; }
+  .hitmark { position: absolute; width: 14px; height: 14px; border: 2px solid #ffd60a; border-radius: 50%; transform: translate(-7px, -7px); pointer-events: none; z-index: 6; }
   #magbox { position: absolute; width: 132px; height: 132px; border: 1px solid #8ab4f8; background: #111; pointer-events: none; display: none; z-index: 5; }
   #magbox canvas { width: 100%; height: 100%; image-rendering: pixelated; }
   #maginfo { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.75); color: #0f0; font-size: 10px; font-family: Consolas, monospace; text-align: center; padding: 1px; }
@@ -112,12 +114,23 @@
       </select>
     </label>
     <label><input type="checkbox" id="autoCopy" checked> 取色自动复制</label>
+    <div class="sep"></div>
+    <button id="btnRange">范围(拖拽框选)</button>
+    <div class="mini" id="rangeinfo">范围: 无</div>
+    <label><input type="checkbox" id="useRange"> 找色启用范围</label>
+    <button id="btnCrop">剪贴(存模板)</button>
+    <div class="sep"></div>
+    <label>模板
+      <select id="tplsel"></select>
+    </label>
+    <button id="btnFindPic">图片查找</button>
   </div>
 
   <!-- ===== 中间截图 ===== -->
   <div id="stage">
     <div id="shotwrap">
       <img id="shot" alt="先截图">
+      <div id="selrect"></div>
       <div id="magbox"><canvas id="mag" width="132" height="132"></canvas><div id="maginfo"></div></div>
     </div>
   </div>
@@ -369,6 +382,118 @@ $('btnGoto').onclick = () => {
   if (m) { m.style.borderColor = '#ff0'; setTimeout(() => m.style.borderColor = '#ff3b30', 1200); m.scrollIntoView({ block: 'center', inline: 'center' }); }
 };
 
+// ============ 三件套：框选 / 剪贴 / 图片查找 ============
+let rangeMode = false;
+let range = null;   // {x1,y1,x2,y2} 逻辑坐标
+let dragStart = null;
+
+$('btnRange').onclick = () => {
+  rangeMode = !rangeMode;
+  $('btnRange').classList.toggle('on', rangeMode);
+  if (!rangeMode) { dragStart = null; }
+};
+
+function wrapPos(e) {
+  const r = $('shot').getBoundingClientRect(), wr = $('shotwrap').getBoundingClientRect();
+  return { wx: e.clientX - wr.left, wy: e.clientY - wr.top, r };
+}
+
+$('shotwrap').addEventListener('mousedown', (e) => {
+  if (!rangeMode) return;
+  e.preventDefault();
+  const p = wrapPos(e);
+  dragStart = p;
+  $('selrect').style.display = 'block';
+  $('selrect').style.left = p.wx + 'px'; $('selrect').style.top = p.wy + 'px';
+  $('selrect').style.width = '0px'; $('selrect').style.height = '0px';
+});
+$('shotwrap').addEventListener('mousemove', (e) => {
+  if (!rangeMode || !dragStart) return;
+  const p = wrapPos(e);
+  const x = Math.min(dragStart.wx, p.wx), y = Math.min(dragStart.wy, p.wy);
+  $('selrect').style.left = x + 'px'; $('selrect').style.top = y + 'px';
+  $('selrect').style.width = Math.abs(p.wx - dragStart.wx) + 'px';
+  $('selrect').style.height = Math.abs(p.wy - dragStart.wy) + 'px';
+});
+$('shotwrap').addEventListener('mouseup', (e) => {
+  if (!rangeMode || !dragStart) return;
+  const p = wrapPos(e);
+  const r = $('shot').getBoundingClientRect();
+  const x1 = Math.min(dragStart.wx, p.wx) - (r.left - $('shotwrap').getBoundingClientRect().left);
+  const y1 = Math.min(dragStart.wy, p.wy) - (r.top - $('shotwrap').getBoundingClientRect().top);
+  const x2 = Math.max(dragStart.wx, p.wx) - (r.left - $('shotwrap').getBoundingClientRect().left);
+  const y2 = Math.max(dragStart.wy, p.wy) - (r.top - $('shotwrap').getBoundingClientRect().top);
+  dragStart = null;
+  rangeMode = false;
+  $('btnRange').classList.remove('on');
+  const lx1 = Math.round(x1 / r.width * devW), ly1 = Math.round(y1 / r.height * devH);
+  const lx2 = Math.round(x2 / r.width * devW), ly2 = Math.round(y2 / r.height * devH);
+  if (lx2 - lx1 < 3 || ly2 - ly1 < 3) { $('selrect').style.display = 'none'; return; }
+  range = { x1: lx1, y1: ly1, x2: lx2, y2: ly2 };
+  $('rangeinfo').textContent = `范围: ${lx1},${ly1} ~ ${lx2},${ly2} (${lx2 - lx1}x${ly2 - ly1})`;
+  $('useRange').checked = true;
+  genColorStr();
+});
+
+// 剪贴：框选范围 → 存模板
+$('btnCrop').onclick = async () => {
+  if (!range) { $('result').textContent = '先用「范围」拖拽框选'; return; }
+  const name = prompt('模板文件名:', 'tpl_' + Date.now() + '.png');
+  if (!name) return;
+  const r = await (await fetch('/api/crop', {
+    method: 'POST',
+    body: JSON.stringify({ ...range, name }),
+  })).json();
+  $('result').textContent = r.ok ? `✅ 模板已存: ${r.name}` : '❌ 裁剪失败: ' + (r.error || '');
+  loadTemplates();
+};
+
+// 模板列表
+async function loadTemplates() {
+  const list = await (await fetch('/api/templates')).json();
+  $('tplsel').innerHTML = list.map((t) => `<option>${t}</option>`).join('') || '<option value="">(无)</option>';
+}
+
+// 图片查找：选中模板 → 设备找图 → 标记命中点 + 生成代码
+$('btnFindPic').onclick = async () => {
+  const name = $('tplsel').value;
+  if (!name) { $('result').textContent = '先剪贴一个模板'; return; }
+  const sim = parseFloat($('sim').value) || 0.9;
+  const rg = $('useRange').checked && range ? range : { x1: 0, y1: 0, x2: 0, y2: 0 };
+  const r = await (await fetch('/api/findpic', {
+    method: 'POST',
+    body: JSON.stringify({ name, ...rg, sim }),
+  })).json();
+  document.querySelectorAll('.hitmark').forEach((m) => m.remove());
+  if (r.ret === 1) {
+    const wr = $('shotwrap').getBoundingClientRect(), sr = $('shot').getBoundingClientRect();
+    const m = document.createElement('div');
+    m.className = 'hitmark';
+    m.style.left = (sr.left - wr.left + r.x / devW * sr.width) + 'px';
+    m.style.top = (sr.top - wr.top + r.y / devH * sr.height) + 'px';
+    $('shotwrap').appendChild(m);
+    $('result').textContent = `✅ 图片查找命中 (${r.x}, ${r.y})\n` +
+      `local x, y = findPic(${rg.x1}, ${rg.y1}, ${rg.x2 || devW}, ${rg.y2 || devH}, "${name}", ${sim})\nif x >= 0 then tap(x, y) end`;
+    $('result').style.color = '#4ec9b0';
+  } else {
+    $('result').textContent = `❌ 未找到模板（sim=${sim}）`;
+    $('result').style.color = '#f66';
+  }
+};
+
+// findColor 生成代码时启用范围
+const _genOrig = genColorStr;
+genColorStr = function () {
+  _genOrig();
+  if (fnKind === 'findcolor' && $('useRange').checked && range && points.length) {
+    const p = points[points.length - 1];
+    const bias = $('bias').value.trim();
+    const b = bias ? '-' + bias : '';
+    const sim = parseFloat($('sim').value) || 0.9;
+    $('codestr').value = `local x, y = findColor(${range.x1}, ${range.y1}, ${range.x2}, ${range.y2}, "${p.color}${b}", 0, ${sim})\nif x >= 0 then tap(x, y) end`;
+  }
+};
+
 // ============ 工具栏 ============
 $('btnMag').onclick = () => $('btnMag').classList.toggle('on');
 $('btnShot').onclick = takeShot;
@@ -393,6 +518,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'h') { e.preventDefault(); $('btnClearPts').click(); }
 });
 
+loadTemplates();
 takeShot();
 </script>
 </body>

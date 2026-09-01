@@ -26,6 +26,9 @@ function iosSock(cmd, timeout = 20000) {
 }
 
 const PORT = parseInt(process.argv[2] || '5586', 10);
+let lastScreen = null;   // 最近一次截图（裁剪/找图复用）
+const TPL_DIR = path.join(__dirname, 'templates');
+if (!fs.existsSync(TPL_DIR)) fs.mkdirSync(TPL_DIR, { recursive: true });
 
 function send(res, code, body, type = 'application/json') {
   res.writeHead(code, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
@@ -171,6 +174,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/screen') {
     const buf = captureScreen();
     if (!buf) return send(res, 502, JSON.stringify({ error: 'screencap failed' }));
+    lastScreen = buf;   // 裁剪/找图复用
     return send(res, 200, buf, 'image/png');
   }
 
@@ -192,6 +196,37 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     const r = bridge.cmpColorEx(b.multi || '', b.sim == null ? 0.9 : b.sim);
     return send(res, 200, JSON.stringify({ ret: r }));
+  }
+
+  // ---- 抓抓三件套：裁剪模板 / 模板列表 / 图片查找 ----
+  if (p === '/api/crop' && req.method === 'POST') {
+    // {x1,y1,x2,y2(逻辑坐标),name}：区域截图存模板——snapShot 内部完成
+    // 物理帧→devinfo 逻辑尺寸缩放→裁剪，产物与 findPic 搜索帧同尺寸基准。
+    const b = await readBody(req);
+    const name = String(b.name || ('tpl_' + Date.now() + '.png')).replace(/[^\w.一-龥-]/g, '_');
+    const out = path.join(TPL_DIR, name);
+    const r = bridge.snapShot(out, b.x1 | 0, b.y1 | 0, b.x2 | 0, b.y2 | 0);
+    return send(res, 200, JSON.stringify({ ok: !!r, name }));
+  }
+
+  if (p === '/api/templates') {
+    const list = fs.readdirSync(TPL_DIR).filter((f) => f.endsWith('.png'));
+    return send(res, 200, JSON.stringify(list));
+  }
+
+  if (p.startsWith('/templates/')) {
+    const f = path.join(TPL_DIR, p.slice('/templates/'.length));
+    if (!f.startsWith(TPL_DIR) || !fs.existsSync(f)) return send(res, 404, '{}');
+    return send(res, 200, fs.readFileSync(f), 'image/png');
+  }
+
+  if (p === '/api/findpic' && req.method === 'POST') {
+    // {name, x1,y1,x2,y2, sim}：设备全帧找图（模板为物理像素，帧经 devinfo 缩放——坐标返回逻辑点）
+    const b = await readBody(req);
+    const tpl = path.join(TPL_DIR, String(b.name || ''));
+    if (!fs.existsSync(tpl)) return send(res, 404, '{"error":"模板不存在"}');
+    const r = bridge.findPic(b.x1 | 0, b.y1 | 0, b.x2 | 0, b.y2 | 0, tpl, null, 0, b.sim == null ? 0.9 : b.sim);
+    return send(res, 200, JSON.stringify({ ret: r[0], x: r[1], y: r[2] }));
   }
 
   if (p === '/api/tap' && req.method === 'POST') {
