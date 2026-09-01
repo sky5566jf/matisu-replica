@@ -2,256 +2,263 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>MatisuAuto 抓抓</title>
+<title>MatisuAuto IDE</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "Microsoft YaHei", sans-serif; background: #1e1e1e; color: #ddd; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-  #topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #2d2d30; border-bottom: 1px solid #3f3f46; flex-wrap: wrap; }
-  #topbar button { background: #0e639c; color: #fff; border: none; padding: 6px 14px; border-radius: 3px; cursor: pointer; font-size: 13px; }
-  #topbar button:hover { background: #1177bb; }
-  #topbar button.ghost { background: #3f3f46; }
-  #topbar button.active { background: #4ec9b0; color: #111; }
-  #coord { font-family: Consolas, monospace; font-size: 13px; color: #4ec9b0; min-width: 240px; }
-  #swatch { width: 18px; height: 18px; border: 1px solid #666; display: inline-block; vertical-align: middle; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-family: "Microsoft YaHei", sans-serif; background: #2b303b; color: #c8cdd5; display: flex; flex-direction: column; font-size: 13px; }
+
+  /* ===== 顶部工具栏 ===== */
+  #topbar { background: #21252d; padding: 4px 8px; display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #101215; }
+  #topbar .brand { color: #8ab4f8; font-weight: bold; margin-right: 12px; }
+  .tb { background: #31383f; color: #b8c0ca; border: 1px solid #22262b; padding: 4px 12px; border-radius: 2px; cursor: pointer; font-size: 12px; }
+  .tb:hover { background: #3d454e; color: #fff; }
+  .tb.primary { background: #0e639c; color: #fff; }
+  .tb.danger { background: #8c2f2f; color: #fff; }
+  #devsel { margin-left: auto; background: #31383f; color: #c8cdd5; border: 1px solid #454c56; padding: 3px 6px; border-radius: 3px; }
+
+  /* ===== 文件标签页 ===== */
+  #filetabs { background: #21252d; display: flex; gap: 2px; padding: 3px 8px 0; overflow-x: auto; }
+  .ftab { background: #2d333b; color: #9aa4b0; padding: 3px 12px; border-radius: 3px 3px 0 0; cursor: pointer; font-size: 12px; white-space: nowrap; }
+  .ftab.active { background: #3d4450; color: #fff; }
+  .ftab .x { color: #f66; margin-left: 6px; }
+
   #main { flex: 1; display: flex; overflow: hidden; }
-  #left { flex: 1; overflow: auto; text-align: center; padding: 10px; position: relative; }
-  #shotwrap { position: relative; display: inline-block; line-height: 0; }
-  #shot { max-width: 100%; cursor: crosshair; }
-  #cross { position: absolute; border: 1px solid #ff0; pointer-events: none; display: none; width: 8px; height: 8px; transform: translate(-4px, -4px); border-radius: 50%; }
-  .ptmark { position: absolute; width: 10px; height: 10px; border: 2px solid #f44; border-radius: 50%; transform: translate(-5px, -5px); pointer-events: none; line-height: 10px; font-size: 9px; color: #f44; text-align: center; }
-  #right { width: 330px; background: #252526; border-left: 1px solid #3f3f46; display: flex; flex-direction: column; overflow: hidden; }
-  .panel { padding: 8px 10px; border-bottom: 1px solid #3f3f46; }
-  .panel h3 { font-size: 13px; color: #4ec9b0; margin-bottom: 6px; }
-  #magnifier { image-rendering: pixelated; border: 1px solid #555; background: #111; display: block; margin: 0 auto; }
-  #ptlist { flex: 0 0 130px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; }
-  .ptitem { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-bottom: 1px solid #333; }
-  .ptitem .del { color: #f44; cursor: pointer; margin-left: auto; }
-  .ptitem .sw { width: 14px; height: 14px; border: 1px solid #666; flex: none; }
-  #code { width: 100%; height: 90px; background: #1e1e1e; color: #9cdcfe; border: 1px solid #3f3f46; font-family: Consolas, monospace; font-size: 12px; padding: 6px; resize: none; }
-  .btnrow { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .btnrow button { background: #0e639c; color: #fff; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
-  .btnrow button:hover { background: #1177bb; }
-  #lua { width: 100%; height: 110px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #3f3f46; font-family: Consolas, monospace; font-size: 12px; padding: 6px; resize: none; }
-  #runout { width: 100%; height: 70px; overflow-y: auto; background: #111; border: 1px solid #3f3f46; font-family: Consolas, monospace; font-size: 12px; padding: 6px; white-space: pre-wrap; color: #b5cea8; }
-  select { background: #3f3f46; color: #ddd; border: 1px solid #555; padding: 4px 8px; border-radius: 3px; }
-  #testres { font-family: Consolas, monospace; font-size: 13px; }
+
+  /* ===== 左列：文件管理 + 调试面板 ===== */
+  #left { width: 190px; background: #262b32; border-right: 1px solid #101215; display: flex; flex-direction: column; flex: none; }
+  .lpanel h3 { font-size: 12px; color: #8ab4f8; padding: 5px 8px; background: #21252d; }
+  #filelist { flex: 1; overflow-y: auto; padding: 4px; }
+  .fitem { padding: 3px 8px; cursor: pointer; color: #b8c0ca; font-size: 12px; border-radius: 2px; display: flex; align-items: center; gap: 6px; }
+  .fitem:hover { background: #31383f; }
+  .fitem.active { background: #3d4450; color: #fff; }
+  .fitem::before { content: "fx"; color: #6a9955; font-family: Consolas, monospace; font-size: 10px; }
+  #debugctl { border-top: 1px solid #101215; padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  #debugctl .tb { padding: 4px 6px; font-size: 12px; text-align: center; }
+  #svcstate { grid-column: 1/3; font-size: 11px; color: #7d8791; text-align: center; }
+
+  /* ===== 中间编辑器 ===== */
+  #editor { flex: 1; display: flex; overflow: hidden; background: #1e2127; }
+  #gutter { width: 44px; background: #1a1d23; color: #5a6370; font-family: Consolas, monospace; font-size: 12px; text-align: right; padding: 8px 6px; overflow: hidden; line-height: 1.5; user-select: none; white-space: pre; }
+  #code { flex: 1; background: #1e2127; color: #d4d4d4; border: none; outline: none; resize: none; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.5; padding: 8px; tab-size: 4; white-space: pre; }
+
+  /* ===== 右列：调试输出 + 帮助 ===== */
+  #right { width: 340px; background: #262b32; border-left: 1px solid #101215; display: flex; flex-direction: column; flex: none; }
+  #logout { flex: 1; overflow-y: auto; background: #15181d; font-family: Consolas, monospace; font-size: 12px; color: #b5cea8; padding: 6px; white-space: pre-wrap; }
+  #help { height: 150px; border-top: 1px solid #101215; overflow-y: auto; padding: 6px; font-size: 12px; color: #9aa4b0; }
+  #help b { color: #8ab4f8; }
+
+  /* ===== 底部状态栏 ===== */
+  #statusbar { background: #0e639c; color: #fff; padding: 3px 10px; font-size: 12px; display: flex; gap: 16px; }
+  #statusbar a { color: #fff; text-decoration: none; cursor: pointer; }
 </style>
 </head>
 <body>
+
 <div id="topbar">
-  <select id="target">
+  <span class="brand">MatisuAuto IDE</span>
+  <button class="tb" id="btnNew">新建</button>
+  <button class="tb" id="btnSave">保存</button>
+  <button class="tb" id="btnDel">删除</button>
+  <button class="tb primary" id="btnRun">▶ 运行(F5)</button>
+  <button class="tb" id="btnSvc">常驻运行</button>
+  <button class="tb danger" id="btnStop">■ 停止</button>
+  <a class="tb" href="/zhuazhua" target="_blank" style="text-decoration:none;display:inline-block">截图工具(抓抓)</a>
+  <select id="devsel">
     <option value="ios">iOS 192.69.0.38</option>
     <option value="android">Android 192.69.0.18</option>
   </select>
-  <button id="refresh">刷新截图</button>
-  <button id="auto" class="ghost">自动刷新: 关</button>
-  <span id="coord">移动鼠标取色…</span>
-  <span id="swatch"></span>
 </div>
+<div id="filetabs"></div>
+
 <div id="main">
   <div id="left">
-    <div id="shotwrap">
-      <img id="shot" alt="设备截图">
-      <div id="cross"></div>
+    <div class="lpanel" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <h3>文件管理 <span id="frefresh" style="float:right;cursor:pointer;color:#7d8791">⟳</span></h3>
+      <div id="filelist"></div>
+    </div>
+    <div id="debugctl">
+      <button class="tb" id="btnRun2">运行(F5)</button>
+      <button class="tb" id="btnStop2">停止(F6)</button>
+      <button class="tb" id="btnState">状态</button>
+      <button class="tb" id="btnClearLog">清空日志</button>
+      <div id="svcstate">常驻: -</div>
     </div>
   </div>
-  <div id="right">
-    <div class="panel">
-      <h3>放大镜</h3>
-      <canvas id="magnifier" width="264" height="132"></canvas>
-    </div>
-    <div class="panel">
-      <h3>取样点 <button class="ghost" style="float:right;font-size:11px;padding:2px 8px" id="clearpts">清空</button></h3>
-      <div id="ptlist"></div>
-    </div>
-    <div class="panel">
-      <h3>代码生成</h3>
-      <textarea id="code" readonly></textarea>
-      <div class="btnrow">
-        <button data-gen="cmpcolorex">cmpColorEx</button>
-        <button data-gen="findcolor">findColor</button>
-        <button data-gen="tap">tap</button>
-        <button id="copy">复制</button>
-      </div>
-      <div class="btnrow">
-        <button id="testcmp">测试比色</button>
-        <button id="testtap">点击测试</button>
-        <span id="testres"></span>
-      </div>
-    </div>
-    <div class="panel" style="flex:1;display:flex;flex-direction:column">
-      <h3>脚本（设备端运行）</h3>
-      <textarea id="lua">-- 设备端 Lua（iOS）
+
+  <div id="editor">
+    <div id="gutter">1</div>
+    <textarea id="code" spellcheck="false">-- MatisuAuto 脚本
+-- 左侧选文件或直接编辑；F5 运行 / 常驻运行 / 停止
 local w, h = getDisplaySize()
-print("screen: " .. w .. "x" .. h)</textarea>
-      <div class="btnrow"><button id="runlua">▶ 运行</button></div>
-      <div id="runout"></div>
+print("screen: " .. w .. "x" .. h)
+</textarea>
+  </div>
+
+  <div id="right">
+    <h3 style="font-size:12px;color:#8ab4f8;padding:5px 8px;background:#21252d">调试输出</h3>
+    <div id="logout"></div>
+    <div id="help">
+      <b>帮助文档</b><br>
+      tap(x,y) 点击 · swipe(x1,y1,x2,y2,t) 滑动 · keyPress("home")<br>
+      getPixelColor(x,y) 取色 · findColor/cmpColorEx 找色/比色<br>
+      findPic(x1,y1,x2,y2,path,sim) 找图 · snapShot(path) 截图<br>
+      inputText("ascii") 输入 · mSleep(ms) 延时<br>
+      <a href="/zhuazhua" target="_blank" style="color:#8ab4f8">打开抓抓工具取色 →</a>
     </div>
   </div>
 </div>
+
+<div id="statusbar">
+  <span id="stinfo">就绪</span>
+  <a href="/zhuazhua" target="_blank">抓抓工具</a>
+  <span style="margin-left:auto" id="stdev"></span>
+</div>
+
 <script>
 const $ = (id) => document.getElementById(id);
-let imgW = 0, imgH = 0, devW = 0, devH = 0;   // 图像物理尺寸 / 设备逻辑尺寸
-let points = [];   // {x,y,color} 逻辑坐标 + BBGGRR
-let autoTimer = null;
+let files = [];
+let tabs = [];          // {name, code, dirty}
+let activeTab = -1;
 
-// BBGGRR(设备契约) -> CSS #RRGGBB
-const cssColor = (bbggrr) => '#' + bbggrr.slice(4, 6) + bbggrr.slice(2, 4) + bbggrr.slice(0, 2);
-
-async function refresh() {
-  const img = $('shot');
-  const r = await fetch('/api/screen?' + Date.now());
-  if (!r.ok) { $('coord').textContent = '截图失败'; return; }
-  const blob = await r.blob();
-  img.src = URL.createObjectURL(blob);
-  await new Promise((res) => { img.onload = res; });
-  imgW = img.naturalWidth; imgH = img.naturalHeight;
-  const d = await (await fetch('/api/devinfo')).json();
-  devW = d.width || imgW; devH = d.height || imgH;
-  renderMarks();
+// ============ 日志 ============
+function log(s) {
+  const el = $('logout');
+  const t = new Date().toTimeString().slice(0, 8);
+  el.textContent += `[${t}] ${s}\n`;
+  el.scrollTop = el.scrollHeight;
 }
 
-// 图像像素坐标 -> 设备逻辑坐标
-function toLogical(e) {
-  const r = $('shot').getBoundingClientRect();
-  const px = (e.clientX - r.left) / r.width * imgW;
-  const py = (e.clientY - r.top) / r.height * imgH;
-  return {
-    x: Math.round(px / imgW * devW),
-    y: Math.round(py / imgH * devH),
-    px: Math.round(px), py: Math.round(py),
-  };
+// ============ 行号 ============
+function syncGutter() {
+  const n = $('code').value.split('\n').length;
+  $('gutter').textContent = Array.from({ length: n }, (_, i) => i + 1).join('\n');
 }
+$('code').addEventListener('input', () => { syncGutter(); markDirty(); });
+$('code').addEventListener('scroll', () => { $('gutter').scrollTop = $('code').scrollTop; });
 
-async function hoverInfo(e) {
-  const p = toLogical(e);
-  const cross = $('cross');
-  cross.style.display = 'block';
-  const r = $('shot').getBoundingClientRect(), wr = $('shotwrap').getBoundingClientRect();
-  cross.style.left = (e.clientX - wr.left) + 'px';
-  cross.style.top = (e.clientY - wr.top) + 'px';
-  drawMagnifier(p.px, p.py);
-  const d = await (await fetch(`/api/pixel?x=${p.x}&y=${p.y}`)).json();
-  if (d.color) {
-    $('coord').textContent = `(${p.x}, ${p.y})  BBGGRR=${d.color}  RGB=${cssColor(d.color)}`;
-    $('swatch').style.background = cssColor(d.color);
-    lastHover = { ...p, color: d.color };
-  } else {
-    $('coord').textContent = `(${p.x}, ${p.y})  取色失败`;
-  }
+// ============ 标签页 ============
+function markDirty() {
+  if (activeTab >= 0) { tabs[activeTab].code = $('code').value; tabs[activeTab].dirty = true; renderTabs(); }
 }
-
-let lastHover = null;
-let hoverTimer = null;
-$('shot').addEventListener('mousemove', (e) => {
-  if (hoverTimer) return;
-  hoverTimer = setTimeout(() => { hoverTimer = null; }, 120);
-  hoverInfo(e);
-});
-$('shot').addEventListener('click', async () => {
-  if (!lastHover || !lastHover.color) return;
-  points.push({ x: lastHover.x, y: lastHover.y, color: lastHover.color });
-  renderPoints();
-  renderMarks();
-  genCode('cmpcolorex');
-});
-
-function drawMagnifier(px, py) {
-  const cv = $('magnifier'), ctx = cv.getContext('2d');
-  const img = $('shot');
-  if (!imgW) return;
-  const N = 22, M = 11;   // 源区 22x11 像素
-  const sx = Math.max(0, Math.min(imgW - N, px - N / 2));
-  const sy = Math.max(0, Math.min(imgH - M, py - M / 2));
-  ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  ctx.drawImage(img, sx, sy, N, M, 0, 0, cv.width, cv.height);
-  // 中心十字
-  ctx.strokeStyle = '#ff0';
-  const cx = (px - sx) / N * cv.width, cy = (py - sy) / M * cv.height;
-  ctx.strokeRect(cx - cv.width / N / 2, cy - cv.height / M / 2, cv.width / N, cv.height / M);
-}
-
-function renderPoints() {
-  $('ptlist').innerHTML = points.map((p, i) =>
-    `<div class="ptitem"><span class="sw" style="background:${cssColor(p.color)}"></span>
-     <span>${i + 1}. (${p.x}, ${p.y}) ${p.color}</span>
-     <span class="del" data-i="${i}">✕</span></div>`).join('');
-  document.querySelectorAll('.del').forEach((el) => el.onclick = () => {
-    points.splice(+el.dataset.i, 1); renderPoints(); renderMarks(); genCode('cmpcolorex');
+function renderTabs() {
+  $('filetabs').innerHTML = tabs.map((t, i) =>
+    `<div class="ftab ${i === activeTab ? 'active' : ''}" data-i="${i}">${t.name}${t.dirty ? ' ●' : ''}<span class="x" data-x="${i}"> ×</span></div>`).join('');
+  document.querySelectorAll('.ftab').forEach((el) => el.onclick = (e) => {
+    if (e.target.dataset.x !== undefined) {
+      tabs.splice(+e.target.dataset.x, 1);
+      if (activeTab >= tabs.length) activeTab = tabs.length - 1;
+      if (activeTab >= 0) $('code').value = tabs[activeTab].code; else $('code').value = '';
+      renderTabs(); syncGutter();
+      return;
+    }
+    switchTab(+el.dataset.i);
   });
 }
+function switchTab(i) {
+  if (i < 0 || i >= tabs.length) return;
+  activeTab = i;
+  $('code').value = tabs[i].code;
+  renderTabs(); syncGutter();
+}
+function openTab(name, code) {
+  const ex = tabs.findIndex((t) => t.name === name);
+  if (ex >= 0) { switchTab(ex); return; }
+  tabs.push({ name, code, dirty: false });
+  switchTab(tabs.length - 1);
+}
 
-function renderMarks() {
-  document.querySelectorAll('.ptmark').forEach((m) => m.remove());
-  const r = $('shot').getBoundingClientRect(), wr = $('shotwrap').getBoundingClientRect();
-  points.forEach((p, i) => {
-    const m = document.createElement('div');
-    m.className = 'ptmark';
-    m.textContent = i + 1;
-    m.style.left = (r.left - wr.left + p.x / devW * r.width) + 'px';
-    m.style.top = (r.top - wr.top + p.y / devH * r.height) + 'px';
-    $('shotwrap').appendChild(m);
+// ============ 文件管理 ============
+async function loadFiles() {
+  const r = await (await fetch('/api/scripts')).json();
+  files = r;
+  $('filelist').innerHTML = files.map((f) =>
+    `<div class="fitem" data-n="${f}">${f}</div>`).join('');
+  document.querySelectorAll('.fitem').forEach((el) => el.onclick = async () => {
+    document.querySelectorAll('.fitem').forEach((x) => x.classList.remove('active'));
+    el.classList.add('active');
+    const r = await (await fetch('/api/script?name=' + encodeURIComponent(el.dataset.n))).json();
+    openTab(el.dataset.n, r.code || '');
+    log('打开 ' + el.dataset.n);
   });
 }
+$('frefresh').onclick = loadFiles;
 
-let lastGen = 'cmpcolorex';
-function genCode(kind) {
-  lastGen = kind;
-  let s = '';
-  if (!points.length) { $('code').value = '-- 先点击截图取样'; return; }
-  if (kind === 'cmpcolorex') {
-    const multi = points.map((p) => `${p.x}|${p.y}|${p.color}`).join(',');
-    s = `if cmpColorEx("${multi}", 0.9) == 1 then\n    -- 全部命中\nend`;
-  } else if (kind === 'findcolor') {
-    const p = points[points.length - 1];
-    s = `local x, y = findColor(0, 0, ${devW}, ${devH}, "${p.color}", 0, 0.9)\nif x >= 0 then\n    tap(x, y)\nend`;
-  } else if (kind === 'tap') {
-    const p = points[points.length - 1];
-    s = `tap(${p.x}, ${p.y})`;
-  }
-  $('code').value = s;
+$('btnNew').onclick = () => {
+  const name = prompt('脚本文件名:', 'new_script.lua');
+  if (!name) return;
+  openTab(name, '-- ' + name + '\n');
+};
+$('btnSave').onclick = async () => {
+  if (activeTab < 0) { log('没有打开的文件'); return; }
+  const t = tabs[activeTab];
+  const r = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: t.name, code: $('code').value }) })).json();
+  if (r.ok) { t.code = $('code').value; t.dirty = false; renderTabs(); log('已保存 ' + t.name); loadFiles(); }
+  else log('保存失败 ' + t.name);
+};
+$('btnDel').onclick = async () => {
+  if (activeTab < 0) return;
+  const t = tabs[activeTab];
+  if (!confirm('删除 ' + t.name + ' ?')) return;
+  await fetch('/api/script?name=' + encodeURIComponent(t.name), { method: 'DELETE' });
+  log('已删除 ' + t.name);
+  tabs.splice(activeTab, 1); activeTab = -1; $('code').value = '';
+  renderTabs(); loadFiles();
+};
+
+// ============ 运行控制 ============
+async function runCurrent() {
+  // 先保存再跑（iOS 走 runfile，Android 暂走提示）
+  if (activeTab >= 0 && tabs[activeTab].dirty) await $('btnSave').onclick();
+  const name = activeTab >= 0 ? tabs[activeTab].name : null;
+  log('开始运行 ' + (name || '(未命名)'));
+  if (!name) { log('请先保存文件'); return; }
+  const r = await (await fetch('/api/runfile', { method: 'POST', body: JSON.stringify({ name }) })).json();
+  if (r.output) log(r.output.trim());
+  if (!r.ok) log('[错误] ' + (r.error || '未知'));
+  else log('运行结束');
 }
+$('btnRun').onclick = runCurrent;
+$('btnRun2').onclick = runCurrent;
 
-document.querySelectorAll('[data-gen]').forEach((b) => b.onclick = () => genCode(b.dataset.gen));
-$('copy').onclick = () => { $('code').select(); document.execCommand('copy'); };
-$('clearpts').onclick = () => { points = []; renderPoints(); renderMarks(); };
-
-$('testcmp').onclick = async () => {
-  if (!points.length) return;
-  const multi = points.map((p) => `${p.x}|${p.y}|${p.color}`).join(',');
-  const r = await (await fetch('/api/cmpcolorex', { method: 'POST', body: JSON.stringify({ multi, sim: 0.9 }) })).json();
-  $('testres').textContent = r.ret === 1 ? '✅ 全部命中' : '❌ 未命中';
-  $('testres').style.color = r.ret === 1 ? '#4ec9b0' : '#f44';
+$('btnSvc').onclick = async () => {
+  const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'start', code: $('code').value }) })).json();
+  log(r.ok ? '常驻脚本已启动' : '常驻启动失败（已有在跑？）');
+  refreshState();
 };
+async function stopSvc() {
+  await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'stop' }) });
+  log('已请求停止常驻脚本');
+  setTimeout(refreshState, 800);
+}
+$('btnStop').onclick = stopSvc;
+$('btnStop2').onclick = stopSvc;
 
-$('testtap').onclick = async () => {
-  if (!points.length) return;
-  const p = points[points.length - 1];
-  await fetch('/api/tap', { method: 'POST', body: JSON.stringify({ x: p.x, y: p.y }) });
-  $('testres').textContent = `已点击 (${p.x}, ${p.y})`;
-  $('testres').style.color = '#4ec9b0';
-  setTimeout(refresh, 1500);
-};
+async function refreshState() {
+  const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'state' }) })).json();
+  $('svcstate').textContent = '常驻: ' + (r.running ? '运行中' : '停止');
+  if (r.output) log('[常驻输出] ' + r.output.trim());
+}
+$('btnState').onclick = refreshState;
+$('btnClearLog').onclick = () => { $('logout').textContent = ''; };
 
-$('refresh').onclick = refresh;
-$('auto').onclick = () => {
-  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; $('auto').textContent = '自动刷新: 关'; $('auto').classList.remove('active'); }
-  else { autoTimer = setInterval(refresh, 2000); $('auto').textContent = '自动刷新: 开'; $('auto').classList.add('active'); }
-};
-$('target').onchange = async (e) => {
+$('devsel').onchange = async (e) => {
   await fetch('/api/target', { method: 'POST', body: JSON.stringify({ target: e.target.value }) });
-  points = []; renderPoints();
-  refresh();
+  tabs = []; activeTab = -1; $('code').value = ''; renderTabs();
+  $('stdev').textContent = e.target.value === 'ios' ? 'iOS 192.69.0.38' : 'Android 192.69.0.18（脚本存 PC 本地）';
+  loadFiles();
 };
 
-$('runlua').onclick = async () => {
-  $('runout').textContent = '运行中…';
-  const r = await (await fetch('/api/run', { method: 'POST', body: JSON.stringify({ code: $('lua').value }) })).json();
-  $('runout').textContent = (r.ok ? '' : '[失败] ' + (r.error || '') + '\n') + (r.output || '');
-};
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F5') { e.preventDefault(); runCurrent(); }
+  if (e.key === 'F6') { e.preventDefault(); stopSvc(); }
+  if (e.ctrlKey && e.key === 's') { e.preventDefault(); $('btnSave').click(); }
+});
 
-refresh();
+$('stdev').textContent = 'iOS 192.69.0.38';
+loadFiles();
+refreshState();
+syncGutter();
 </script>
 </body>
 </html>

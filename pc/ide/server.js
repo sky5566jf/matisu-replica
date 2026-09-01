@@ -81,6 +81,76 @@ const server = http.createServer(async (req, res) => {
   const p = u.pathname;
 
   if (p === '/') return send(res, 200, fs.readFileSync(path.join(__dirname, 'index.html')), 'text/html; charset=utf-8');
+  if (p === '/zhuazhua') return send(res, 200, fs.readFileSync(path.join(__dirname, 'zhuazhua.html')), 'text/html; charset=utf-8');
+
+  // ---- 脚本管理（iOS=设备 scripts 目录；Android=PC 本地 scripts/）----
+  const LOCAL_SCRIPTS = path.join(__dirname, 'scripts');
+  if (!fs.existsSync(LOCAL_SCRIPTS)) fs.mkdirSync(LOCAL_SCRIPTS, { recursive: true });
+
+  if (p === '/api/scripts') {
+    if (bridge.CFG.target === 'android') {
+      return send(res, 200, JSON.stringify(fs.readdirSync(LOCAL_SCRIPTS).filter((f) => f.endsWith('.lua'))));
+    }
+    const out = iosSock('list');
+    try { JSON.parse(String(out)); return send(res, 200, String(out)); } catch (_) { return send(res, 200, '[]'); }
+  }
+
+  if (p === '/api/script' && req.method === 'GET') {
+    const name = u.searchParams.get('name') || '';
+    if (!name || name.includes('..')) return send(res, 400, '{"error":"bad name"}');
+    if (bridge.CFG.target === 'android') {
+      const f = path.join(LOCAL_SCRIPTS, name);
+      return send(res, 200, JSON.stringify({ code: fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '' }));
+    }
+    // iOS：经 run 指令读设备文件内容
+    const rb = Buffer.from(`local f = io.open("/var/mobile/MatisuAuto/scripts/${name}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
+    const out2 = iosSock('run ' + rb);
+    try { const d = JSON.parse(String(out2)); return send(res, 200, JSON.stringify({ code: d.output || '' })); }
+    catch (_) { return send(res, 200, '{"code":""}'); }
+  }
+
+  if (p === '/api/script' && req.method === 'POST') {
+    const b = await readBody(req);
+    const name = String(b.name || '');
+    if (!name || name.includes('..')) return send(res, 400, '{"error":"bad name"}');
+    if (bridge.CFG.target === 'android') {
+      fs.writeFileSync(path.join(LOCAL_SCRIPTS, name), String(b.code || ''), 'utf8');
+      return send(res, 200, '{"ok":true}');
+    }
+    const b64n = Buffer.from(name, 'utf8').toString('base64');
+    const b64c = Buffer.from(String(b.code || ''), 'utf8').toString('base64');
+    const out3 = iosSock(`upload ${b64n} ${b64c}`);
+    return send(res, 200, JSON.stringify({ ok: String(out3).trim() === 'OK' }));
+  }
+
+  if (p === '/api/script' && req.method === 'DELETE') {
+    const name = u.searchParams.get('name') || '';
+    if (!name || name.includes('..')) return send(res, 400, '{"error":"bad name"}');
+    if (bridge.CFG.target === 'android') {
+      try { fs.unlinkSync(path.join(LOCAL_SCRIPTS, name)); } catch (_) {}
+      return send(res, 200, '{"ok":true}');
+    }
+    const out4 = iosSock('delete ' + name);
+    return send(res, 200, JSON.stringify({ ok: String(out4).trim() === 'OK' }));
+  }
+
+  if (p === '/api/runfile' && req.method === 'POST') {
+    const b = await readBody(req);
+    const out5 = iosSock('runfile ' + String(b.name || ''), 60000);
+    if (!out5) return send(res, 502, '{"ok":false,"error":"runfile 失败"}');
+    return send(res, 200, String(out5));
+  }
+
+  if (p === '/api/svc' && req.method === 'POST') {
+    // 常驻控制：{action: start|stop|state, code?}
+    const b = await readBody(req);
+    let out6;
+    if (b.action === 'start') out6 = iosSock('start ' + Buffer.from(String(b.code || ''), 'utf8').toString('base64'));
+    else if (b.action === 'stop') out6 = iosSock('stop');
+    else out6 = iosSock('state');
+    if (b.action === 'state') { try { return send(res, 200, String(out6)); } catch (_) { return send(res, 200, '{}'); } }
+    return send(res, 200, JSON.stringify({ ok: String(out6).trim() === 'OK' }));
+  }
 
   if (p === '/api/target' && req.method === 'POST') {
     const b = await readBody(req);

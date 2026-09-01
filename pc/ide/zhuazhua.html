@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MatisuAuto 抓抓工具</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-family: "Microsoft YaHei", sans-serif; background: #23272e; color: #c8cdd5; display: flex; flex-direction: column; font-size: 13px; }
+
+  /* ===== 顶部：标题 + 截图标签页 ===== */
+  #titlebar { background: #1b1e23; padding: 5px 10px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #101215; }
+  #titlebar .tt { color: #8ab4f8; font-weight: bold; margin-right: 10px; white-space: nowrap; }
+  #tabs { flex: 1; display: flex; gap: 3px; overflow-x: auto; }
+  .tab { background: #2d333b; color: #9aa4b0; padding: 3px 10px; border-radius: 3px 3px 0 0; cursor: pointer; white-space: nowrap; font-size: 12px; }
+  .tab.active { background: #3d4450; color: #fff; }
+  .tab .x { color: #f66; margin-left: 5px; }
+  #devsel { background: #2d333b; color: #c8cdd5; border: 1px solid #454c56; padding: 3px 6px; border-radius: 3px; }
+
+  #main { flex: 1; display: flex; overflow: hidden; }
+
+  /* ===== 左侧工具栏 ===== */
+  #toolbar { width: 108px; background: #262b32; border-right: 1px solid #101215; padding: 4px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: none; }
+  #toolbar button { background: #31383f; color: #b8c0ca; border: 1px solid #22262b; padding: 4px 6px; border-radius: 2px; cursor: pointer; font-size: 12px; text-align: left; }
+  #toolbar button:hover { background: #3d454e; color: #fff; }
+  #toolbar button.on { background: #0e639c; color: #fff; }
+  #toolbar .sep { border-top: 1px solid #101215; margin: 3px 0; }
+  #toolbar .mini { font-size: 11px; color: #7d8791; padding: 1px 3px; }
+  #toolbar select { width: 100%; background: #31383f; color: #c8cdd5; border: 1px solid #22262b; padding: 2px; font-size: 12px; }
+  #toolbar label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #9aa4b0; padding: 1px 2px; }
+
+  /* ===== 中间截图区 ===== */
+  #stage { flex: 1; overflow: auto; background: #1b1e23; text-align: center; padding: 8px; position: relative; }
+  #shotwrap { position: relative; display: inline-block; line-height: 0; box-shadow: 0 0 12px #000; }
+  #shot { max-width: none; cursor: crosshair; }
+  .ptmark { position: absolute; width: 11px; height: 11px; border: 2px solid #ff3b30; border-radius: 50%; transform: translate(-5px, -5px); pointer-events: none; font-size: 8px; color: #ff3b30; text-align: center; line-height: 8px; }
+  #magbox { position: absolute; width: 132px; height: 132px; border: 1px solid #8ab4f8; background: #111; pointer-events: none; display: none; z-index: 5; }
+  #magbox canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+  #maginfo { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.75); color: #0f0; font-size: 10px; font-family: Consolas, monospace; text-align: center; padding: 1px; }
+
+  /* ===== 右侧面板 ===== */
+  #right { width: 380px; background: #262b32; border-left: 1px solid #101215; display: flex; flex-direction: column; flex: none; }
+  #rtabs { display: flex; background: #1b1e23; }
+  #rtabs .rt { padding: 5px 14px; cursor: pointer; color: #9aa4b0; font-size: 12px; }
+  #rtabs .rt.active { background: #262b32; color: #8ab4f8; border-bottom: 2px solid #8ab4f8; }
+
+  #ptable { flex: 1; overflow-y: auto; min-height: 160px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: Consolas, monospace; }
+  th { background: #1b1e23; color: #7d8791; padding: 3px 2px; font-weight: normal; position: sticky; top: 0; }
+  td { border-bottom: 1px solid #2d333b; padding: 2px; text-align: center; color: #b8c0ca; }
+  td.c { font-family: Consolas, monospace; font-size: 10px; }
+  .csw { display: inline-block; width: 22px; height: 12px; border: 1px solid #555; }
+  .rowdel { color: #f66; cursor: pointer; }
+  tr.sel td { background: #34404d; }
+
+  #ptbtns { display: flex; gap: 3px; padding: 4px; background: #1b1e23; }
+  #ptbtns button, #genbar button, #fnrow button { background: #31383f; color: #b8c0ca; border: 1px solid #22262b; padding: 4px 8px; border-radius: 2px; cursor: pointer; font-size: 12px; }
+  #ptbtns button:hover, #genbar button:hover, #fnrow button:hover { background: #3d454e; color: #fff; }
+
+  #fnpanel { padding: 6px; border-top: 1px solid #101215; }
+  #fnpanel .frow { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; font-size: 12px; }
+  #fnpanel .frow label { width: 42px; color: #7d8791; flex: none; }
+  #fnpanel select, #fnpanel input[type=text] { flex: 1; background: #1b1e23; color: #9cdcfe; border: 1px solid #3f3f46; padding: 3px 5px; font-family: Consolas, monospace; font-size: 11px; }
+  #fnpanel input[type=number] { width: 60px; background: #1b1e23; color: #9cdcfe; border: 1px solid #3f3f46; padding: 3px 5px; }
+  #fnrow { display: flex; gap: 3px; margin-bottom: 5px; }
+  #fnrow button.on { background: #0e639c; color: #fff; }
+
+  #result { background: #111; border: 1px solid #3f3f46; min-height: 44px; max-height: 110px; overflow-y: auto; font-family: Consolas, monospace; font-size: 11px; color: #b5cea8; padding: 5px; white-space: pre-wrap; }
+
+  #genbar { display: flex; gap: 3px; padding: 5px; background: #1b1e23; }
+  #genbar button { flex: 1; }
+</style>
+</head>
+<body>
+
+<div id="titlebar">
+  <span class="tt">MatisuAuto 抓抓工具</span>
+  <div id="tabs"></div>
+  <select id="devsel">
+    <option value="ios">iOS 192.69.0.38</option>
+    <option value="android">Android 192.69.0.18</option>
+  </select>
+</div>
+
+<div id="main">
+  <!-- ===== 左侧工具栏 ===== -->
+  <div id="toolbar">
+    <button id="btnMag" class="on">显示放大镜</button>
+    <div class="sep"></div>
+    <button id="btnShot">截图(CTRL+S)</button>
+    <label><input type="checkbox" id="autoShot"> 自动截图 2s</label>
+    <div class="sep"></div>
+    <div class="mini">坐标: <span id="posinfo">-</span></div>
+    <div class="mini">颜色: <span id="colorinfo">-</span></div>
+    <div class="mini">RGB: <span id="rgbinfo">-</span></div>
+    <button id="btnCopyColor">复制颜色</button>
+    <button id="btnCopyPos">复制坐标</button>
+    <div class="sep"></div>
+    <label>缩放
+      <select id="zoom">
+        <option value="fit" selected>适应窗口</option>
+        <option value="1">原始尺寸</option>
+        <option value="0.5">50%</option>
+        <option value="2">200%</option>
+      </select>
+    </label>
+    <div class="sep"></div>
+    <button id="btnClearMarks">清除面板标记</button>
+    <label>取色个数
+      <select id="maxpts">
+        <option>8</option><option selected>15</option><option>32</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="autoCopy" checked> 取色自动复制</label>
+  </div>
+
+  <!-- ===== 中间截图 ===== -->
+  <div id="stage">
+    <div id="shotwrap">
+      <img id="shot" alt="先截图">
+      <div id="magbox"><canvas id="mag" width="132" height="132"></canvas><div id="maginfo"></div></div>
+    </div>
+  </div>
+
+  <!-- ===== 右侧面板 ===== -->
+  <div id="right">
+    <div id="rtabs"><div class="rt active">图色工具</div></div>
+    <div id="ptable">
+      <table>
+        <thead><tr><th>#</th><th>坐标</th><th>颜色</th><th>RGB</th><th>偏色</th><th>反色</th><th></th></tr></thead>
+        <tbody id="pbody"></tbody>
+      </table>
+    </div>
+    <div id="ptbtns">
+      <button id="btnClearPts">清除所有(CTRL+H)</button>
+      <button id="btnUnify">统一偏色</button>
+      <button id="btnDelSel">删除选中</button>
+    </div>
+
+    <div id="fnpanel">
+      <div id="fnrow">
+        <button data-fn="cmpcolorex" class="on">图色面板</button>
+        <button data-fn="findcolor">找色</button>
+        <button data-fn="tap">点击</button>
+      </div>
+      <div class="frow"><label>精度</label><input type="number" id="sim" value="0.90" step="0.01" min="0.5" max="1"></div>
+      <div class="frow"><label>偏色</label><input type="text" id="bias" placeholder="无（例 101010）"></div>
+      <div class="frow"><label>颜色</label><input type="text" id="colorstr" readonly><button id="cp1" style="flex:none">复制</button></div>
+      <div class="frow"><label>参数</label><input type="text" id="codestr" readonly><button id="cp2" style="flex:none">复制</button></div>
+      <div id="result">结果输出…</div>
+    </div>
+
+    <div id="genbar">
+      <button id="btnGen">生成代码</button>
+      <button id="btnTestCmp">找色测试</button>
+      <button id="btnTestTap">点击测试</button>
+      <button id="btnGoto">跳转到点</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let imgW = 0, imgH = 0, devW = 0, devH = 0;
+let points = [];              // {x,y,color,bias}
+let shots = [];               // 截图历史 {id,name}
+let shotSeq = 0;
+let selRow = -1;
+let autoTimer = null;
+
+// BBGGRR(设备契约) -> CSS #RRGGBB
+const css = (c) => '#' + c.slice(4, 6) + c.slice(2, 4) + c.slice(0, 2);
+const inv = (c) => ('000000' + (0xFFFFFF - parseInt(c, 16)).toString(16)).slice(-6).toUpperCase();
+
+// ============ 截图 ============
+async function takeShot() {
+  const r = await fetch('/api/screen?' + Date.now());
+  if (!r.ok) { $('posinfo').textContent = '截图失败'; return; }
+  const blob = await r.blob();
+  const img = $('shot');
+  img.src = URL.createObjectURL(blob);
+  await new Promise((res) => { img.onload = res; });
+  imgW = img.naturalWidth; imgH = img.naturalHeight;
+  const d = await (await fetch('/api/devinfo')).json();
+  devW = d.width || imgW; devH = d.height || imgH;
+  shotSeq++;
+  const name = '截图_' + new Date().toTimeString().slice(0, 8);
+  shots.push({ id: shotSeq, name, src: img.src });
+  if (shots.length > 10) shots.shift();
+  renderTabs();
+  applyZoom();
+  renderMarks();
+  $('titlebar').querySelector('.tt').textContent =
+    `MatisuAuto 抓抓工具  当前截图尺寸: ${imgW}x${imgH}  逻辑: ${devW}x${devH}`;
+}
+function renderTabs() {
+  $('tabs').innerHTML = shots.map((s) =>
+    `<div class="tab ${s.id === shotSeq ? 'active' : ''}" data-id="${s.id}">${s.name}<span class="x" data-x="${s.id}"> ×</span></div>`).join('');
+  document.querySelectorAll('.tab').forEach((t) => t.onclick = (e) => {
+    const xid = e.target.dataset.x;
+    if (xid) { shots = shots.filter((s) => s.id != xid); renderTabs(); return; }
+    const s = shots.find((v) => v.id == t.dataset.id);
+    if (s) { $('shot').src = s.src; shotSeq = s.id; renderTabs(); setTimeout(renderMarks, 50); }
+  });
+}
+function applyZoom() {
+  const z = $('zoom').value;
+  const img = $('shot');
+  if (z === 'fit') { img.style.width = ''; img.style.maxWidth = '100%'; }
+  else { img.style.maxWidth = 'none'; img.style.width = (imgW * parseFloat(z)) + 'px'; }
+  setTimeout(renderMarks, 30);
+}
+
+// ============ 坐标换算 ============
+function toLogical(e) {
+  const r = $('shot').getBoundingClientRect();
+  const px = (e.clientX - r.left) / r.width * imgW;
+  const py = (e.clientY - r.top) / r.height * imgH;
+  return {
+    x: Math.round(px / imgW * devW), y: Math.round(py / imgH * devH),
+    px: Math.round(px), py: Math.round(py),
+    ex: e.clientX, ey: e.clientY,
+  };
+}
+
+// ============ 放大镜 + 取色 ============
+let hoverT = null;
+$('shot').addEventListener('mousemove', (e) => {
+  if (hoverT) return;
+  hoverT = setTimeout(() => hoverT = null, 100);
+  onHover(e);
+});
+$('shot').addEventListener('mouseleave', () => { $('magbox').style.display = 'none'; });
+
+async function onHover(e) {
+  const p = toLogical(e);
+  if ($('btnMag').classList.contains('on')) drawMag(p);
+  const d = await (await fetch(`/api/pixel?x=${p.x}&y=${p.y}`)).json();
+  if (d.color) {
+    $('posinfo').textContent = `${p.x},${p.y}`;
+    $('colorinfo').textContent = d.color;
+    $('rgbinfo').textContent = css(d.color);
+    $('maginfo').textContent = `${p.x},${p.y} ${d.color}`;
+    lastHover = { ...p, color: d.color };
+  }
+}
+let lastHover = null;
+
+function drawMag(p) {
+  const box = $('magbox'), cv = $('mag'), ctx = cv.getContext('2d');
+  const img = $('shot');
+  const N = 22;
+  const sx = Math.max(0, Math.min(imgW - N, p.px - N / 2));
+  const sy = Math.max(0, Math.min(imgH - N, p.py - N / 2));
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 132, 132);
+  ctx.drawImage(img, sx, sy, N, N, 0, 0, 132, 132);
+  ctx.strokeStyle = '#ff0';
+  ctx.strokeRect(132 / 2 - 3, 132 / 2 - 3, 6, 6);
+  const wr = $('shotwrap').getBoundingClientRect();
+  let mx = p.ex - wr.left + 14, my = p.ey - wr.top + 14;
+  if (mx + 132 > wr.width) mx = p.ex - wr.left - 146;
+  box.style.left = mx + 'px'; box.style.top = my + 'px';
+  box.style.display = 'block';
+}
+
+// ============ 取样点 ============
+$('shot').addEventListener('click', () => {
+  if (!lastHover || !lastHover.color) return;
+  const max = parseInt($('maxpts').value, 10);
+  if (points.length >= max) points.shift();
+  points.push({ x: lastHover.x, y: lastHover.y, color: lastHover.color, bias: '' });
+  renderPoints(); renderMarks(); genColorStr();
+  if ($('autoCopy').checked) navigator.clipboard?.writeText($('colorstr').value).catch(() => {});
+});
+
+function renderPoints() {
+  $('pbody').innerHTML = points.map((p, i) => `
+    <tr class="${i === selRow ? 'sel' : ''}" data-i="${i}">
+      <td>${i + 1}</td>
+      <td class="c">${p.x},${p.y}</td>
+      <td><span class="csw" style="background:${css(p.color)}"></span> ${p.color}</td>
+      <td class="c">${css(p.color)}</td>
+      <td class="c">${p.bias || '-'}</td>
+      <td><span class="csw" style="background:${css(inv(p.color))}"></span></td>
+      <td class="rowdel" data-d="${i}">✕</td>
+    </tr>`).join('');
+  document.querySelectorAll('#pbody tr').forEach((tr) => tr.onclick = (e) => {
+    if (e.target.dataset.d !== undefined) return;
+    selRow = +tr.dataset.i; renderPoints();
+  });
+  document.querySelectorAll('.rowdel').forEach((el) => el.onclick = () => {
+    points.splice(+el.dataset.d, 1); selRow = -1; renderPoints(); renderMarks(); genColorStr();
+  });
+}
+
+function renderMarks() {
+  document.querySelectorAll('.ptmark').forEach((m) => m.remove());
+  const r = $('shot').getBoundingClientRect(), wr = $('shotwrap').getBoundingClientRect();
+  points.forEach((p, i) => {
+    const m = document.createElement('div');
+    m.className = 'ptmark'; m.textContent = i + 1;
+    m.style.left = (r.left - wr.left + p.x / devW * r.width) + 'px';
+    m.style.top = (r.top - wr.top + p.y / devH * r.height) + 'px';
+    $('shotwrap').appendChild(m);
+  });
+}
+
+// ============ 颜色串/代码生成 ============
+let fnKind = 'cmpcolorex';
+document.querySelectorAll('[data-fn]').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('[data-fn]').forEach((x) => x.classList.remove('on'));
+  b.classList.add('on'); fnKind = b.dataset.fn; genColorStr();
+});
+
+function genColorStr() {
+  const bias = $('bias').value.trim();
+  const b = bias ? '-' + bias : '';
+  if (!points.length) { $('colorstr').value = ''; $('codestr').value = ''; return; }
+  const multi = points.map((p) => `${p.x}|${p.y}|${p.color}${b}`).join(',');
+  $('colorstr').value = multi;
+  const sim = parseFloat($('sim').value) || 0.9;
+  if (fnKind === 'cmpcolorex') {
+    $('codestr').value = `if cmpColorEx("${multi}", ${sim}) == 1 then\n    -- 全部命中\nend`;
+  } else if (fnKind === 'findcolor') {
+    const p = points[points.length - 1];
+    $('codestr').value = `local x, y = findColor(0, 0, ${devW}, ${devH}, "${p.color}${b}", 0, ${sim})\nif x >= 0 then tap(x, y) end`;
+  } else {
+    const p = points[points.length - 1];
+    $('codestr').value = `tap(${p.x}, ${p.y})`;
+  }
+}
+$('sim').onchange = genColorStr;
+$('bias').onchange = () => {
+  const b = $('bias').value.trim();
+  points = points.map((p) => ({ ...p, bias: b }));
+  renderPoints(); genColorStr();
+};
+$('btnUnify').onclick = () => { $('bias').onchange(); };
+$('btnGen').onclick = () => { genColorStr(); $('result').textContent = $('codestr').value; };
+$('cp1').onclick = () => navigator.clipboard?.writeText($('colorstr').value).catch(() => {});
+$('cp2').onclick = () => navigator.clipboard?.writeText($('codestr').value).catch(() => {});
+$('btnCopyColor').onclick = () => navigator.clipboard?.writeText($('colorinfo').textContent).catch(() => {});
+$('btnCopyPos').onclick = () => navigator.clipboard?.writeText($('posinfo').textContent).catch(() => {});
+
+// ============ 测试 ============
+$('btnTestCmp').onclick = async () => {
+  if (!points.length) return;
+  const bias = $('bias').value.trim();
+  const b = bias ? '-' + bias : '';
+  const multi = points.map((p) => `${p.x}|${p.y}|${p.color}${b}`).join(',');
+  const sim = parseFloat($('sim').value) || 0.9;
+  const r = await (await fetch('/api/cmpcolorex', { method: 'POST', body: JSON.stringify({ multi, sim }) })).json();
+  $('result').textContent = r.ret === 1 ? `✅ 找色测试通过 (sim=${sim})` : `❌ 未命中 (sim=${sim})`;
+  $('result').style.color = r.ret === 1 ? '#4ec9b0' : '#f66';
+};
+$('btnTestTap').onclick = async () => {
+  const p = selRow >= 0 ? points[selRow] : points[points.length - 1];
+  if (!p) return;
+  await fetch('/api/tap', { method: 'POST', body: JSON.stringify({ x: p.x, y: p.y }) });
+  $('result').textContent = `已点击 (${p.x}, ${p.y})，1.5s 后刷新截图`;
+  setTimeout(takeShot, 1500);
+};
+$('btnGoto').onclick = () => {
+  const p = selRow >= 0 ? points[selRow] : points[points.length - 1];
+  if (!p) return;
+  const idx = selRow >= 0 ? selRow : points.length - 1;
+  const m = document.querySelectorAll('.ptmark')[idx];
+  if (m) { m.style.borderColor = '#ff0'; setTimeout(() => m.style.borderColor = '#ff3b30', 1200); m.scrollIntoView({ block: 'center', inline: 'center' }); }
+};
+
+// ============ 工具栏 ============
+$('btnMag').onclick = () => $('btnMag').classList.toggle('on');
+$('btnShot').onclick = takeShot;
+$('autoShot').onchange = (e) => {
+  if (e.target.checked) autoTimer = setInterval(takeShot, 2000);
+  else { clearInterval(autoTimer); autoTimer = null; }
+};
+$('zoom').onchange = applyZoom;
+$('btnClearPts').onclick = () => { points = []; selRow = -1; renderPoints(); renderMarks(); genColorStr(); };
+$('btnClearMarks').onclick = () => { document.querySelectorAll('.ptmark').forEach((m) => m.remove()); };
+$('btnDelSel').onclick = () => {
+  if (selRow >= 0) { points.splice(selRow, 1); selRow = -1; renderPoints(); renderMarks(); genColorStr(); }
+};
+$('devsel').onchange = async (e) => {
+  await fetch('/api/target', { method: 'POST', body: JSON.stringify({ target: e.target.value }) });
+  points = []; renderPoints(); takeShot();
+};
+
+// 快捷键（对齐原版 CTRL+S 截图 / CTRL+H 清除）
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 's') { e.preventDefault(); takeShot(); }
+  if (e.ctrlKey && e.key === 'h') { e.preventDefault(); $('btnClearPts').click(); }
+});
+
+takeShot();
+</script>
+</body>
+</html>
