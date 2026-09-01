@@ -274,6 +274,16 @@ static int l_MD5(lua_State *L) {
     lua_pushstring(L, hex);
     return 1;
 }
+static int l_sha1(lua_State *L) {
+    size_t len = 0;
+    const char *s = luaL_checklstring(L, 1, &len);
+    unsigned char dig[CC_SHA1_DIGEST_LENGTH];
+    CC_SHA1(s, (CC_LONG)len, dig);
+    char hex[41];
+    for (int i = 0; i < CC_SHA1_DIGEST_LENGTH; i++) snprintf(hex + i * 2, 3, "%02x", dig[i]);
+    lua_pushstring(L, hex);
+    return 1;
+}
 static int l_encodeBase64(lua_State *L) {
     size_t len = 0;
     const char *s = luaL_checklstring(L, 1, &len);
@@ -524,6 +534,61 @@ static void maInvokeStopCb(lua_State *L) {
     else lua_pop(L, 1);
 }
 
+// ---------------- 批次 2：图色变体 / 别名表 / 杂项 ----------------
+static int l_findMultiColorAll(lua_State *L) {
+    NSString *r = MatisuFindMultiColorAll((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                          (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                                          [NSString stringWithUTF8String:luaL_checkstring(L, 5)],
+                                          [NSString stringWithUTF8String:luaL_optstring(L, 6, "")],
+                                          luaL_optnumber(L, 7, 0.9));
+    lua_pushstring(L, r.UTF8String);
+    return 1;
+}
+static int l_getScreenPixel(lua_State *L) {
+    NSArray *arr = MatisuGetScreenPixel((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                        (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0));
+    lua_createtable(L, (int)arr.count, 0);
+    [arr enumerateObjectsUsingBlock:^(NSNumber *v, NSUInteger i, BOOL *stop) {
+        lua_pushinteger(L, [v longLongValue]);
+        lua_seti(L, -2, (lua_Integer)i + 1);
+    }];
+    return 1;
+}
+static int l_isDisplayDead(lua_State *L) {
+    int r = MatisuIsDisplayDead((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
+                                luaL_optnumber(L, 5, 5));
+    lua_pushinteger(L, r);
+    return 1;
+}
+static int l_noopTrue(lua_State *L) { lua_pushboolean(L, 1); return 1; }   // keepCapture/releaseCapture/setScreenScale（设备端天然满足）
+static int l_getCpuArch(lua_State *L) { lua_pushstring(L, "arm64"); return 1; }
+static int l_getDisplayDpi(lua_State *L) {
+    __block CGFloat sc = 2.0;
+    void (^rd)(void) = ^{ sc = [UIScreen mainScreen].scale; };
+    if ([NSThread isMainThread]) rd();
+    else dispatch_sync(dispatch_get_main_queue(), rd);
+    lua_pushinteger(L, (lua_Integer)lround(sc * 160));
+    return 1;
+}
+static int l_getOsVersionName(lua_State *L) { pushInfoStr(L, @"systemVersion"); return 1; }
+static int l_rnd(lua_State *L) {
+    lua_Integer a = luaL_checkinteger(L, 1), b = luaL_checkinteger(L, 2);
+    if (a > b) { lua_Integer t = a; a = b; b = t; }
+    lua_pushinteger(L, a + (lua_Integer)arc4random_uniform((uint32_t)(b - a + 1)));
+    return 1;
+}
+#import <AudioToolbox/AudioToolbox.h>
+static int l_vibrate(lua_State *L) {
+    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+// restartScript：常驻脚本自我重启（stop 后由调用方/守护逻辑拉起；one-shot 下置标志由 runfile 层处理——简化为仅 service 语义）
+static int l_restartScript(lua_State *L) {
+    return luaL_error(L, "__MATISU_RESTART__");
+}
+
 static int l_readPasteboard(lua_State *L) {
     NSString *s = MatisuReadPasteboard();
     lua_pushstring(L, s.UTF8String);
@@ -628,6 +693,7 @@ static void svcHook(lua_State *L, lua_Debug *ar) {
 
 static void *svcThread(void *arg) {
     NSString *source = (__bridge_transfer NSString *)arg;
+    NSString *srcCopy = [source copy];   // restartScript 自举用
     lua_State *L = luaL_newstate();
     if (L) {
         luaL_openlibs(L);
@@ -636,11 +702,14 @@ static void *svcThread(void *arg) {
         int status = luaL_loadbufferx(L, source.UTF8String,
                                       (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], "=service", "t");
         if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
+        BOOL restart = NO;
         if (status != LUA_OK) {
             const char *err = lua_tostring(L, -1);
             NSString *msg = err ? [NSString stringWithUTF8String:err] : @"unknown";
             if ([msg containsString:@"__MATISU_STOP__"]) {
                 maInvokeStopCb(L);   // 用户 stop → setStopCallBack 回调
+            } else if ([msg containsString:@"__MATISU_RESTART__"]) {
+                restart = YES;
             } else if (![msg containsString:@"__MATISU_EXIT__"]) {
                 [gSvcOutLock lock];
                 [gSvcOut appendFormat:@"[service error] %@\n", msg];
@@ -648,6 +717,10 @@ static void *svcThread(void *arg) {
             }
         }
         lua_close(L);
+        gSvcL = NULL;
+        gSvcRunning = NO;
+        if (restart) MatisuLuaStart(srcCopy);   // restartScript：自举重跑同一源码
+        return NULL;
     }
     gSvcL = NULL;
     gSvcRunning = NO;
@@ -746,6 +819,16 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "clearCLog", l_clearCLog },
         // 脚本控制
         { "exitScript", l_exitScript }, { "setStopCallBack", l_setStopCallBack },
+        { "restartScript", l_restartScript },
+        // 批次 2：图色变体 / 截图缓存 / 杂项
+        { "findMultiColorAll", l_findMultiColorAll },
+        { "getScreenPixel", l_getScreenPixel }, { "isDisplayDead", l_isDisplayDead },
+        { "keepCapture", l_noopTrue }, { "releaseCapture", l_noopTrue }, { "setScreenScale", l_noopTrue },
+        { "getCpuArch", l_getCpuArch }, { "getDisplayDpi", l_getDisplayDpi },
+        { "getOsVersionName", l_getOsVersionName },
+        { "rnd", l_rnd }, { "vibrate", l_vibrate },
+        // findPic 家族别名（findPicFast/findImage 设备端实现同 findPic，本就近零成本）
+        { "findPicFast", l_findPic }, { "findImage", l_findPic },
         { NULL, NULL },
     };
     // jsonLib 表（encode/decode）
@@ -753,6 +836,20 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
     lua_pushcfunction(L, l_jsonEncode); lua_setfield(L, -2, "encode");
     lua_pushcfunction(L, l_jsonDecode); lua_setfield(L, -2, "decode");
     lua_setglobal(L, "jsonLib");
+    // 别名表：json / network / cipher（对齐原版别名习惯）
+    lua_createtable(L, 0, 2);
+    lua_pushcfunction(L, l_jsonEncode); lua_setfield(L, -2, "encode");
+    lua_pushcfunction(L, l_jsonDecode); lua_setfield(L, -2, "decode");
+    lua_setglobal(L, "json");
+    lua_createtable(L, 0, 2);
+    lua_pushcfunction(L, l_httpGet); lua_setfield(L, -2, "httpGet");
+    lua_pushcfunction(L, l_httpPost); lua_setfield(L, -2, "httpPost");
+    lua_setglobal(L, "network");
+    lua_createtable(L, 0, 3);
+    lua_pushcfunction(L, l_MD5); lua_setfield(L, -2, "md5");
+    lua_pushcfunction(L, l_sha1); lua_setfield(L, -2, "sha1");
+    lua_pushcfunction(L, l_encodeBase64); lua_setfield(L, -2, "base64");
+    lua_setglobal(L, "cipher");
     lua_pushcfunction(L, printFn);
     lua_setglobal(L, "print");
     for (int i = 0; FNS[i].name; i++) {

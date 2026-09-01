@@ -25,6 +25,15 @@ int MatisuGetColorNum(int x1, int y1, int x2, int y2, NSString *colorSpec, doubl
 /// 全部偏移点命中才算一组，命中返回 1 并写锚点逻辑坐标。
 int MatisuFindMultiColor(int x1, int y1, int x2, int y2, NSString *firstColor, NSString *offsetColor, int dir, double sim, int *outX, int *outY);
 
+/// 多点找色全部命中：返回 "x1,y1;x2,y2;..." 串（无命中空串）。
+NSString* _Nonnull MatisuFindMultiColorAll(int x1, int y1, int x2, int y2, NSString *firstColor, NSString *offsetColor, double sim);
+
+/// 区域像素读取（逻辑点区域），返回 BBGGRR 整数数组（无帧空数组）。
+NSArray<NSNumber*>* _Nonnull MatisuGetScreenPixel(int x1, int y1, int x2, int y2);
+
+/// 区域显示死亡检测：与上次采样比对，无变化返回 1。
+int MatisuIsDisplayDead(int x1, int y1, int x2, int y2, double timeout);
+
 #ifdef __cplusplus
 }
 #endif

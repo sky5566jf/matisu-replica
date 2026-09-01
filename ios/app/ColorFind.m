@@ -266,3 +266,93 @@ done:
     if (outY) *outY = toLgY(&c, bestY);
     return 1;
 }
+
+// ---------------- 批次 2：findMultiColorAll / getScreenPixel / isDisplayDead ----------------
+
+NSString* _Nonnull MatisuFindMultiColorAll(int x1, int y1, int x2, int y2, NSString *firstColor, NSString *offsetColor, double sim) {
+    MAColorSpec first[MA_MAX_COLORS];
+    int nFirst = parseMulti(firstColor, first);
+    if (nFirst <= 0) return @"";
+
+    NSArray *segs = [offsetColor componentsSeparatedByString:@","];
+    MAOffsetPt offs[32];
+    int nOff = 0;
+    for (NSString *seg in segs) {
+        if (nOff >= 32) break;
+        NSArray *a = [seg componentsSeparatedByString:@"|"];
+        if (a.count < 3) continue;
+        offs[nOff].dx = [a[0] intValue];
+        offs[nOff].dy = [a[1] intValue];
+        NSString *colorPart = [(NSArray *)[a subarrayWithRange:NSMakeRange(2, a.count - 2)] componentsJoinedByString:@"|"];
+        if (parseOne(colorPart, &offs[nOff].cs)) nOff++;
+    }
+
+    int tol = (int)((1.0 - (sim <= 0 ? 0.9 : (sim > 1 ? 1 : sim))) * 255.0 + 0.5);
+    MACapCtx c;
+    if (!capBegin(&c)) return @"";
+    normRegion(&c, &x1, &y1, &x2, &y2);
+
+    NSMutableString *result = [NSMutableString string];
+    for (int y = y1; y < y2; y++) {
+        for (int x = x1; x < x2; x++) {
+            if (!pxMatch(c.base + (size_t)y * c.bpr + (size_t)x * 4, first, nFirst, tol)) continue;
+            BOOL all = YES;
+            for (int k = 0; k < nOff; k++) {
+                int px = x + (int)lroundf(offs[k].dx * c.kx);
+                int py = y + (int)lroundf(offs[k].dy * c.ky);
+                if (px < 0 || py < 0 || px >= c.w || py >= c.h ||
+                    !pxMatch(c.base + (size_t)py * c.bpr + (size_t)px * 4, &offs[k].cs, 1, tol)) { all = NO; break; }
+            }
+            if (all) {
+                if (result.length) [result appendString:@";"];
+                [result appendFormat:@"%d,%d", toLgX(&c, x), toLgY(&c, y)];
+            }
+        }
+    }
+    capEnd(&c);
+    return result;
+}
+
+NSArray<NSNumber*>* _Nonnull MatisuGetScreenPixel(int x1, int y1, int x2, int y2) {
+    MACapCtx c;
+    if (!capBegin(&c)) return @[];
+    normRegion(&c, &x1, &y1, &x2, &y2);
+    NSMutableArray *arr = [NSMutableArray arrayWithCapacity:(x2 - x1) * (y2 - y1)];
+    for (int y = y1; y < y2; y++) {
+        for (int x = x1; x < x2; x++) {
+            const uint8_t *p = c.base + (size_t)y * c.bpr + (size_t)x * 4;
+            [arr addObject:@((p[0] << 16) | (p[1] << 8) | p[2])];   // BBGGRR
+        }
+    }
+    capEnd(&c);
+    return arr;
+}
+
+// 采样哈希缓存（按区域 key）
+static NSMutableDictionary *gDeadHash = nil;
+
+int MatisuIsDisplayDead(int x1, int y1, int x2, int y2, double timeout) {
+    MACapCtx c;
+    if (!capBegin(&c)) return 0;
+    normRegion(&c, &x1, &y1, &x2, &y2);
+    // 抽样 8x8 网格哈希
+    unsigned long long h = 1469598103934665603ULL;
+    int steps = 8;
+    for (int sy = 0; sy < steps; sy++) {
+        for (int sx = 0; sx < steps; sx++) {
+            int x = x1 + (x2 - x1) * sx / steps, y = y1 + (y2 - y1) * sy / steps;
+            const uint8_t *p = c.base + (size_t)y * c.bpr + (size_t)x * 4;
+            h = (h ^ ((p[0] << 16) | (p[1] << 8) | p[2])) * 1099511628211ULL;
+        }
+    }
+    capEnd(&c);
+    if (!gDeadHash) gDeadHash = [NSMutableDictionary dictionary];
+    NSString *key = [NSString stringWithFormat:@"%d,%d,%d,%d", x1, y1, x2, y2];
+    NSDictionary *prev = gDeadHash[key];
+    gDeadHash[key] = @{ @"h": @(h), @"t": @([NSDate timeIntervalSinceReferenceDate]) };
+    if (!prev) return 0;   // 首次采样无法判断，按"有变化"处理
+    unsigned long long ph = [prev[@"h"] unsignedLongLongValue];
+    double elapsed = [NSDate timeIntervalSinceReferenceDate] - [prev[@"t"] doubleValue];
+    if (ph == h && elapsed >= timeout) return 1;
+    return 0;
+}
