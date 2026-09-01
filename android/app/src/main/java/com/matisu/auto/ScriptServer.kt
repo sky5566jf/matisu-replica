@@ -94,6 +94,12 @@ class ScriptServer(private val port: Int = 18183) {
                     respond(cli, (if (okw) "OK\n" else "FAIL\n").toByteArray())
                 }
 
+                "readfile" -> {
+                    val f = dir?.let { File(it, arg) }
+                    if (!arg.contains("..") && f != null && f.isFile) respond(cli, f.readBytes())
+                    else respond(cli, ByteArray(0))
+                }
+
                 "list" -> {
                     val arr = JSONArray()
                     dir?.listFiles()?.filter { it.isFile }?.forEach { arr.put(it.name) }

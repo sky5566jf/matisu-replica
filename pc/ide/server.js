@@ -25,6 +25,38 @@ function iosSock(cmd, timeout = 20000) {
   } catch (e) { return null; }
 }
 
+// ---- Android 设备端引擎通道（:18183，adb forward）----
+const net = require('net');
+let adbForwarded = false;
+function ensureAdbForward() {
+  if (adbForwarded) return;
+  try {
+    execFileSync(bridge.CFG.android.adb, ['-s', bridge.CFG.android.device, 'forward', 'tcp:18183', 'tcp:18183'], { timeout: 10000 });
+    adbForwarded = true;
+  } catch (_) {}
+}
+/** 向 Android 引擎发指令（与 iOS iosSock 同协议：[4B 长度][payload]） */
+function androidSock(cmd, timeout = 20000) {
+  return new Promise((resolve) => {
+    ensureAdbForward();
+    const sock = new net.Socket();
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; try { sock.destroy(); } catch (_) {} resolve(v); } };
+    sock.setTimeout(timeout);
+    const chunks = [];
+    sock.connect(18183, '127.0.0.1', () => sock.write(cmd + '\n'));
+    sock.on('data', (d) => chunks.push(d));
+    sock.on('end', () => finish(Buffer.concat(chunks).slice(4)));   // 去 4B 长度头
+    sock.on('timeout', () => finish(null));
+    sock.on('error', () => finish(null));
+  });
+}
+/** 统一引擎通道：当前 target 决定走 iOS 还是 Android */
+async function engineSock(cmd, timeout = 20000) {
+  if (bridge.CFG.target === 'android') return androidSock(cmd, timeout);
+  return iosSock(cmd, timeout);
+}
+
 const PORT = parseInt(process.argv[2] || '5586', 10);
 let lastScreen = null;   // 最近一次截图（裁剪/找图复用）
 const TPL_DIR = path.join(__dirname, 'templates');
@@ -49,7 +81,7 @@ function applyDevice(dev) {
   if (!dev) return false;
   bridge.CFG.target = dev.type;
   if (dev.type === 'ios') { bridge.CFG.ios.host = dev.host; bridge.CFG.ios.port = dev.port | 0 || 18182; }
-  else { bridge.CFG.android.device = dev.host + ':' + (dev.port | 0 || 5555); }
+  else { bridge.CFG.android.device = dev.host + ':' + (dev.port | 0 || 5555); adbForwarded = false; }
   return true;
 }
 // 启动时应用活动设备
@@ -130,13 +162,17 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return send(res, 500, JSON.stringify({ error: e.message })); }
   }
 
-  // ---- 脚本管理（iOS=设备 scripts 目录；Android=PC 本地 scripts/）----
+  // ---- 脚本管理（iOS/Android 均走设备引擎通道；Android 需 APK v2+ 的 readfile 指令）----
   const LOCAL_SCRIPTS = path.join(__dirname, 'scripts');
   if (!fs.existsSync(LOCAL_SCRIPTS)) fs.mkdirSync(LOCAL_SCRIPTS, { recursive: true });
 
   if (p === '/api/scripts') {
     if (bridge.CFG.target === 'android') {
-      return send(res, 200, JSON.stringify(fs.readdirSync(LOCAL_SCRIPTS).filter((f) => f.endsWith('.lua'))));
+      const out0 = await engineSock('list');
+      try {
+        const all = JSON.parse(String(out0));
+        return send(res, 200, JSON.stringify(all.filter((f) => String(f).endsWith('.lua'))));
+      } catch (_) { return send(res, 200, '[]'); }
     }
     const out = iosSock('list');
     try {
@@ -149,8 +185,8 @@ const server = http.createServer(async (req, res) => {
     const name = u.searchParams.get('name') || '';
     if (!name || name.includes('..')) return send(res, 400, '{"error":"bad name"}');
     if (bridge.CFG.target === 'android') {
-      const f = path.join(LOCAL_SCRIPTS, name);
-      return send(res, 200, JSON.stringify({ code: fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '' }));
+      const outR = await engineSock('readfile ' + name);
+      return send(res, 200, JSON.stringify({ code: outR ? String(outR) : '' }));
     }
     // iOS：经 run 指令读设备文件内容
     const rb = Buffer.from(`local f = io.open("/var/mobile/MatisuAuto/scripts/${name}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
@@ -164,8 +200,10 @@ const server = http.createServer(async (req, res) => {
     const name = String(b.name || '');
     if (!name || name.includes('..')) return send(res, 400, '{"error":"bad name"}');
     if (bridge.CFG.target === 'android') {
-      fs.writeFileSync(path.join(LOCAL_SCRIPTS, name), String(b.code || ''), 'utf8');
-      return send(res, 200, '{"ok":true}');
+      const b64n2 = Buffer.from(name, 'utf8').toString('base64');
+      const b64c2 = Buffer.from(String(b.code || ''), 'utf8').toString('base64');
+      const outU = await engineSock(`upload ${b64n2} ${b64c2}`);
+      return send(res, 200, JSON.stringify({ ok: String(outU).trim() === 'OK' }));
     }
     const b64n = Buffer.from(name, 'utf8').toString('base64');
     const b64c = Buffer.from(String(b.code || ''), 'utf8').toString('base64');
@@ -177,8 +215,8 @@ const server = http.createServer(async (req, res) => {
     const name = u.searchParams.get('name') || '';
     if (!name || name.includes('..')) return send(res, 400, '{"error":"bad name"}');
     if (bridge.CFG.target === 'android') {
-      try { fs.unlinkSync(path.join(LOCAL_SCRIPTS, name)); } catch (_) {}
-      return send(res, 200, '{"ok":true}');
+      const outD = await engineSock('delete ' + name);
+      return send(res, 200, JSON.stringify({ ok: String(outD).trim() === 'OK' }));
     }
     const out4 = iosSock('delete ' + name);
     return send(res, 200, JSON.stringify({ ok: String(out4).trim() === 'OK' }));
@@ -186,7 +224,7 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/runfile' && req.method === 'POST') {
     const b = await readBody(req);
-    const out5 = iosSock('runfile ' + String(b.name || ''), 60000);
+    const out5 = await engineSock('runfile ' + String(b.name || ''), 60000);
     if (!out5) return send(res, 502, '{"ok":false,"error":"runfile 失败"}');
     return send(res, 200, String(out5));
   }
@@ -203,8 +241,8 @@ const server = http.createServer(async (req, res) => {
     for (const f of files) {
       let code = '';
       if (bridge.CFG.target === 'android') {
-        const lf = path.join(LOCAL_SCRIPTS, f);
-        if (fs.existsSync(lf)) code = fs.readFileSync(lf, 'utf8');
+        const outR2 = await engineSock('readfile ' + f);
+        code = outR2 ? String(outR2) : '';
       } else {
         const rb = Buffer.from(`local f = io.open("/var/mobile/MatisuAuto/scripts/${f}", "r") if f then print(f:read("*a")) f:close() end`, 'utf8').toString('base64');
         const out7 = iosSock('run ' + rb);
@@ -228,9 +266,9 @@ const server = http.createServer(async (req, res) => {
     // 常驻控制：{action: start|stop|state, code?}
     const b = await readBody(req);
     let out6;
-    if (b.action === 'start') out6 = iosSock('start ' + Buffer.from(String(b.code || ''), 'utf8').toString('base64'));
-    else if (b.action === 'stop') out6 = iosSock('stop');
-    else out6 = iosSock('state');
+    if (b.action === 'start') out6 = await engineSock('start ' + Buffer.from(String(b.code || ''), 'utf8').toString('base64'));
+    else if (b.action === 'stop') out6 = await engineSock('stop');
+    else out6 = await engineSock('state');
     if (b.action === 'state') { try { return send(res, 200, String(out6)); } catch (_) { return send(res, 200, '{}'); } }
     return send(res, 200, JSON.stringify({ ok: String(out6).trim() === 'OK' }));
   }
@@ -361,13 +399,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (p === '/api/run' && req.method === 'POST') {
-    // iOS：设备端 run（base64）；Android：暂提示走 runner
+    // 双端设备引擎 run（base64）
     const b = await readBody(req);
-    if (bridge.CFG.target === 'android') {
-      return send(res, 200, JSON.stringify({ ok: false, error: 'Android 脚本运行请用 runner.js（IDE 内运行暂仅支持 iOS 设备端）' }));
-    }
     const b64 = Buffer.from(String(b.code || ''), 'utf8').toString('base64');
-    const out = iosSock('run ' + b64, 60000);
+    const out = await engineSock('run ' + b64, 60000);
     if (!out) return send(res, 502, JSON.stringify({ ok: false, error: 'run 失败（设备无响应或脚本超时）' }));
     try { return send(res, 200, String(out)); } catch (_) { return send(res, 200, String(out), 'text/plain; charset=utf-8'); }
   }
