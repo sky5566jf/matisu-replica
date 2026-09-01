@@ -86,6 +86,25 @@ const server = http.createServer(async (req, res) => {
   if (p === '/') return send(res, 200, fs.readFileSync(path.join(__dirname, 'index.html')), 'text/html; charset=utf-8');
   if (p === '/zhuazhua') return send(res, 200, fs.readFileSync(path.join(__dirname, 'zhuazhua.html')), 'text/html; charset=utf-8');
 
+  // ---- API 契约清单（从 core.lua 解析：分节注释 + _stub 函数名 + 表方法）----
+  if (p === '/api/apis') {
+    try {
+      const core = fs.readFileSync(path.join(__dirname, '..', '..', 'common', 'lua-api', 'core.lua'), 'utf8');
+      const sections = [];
+      let cur = { name: '全局', fns: [] };
+      for (const line of core.split('\n')) {
+        const sec = line.match(/^--\s*[一二三四五六七八九十]+、(.+)$/);
+        if (sec) { if (cur.fns.length) sections.push(cur); cur = { name: sec[1].trim(), fns: [] }; continue; }
+        const m = line.match(/_stub\("([^"]+)"\)/);
+        if (m) { cur.fns.push(m[1]); continue; }
+        const m2 = line.match(/^\s*(?:function\s+)?(?:jsonLib|imeLib|ImageUtil|ui|nodeLib|strutils|cryptLib|console|lfs)\.(\w+)/);
+        if (m2) cur.fns.push(line.trim().split('.')[0].replace(/^\W+/, '') + '.' + m2[1]);
+      }
+      if (cur.fns.length) sections.push(cur);
+      return send(res, 200, JSON.stringify(sections));
+    } catch (e) { return send(res, 500, JSON.stringify({ error: e.message })); }
+  }
+
   // ---- 脚本管理（iOS=设备 scripts 目录；Android=PC 本地 scripts/）----
   const LOCAL_SCRIPTS = path.join(__dirname, 'scripts');
   if (!fs.existsSync(LOCAL_SCRIPTS)) fs.mkdirSync(LOCAL_SCRIPTS, { recursive: true });

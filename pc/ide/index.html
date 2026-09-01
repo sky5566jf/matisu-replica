@@ -37,10 +37,24 @@
   #debugctl .tb { padding: 4px 6px; font-size: 12px; text-align: center; }
   #svcstate { grid-column: 1/3; font-size: 11px; color: #7d8791; text-align: center; }
 
-  /* ===== 中间编辑器 ===== */
-  #editor { flex: 1; display: flex; overflow: hidden; background: #1e2127; }
+  /* ===== 中间编辑器（高亮 overlay：pre 垫底 + 透明 textarea） ===== */
+  #editor { flex: 1; display: flex; overflow: hidden; background: #1e2127; position: relative; }
   #gutter { width: 44px; background: #1a1d23; color: #5a6370; font-family: Consolas, monospace; font-size: 12px; text-align: right; padding: 8px 6px; overflow: hidden; line-height: 1.5; user-select: none; white-space: pre; }
-  #code { flex: 1; background: #1e2127; color: #d4d4d4; border: none; outline: none; resize: none; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.5; padding: 8px; tab-size: 4; white-space: pre; }
+  #editwrap { flex: 1; position: relative; overflow: hidden; }
+  #hl, #code { font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.5; padding: 8px; tab-size: 4; white-space: pre; }
+  #hl { position: absolute; inset: 0; overflow: hidden; color: #d4d4d4; pointer-events: none; margin: 0; }
+  #code { position: absolute; inset: 0; width: 100%; height: 100%; background: transparent; color: transparent; caret-color: #fff; border: none; outline: none; resize: none; }
+  #hl .k { color: #c586c0; }   /* 关键词 */
+  #hl .s { color: #ce9178; }   /* 字符串 */
+  #hl .c { color: #6a9955; }   /* 注释 */
+  #hl .n { color: #b5cea8; }   /* 数字 */
+  #hl .a { color: #4ec9b0; }   /* 契约 API */
+  /* 函数面板 */
+  #fnsearch { width: calc(100% - 12px); margin: 4px 6px; background: #1b1e23; color: #c8cdd5; border: 1px solid #3f3f46; padding: 3px 6px; font-size: 12px; }
+  #fnlist { flex: 1; overflow-y: auto; padding: 2px 4px; }
+  .fnsec { color: #8ab4f8; font-size: 11px; padding: 4px 4px 1px; }
+  .fnitem { padding: 2px 8px; color: #b8c0ca; font-family: Consolas, monospace; font-size: 11px; cursor: pointer; border-radius: 2px; }
+  .fnitem:hover { background: #31383f; color: #4ec9b0; }
 
   /* ===== 右列：调试输出 + 帮助 ===== */
   #right { width: 340px; background: #262b32; border-left: 1px solid #101215; display: flex; flex-direction: column; flex: none; }
@@ -73,9 +87,14 @@
 
 <div id="main">
   <div id="left">
-    <div class="lpanel" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div class="lpanel" style="flex:1.2;display:flex;flex-direction:column;overflow:hidden">
       <h3>文件管理 <span id="frefresh" style="float:right;cursor:pointer;color:#7d8791">⟳</span></h3>
       <div id="filelist"></div>
+    </div>
+    <div class="lpanel" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-top:1px solid #101215">
+      <h3>函数</h3>
+      <input id="fnsearch" placeholder="搜索函数…">
+      <div id="fnlist"></div>
     </div>
     <div id="debugctl">
       <button class="tb" id="btnRun2">运行(F5)</button>
@@ -88,11 +107,14 @@
 
   <div id="editor">
     <div id="gutter">1</div>
-    <textarea id="code" spellcheck="false">-- MatisuAuto 脚本
+    <div id="editwrap">
+      <pre id="hl"></pre>
+      <textarea id="code" spellcheck="false">-- MatisuAuto 脚本
 -- 左侧选文件或直接编辑；F5 运行 / 常驻运行 / 停止
 local w, h = getDisplaySize()
 print("screen: " .. w .. "x" .. h)
 </textarea>
+    </div>
   </div>
 
   <div id="right">
@@ -129,13 +151,90 @@ function log(s) {
   el.scrollTop = el.scrollHeight;
 }
 
-// ============ 行号 ============
+// ============ 行号 + 高亮 ============
 function syncGutter() {
   const n = $('code').value.split('\n').length;
   $('gutter').textContent = Array.from({ length: n }, (_, i) => i + 1).join('\n');
 }
-$('code').addEventListener('input', () => { syncGutter(); markDirty(); });
-$('code').addEventListener('scroll', () => { $('gutter').scrollTop = $('code').scrollTop; });
+
+const LUA_KW = new Set(('and break do else elseif end false for function goto if in local nil not or repeat return then true until while').split(' '));
+let API_SET = new Set();
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function highlight(src) {
+  // 逐行处理：注释 > 字符串 > 关键词/数字/API
+  return src.split('\n').map((line) => {
+    let out = '';
+    let rest = line;
+    // 行注释（不在字符串内的 --，简化处理：找第一个 -- 且前面无引号奇数）
+    let ci = rest.indexOf('--');
+    let comment = '';
+    if (ci >= 0) { comment = esc(rest.slice(ci)); rest = rest.slice(0, ci); }
+    // 字符串与词法
+    const re = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(\d+\.?\d*)\b|\b([A-Za-z_]\w*)\b/g;
+    let m, last = 0;
+    while ((m = re.exec(rest))) {
+      out += esc(rest.slice(last, m.index));
+      if (m[1]) out += `<span class="s">${esc(m[1])}</span>`;
+      else if (m[2]) out += `<span class="n">${esc(m[2])}</span>`;
+      else if (m[3]) {
+        const w = m[3];
+        if (LUA_KW.has(w)) out += `<span class="k">${w}</span>`;
+        else if (API_SET.has(w)) out += `<span class="a">${w}</span>`;
+        else out += esc(w);
+      }
+      last = m.index + m[0].length;
+    }
+    out += esc(rest.slice(last));
+    if (comment) out += `<span class="c">${comment}</span>`;
+    return out;
+  }).join('\n');
+}
+
+function renderHl() {
+  $('hl').innerHTML = highlight($('code').value) + '\n';
+  $('hl').scrollTop = $('code').scrollTop;
+  $('hl').scrollLeft = $('code').scrollLeft;
+}
+
+$('code').addEventListener('input', () => { syncGutter(); renderHl(); markDirty(); });
+$('code').addEventListener('scroll', () => {
+  $('gutter').scrollTop = $('code').scrollTop;
+  $('hl').scrollTop = $('code').scrollTop;
+  $('hl').scrollLeft = $('code').scrollLeft;
+});
+
+// ============ 函数面板 ============
+let API_SECTIONS = [];
+async function loadApis() {
+  try {
+    API_SECTIONS = await (await fetch('/api/apis')).json();
+    API_SET = new Set();
+    API_SECTIONS.forEach((s) => s.fns.forEach((f) => API_SET.add(f.split('.').pop())));
+    renderFnList('');
+    renderHl();
+  } catch (e) { /* 无清单时不高亮 API */ }
+}
+function renderFnList(q) {
+  q = q.toLowerCase();
+  $('fnlist').innerHTML = API_SECTIONS.map((sec) => {
+    const fns = sec.fns.filter((f) => !q || f.toLowerCase().includes(q));
+    if (!fns.length) return '';
+    return `<div class="fnsec">${sec.name}</div>` +
+      fns.map((f) => `<div class="fnitem" data-f="${f}">${f}</div>`).join('');
+  }).join('');
+  document.querySelectorAll('.fnitem').forEach((el) => el.onclick = () => insertAtCursor(el.dataset.f));
+}
+function insertAtCursor(text) {
+  const ta = $('code');
+  const st = ta.selectionStart, en = ta.selectionEnd;
+  ta.value = ta.value.slice(0, st) + text + ta.value.slice(en);
+  ta.selectionStart = ta.selectionEnd = st + text.length;
+  ta.focus();
+  syncGutter(); renderHl(); markDirty();
+}
+$('fnsearch').addEventListener('input', (e) => renderFnList(e.target.value));
 
 // ============ 标签页 ============
 function markDirty() {
@@ -159,7 +258,7 @@ function switchTab(i) {
   if (i < 0 || i >= tabs.length) return;
   activeTab = i;
   $('code').value = tabs[i].code;
-  renderTabs(); syncGutter();
+  renderTabs(); syncGutter(); renderHl();
 }
 function openTab(name, code) {
   const ex = tabs.findIndex((t) => t.name === name);
@@ -254,11 +353,20 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'F6') { e.preventDefault(); stopSvc(); }
   if (e.ctrlKey && e.key === 's') { e.preventDefault(); $('btnSave').click(); }
 });
+// Tab 键缩进（原版编辑器行为）
+$('code').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    insertAtCursor('    ');
+  }
+});
 
 $('stdev').textContent = 'iOS 192.69.0.38';
 loadFiles();
 refreshState();
+loadApis();
 syncGutter();
+renderHl();
 </script>
 </body>
 </html>
