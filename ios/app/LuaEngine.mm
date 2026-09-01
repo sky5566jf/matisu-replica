@@ -704,11 +704,14 @@ static void maInvokeStopCb(lua_State *L) {
 
 // ---------------- 批次 2：图色变体 / 别名表 / 杂项 ----------------
 static int l_findMultiColorAll(lua_State *L) {
+    // 原版签名 8 参：(x1,y1,x2,y2,first_color,offset_color,dir,sim)。
+    // dir 对 All 变体只影响返回点序（集合相同），收下第 7 参但忽略，sim 取第 8 参。
+    (void)luaL_optinteger(L, 7, 0);
     NSString *r = MatisuFindMultiColorAll((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
                                           (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0),
                                           [NSString stringWithUTF8String:luaL_checkstring(L, 5)],
                                           [NSString stringWithUTF8String:luaL_optstring(L, 6, "")],
-                                          luaL_optnumber(L, 7, 0.9));
+                                          luaL_optnumber(L, 8, 0.9));
     lua_pushstring(L, r.UTF8String);
     return 1;
 }
