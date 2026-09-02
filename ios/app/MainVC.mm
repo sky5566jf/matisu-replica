@@ -107,6 +107,15 @@ static UILabel *maSectionTitle(UIView *parent, NSString *text, CGFloat y, CGFloa
     // 失败（约 15s）才被拉起，状态行会误显示"已停止"。
     dispatch_async(dispatch_get_global_queue(0, 0), ^{ MatisuServiceStart(); });
 
+    // 覆盖 daemon 启动期：spawnTarget 后 :18182 监听约 1-2s 起来，期间
+    // viewWillAppear 触发的 refreshSvc 探测会显示"已停止"且不会自动复查，
+    // 排程连续 6 次（1+1.5+2.25+3.4+5+7.5 ≈ 20s 兜底）保证状态行跟上去。
+    for (int i = 0; i < 6; i++) {
+        CGFloat dt = 1.0 + i * 1.5;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(dt * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ [self refreshSvc]; });
+    }
+
     // ---- 文件浏览器 ----
     maSectionTitle(cv, @"文件浏览", y, w);
     y += 30;
