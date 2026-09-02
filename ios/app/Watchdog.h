@@ -20,6 +20,14 @@ void MatisuWatchdogStop(void);
 /// 恢复保活：清 stopFlag 并确保看门狗在跑。用户"启动服务"时调用。
 void MatisuWatchdogResume(void);
 
+/// 启动服务：清 stopFlag、确保看门狗在跑，并立即拉起 daemon
+/// （幂等：18182 端口已监听则不重复拉起）。
+void MatisuServiceStart(void);
+
+/// 停止服务：写 stopFlag（防拉起）、杀看门狗、杀全部 daemon 进程
+/// （排除调用方自身——app UI 与 daemon 同进程名）。返回杀掉的进程数。
+int MatisuServiceStop(void);
+
 /// 看门狗是否处于"已停止（不拉起）"语义。
 BOOL MatisuWatchdogIsStopped(void);
 

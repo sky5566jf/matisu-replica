@@ -503,6 +503,60 @@ void MatisuWatchdogResume(void) {
     MatisuWatchdogEnsureStarted();
 }
 
+void MatisuServiceStart(void) {
+    MatisuWatchdogResume();              // 清 stopFlag + 确保看门狗在跑
+    if (MatisuPortInUse(18182)) return;  // daemon 已在，幂等
+
+    // 直接 spawn daemon，省去看门狗一个探活周期（threshold×interval ≈ 15s）。
+    // 复用看门狗的 spawnTarget，保证 argv / runtime 目录 / 降权 / daemonize
+    // 语义与崩溃自动拉起完全一致（否则两套拉起路径迟早跑偏）。
+    NSString *exe = maExecutablePath();
+    if (!exe.length) return;
+
+    WatchdogConf c;
+    memset(&c, 0, sizeof(c));
+    strncpy(c.exe, exe.fileSystemRepresentation, sizeof(c.exe) - 1);
+    strncpy(c.runtime, maRuntimeDir().fileSystemRepresentation, sizeof(c.runtime) - 1);
+    strncpy(c.comm, (exe.lastPathComponent ?: @"MatisuAuto").fileSystemRepresentation,
+            sizeof(c.comm) - 1);
+    c.comm[15] = '\0';   // MAXCOMLEN
+    c.port = 18182;
+    c.headless = 1;      // --daemon 无头模式
+    c.targetUid = 0;     // app 侧拉起沿用当前 uid（TrollStore 下本就是 mobile）
+    spawnTarget(&c, NULL);
+}
+
+int MatisuServiceStop(void) {
+    MatisuWatchdogStop();   // stopFlag：看门狗不再拉起
+    MatisuWatchdogKill();   // 杀看门狗本体
+
+    // 按进程名杀 daemon。app UI 与 daemon 同 comm，必须排除自身。
+    char comm[64];
+    NSString *base = maExecutablePath().lastPathComponent ?: @"MatisuAuto";
+    strncpy(comm, base.fileSystemRepresentation, sizeof(comm) - 1);
+    comm[15] = '\0';   // MAXCOMLEN
+    pid_t self = getpid();
+    int killed = 0;
+
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+    size_t len = 0;
+    if (sysctl(mib, 4, NULL, &len, NULL, 0) != 0) return 0;
+    struct kinfo_proc *ps = (struct kinfo_proc *)malloc(len);
+    if (!ps) return 0;
+    if (sysctl(mib, 4, ps, &len, NULL, 0) == 0) {
+        int n = (int)(len / sizeof(struct kinfo_proc));
+        for (int i = 0; i < n; i++) {
+            if (ps[i].kp_proc.p_pid == self) continue;
+            if (strcmp(ps[i].kp_proc.p_comm, comm) == 0) {
+                kill(ps[i].kp_proc.p_pid, SIGKILL);
+                killed++;
+            }
+        }
+    }
+    free(ps);
+    return killed;
+}
+
 BOOL MatisuWatchdogIsStopped(void) {
     return access(maStopFile().fileSystemRepresentation, F_OK) == 0;
 }
