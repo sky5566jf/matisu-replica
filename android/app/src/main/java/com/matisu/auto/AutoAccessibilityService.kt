@@ -20,6 +20,22 @@ class AutoAccessibilityService : AccessibilityService() {
         /** MainActivity 置位：有投屏授权弹窗待自动接受 */
         @Volatile var pendingAutoAcceptProjection = false
 
+        /** 引擎启停控制广播（app 主界面「启动服务/停止服务」） */
+        const val ACTION_START_ENGINE = "com.matisu.auto.action.START_ENGINE"
+        const val ACTION_STOP_ENGINE = "com.matisu.auto.action.STOP_ENGINE"
+
+        private var server: ScriptServer? = null
+
+        @Synchronized fun startEngine() {
+            if (server == null) server = ScriptServer(18183)
+            server?.start()
+        }
+
+        @Synchronized fun stopEngine() {
+            LuaEngine.stop()
+            server?.stop()
+        }
+
         /** 屏幕逻辑尺寸（脚本坐标系） */
         fun displaySize(): Pair<Int, Int> {
             val ctx = instance ?: return Pair(720, 1280)
@@ -29,13 +45,44 @@ class AutoAccessibilityService : AccessibilityService() {
         }
     }
 
+    private var controlReceiver: android.content.BroadcastReceiver? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        // 设备端 Lua 引擎：脚本目录 + 指令服务
-        LuaEngine.scriptDir = getExternalFilesDir("scripts")
-        ScriptServer(18183).start()
+        // 设备端 Lua 引擎：脚本目录 + 日志落盘 + 指令服务
+        LuaEngine.scriptDir = MatisuDirs.scripts(this)
+        EngineLog.logFile = java.io.File(MatisuDirs.logs(this), "engine.log")
+        registerControl()
+        startEngine()
         LuaEngine.autoRun()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        instance = null
+        controlReceiver?.let { try { unregisterReceiver(it) } catch (_: Exception) {} }
+        controlReceiver = null
+    }
+
+    /** 注册引擎启停控制广播（仅本 app，不导出） */
+    private fun registerControl() {
+        if (controlReceiver != null) return
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+                when (intent?.action) {
+                    ACTION_START_ENGINE -> startEngine()
+                    ACTION_STOP_ENGINE -> stopEngine()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(ACTION_START_ENGINE)
+            addAction(ACTION_STOP_ENGINE)
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, r, filter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        controlReceiver = r
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

@@ -21,6 +21,7 @@ class ScriptServer(private val port: Int = 18183) {
 
     private var serverThread: Thread? = null
     @Volatile private var running = false
+    @Volatile private var serverSocket: ServerSocket? = null
 
     fun start() {
         if (running) return
@@ -28,6 +29,7 @@ class ScriptServer(private val port: Int = 18183) {
         serverThread = Thread {
             try {
                 val ss = ServerSocket(port)
+                serverSocket = ss
                 Log.i("MatisuAuto", "ScriptServer listening :$port")
                 while (running) {
                     try {
@@ -36,9 +38,18 @@ class ScriptServer(private val port: Int = 18183) {
                     } catch (_: Exception) {}
                 }
             } catch (e: Exception) {
-                Log.e("MatisuAuto", "ScriptServer died: ${e.message}")
+                if (running) Log.e("MatisuAuto", "ScriptServer died: ${e.message}")
+            } finally {
+                serverSocket = null
+                running = false
             }
         }.also { it.isDaemon = true; it.start() }
+    }
+
+    /** 停止监听（「停止服务」用）；accept 因 close 抛异常退出循环。 */
+    fun stop() {
+        running = false
+        try { serverSocket?.close() } catch (_: Exception) {}
     }
 
     private fun respond(cli: Socket, payload: ByteArray) {

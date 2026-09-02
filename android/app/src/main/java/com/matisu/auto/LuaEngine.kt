@@ -38,13 +38,14 @@ object LuaEngine {
 
         g.set("print", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                synchronized(outLock) {
-                    for (i in 1..args.narg()) {
-                        if (i > 1) out.append('\t')
-                        out.append(args.arg(i).tojstring())
-                    }
-                    out.append('\n')
+                val sb = StringBuilder()
+                for (i in 1..args.narg()) {
+                    if (i > 1) sb.append('\t')
+                    sb.append(args.arg(i).tojstring())
                 }
+                sb.append('\n')
+                synchronized(outLock) { out.append(sb) }
+                EngineLog.append(sb.toString())
                 return NIL
             }
         })
@@ -196,6 +197,7 @@ object LuaEngine {
                 val msg = e.message ?: ""
                 if (!msg.contains("__MATISU_STOP__")) {
                     synchronized(outLock) { svcOut.append("[service error] $msg\n") }
+                    EngineLog.append("[service error] $msg\n")
                 }
             } finally {
                 svcRunning = false
