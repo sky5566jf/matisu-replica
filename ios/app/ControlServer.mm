@@ -198,6 +198,25 @@ static void* MAClientLoop(void* arg) {
                         sendLE(cli, NULL, 0);
                         NSLog(@"[MatisuAuto] uinode failed (需 accessibility.inspection 授权)");
                     }
+                } else if (strncmp(line, "logtail ", 8) == 0) {
+                    // logtail <offset>：增量拉取引擎日志（logdir/engine.log）
+                    // 返回 {"off":<新offset>,"data":"<增量文本>"}；offset 超文件大小（被截断/清空）时从头读。
+                    unsigned long long off = strtoull(line + 8, NULL, 10);
+                    NSString *p = [MatisuLogDir() stringByAppendingPathComponent:@"engine.log"];
+                    NSMutableDictionary *r = [NSMutableDictionary dictionaryWithDictionary:@{ @"off": @0, @"data": @"" }];
+                    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:p];
+                    if (fh) {
+                        unsigned long long sz = [fh seekToEndOfFile];
+                        unsigned long long from = (off <= sz) ? off : 0;
+                        [fh seekToFileOffset:from];
+                        NSData *d = [fh readDataToEndOfFile];
+                        [fh closeFile];
+                        NSString *txt = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] ?: @"";
+                        r[@"off"] = @(from + d.length);
+                        r[@"data"] = txt;
+                    }
+                    NSData *j = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, j ? j.bytes : NULL, j ? j.length : 0);
                 } else if (strncmp(line, "run ", 4) == 0 && line[4]) {
                     // run <base64(lua 源码)>：设备端 Lua 引擎执行（base64 防协议冲突）
                     NSString *b64 = [NSString stringWithUTF8String:line + 4];

@@ -138,6 +138,30 @@ class ScriptServer(private val port: Int = 18183) {
                     respond(cli, j.toString().toByteArray())
                 }
 
+                // logtail <offset>：增量拉取引擎日志（logs/engine.log），协议与 iOS 端一致
+                // 返回 {"off":<新offset>,"data":"<增量文本>"}；offset 超文件大小（被截断）时从头读。
+                "logtail" -> {
+                    val off = arg.trim().toLongOrNull() ?: 0L
+                    val f = EngineLog.logFile
+                    val j = JSONObject()
+                    if (f != null && f.isFile) {
+                        val sz = f.length()
+                        val from = if (off in 0..sz) off else 0L
+                        f.inputStream().use { ins ->
+                            ins.skip(from)
+                            val d = ins.readBytes()
+                            j.put("off", from + d.size).put("data", String(d, Charsets.UTF_8))
+                        }
+                    } else j.put("off", 0).put("data", "")
+                    respond(cli, j.toString().toByteArray())
+                }
+
+                // nodetree：无障碍节点树 JSON（IDE 节点查看器）
+                "nodetree" -> {
+                    val j = AutoAccessibilityService.instance?.dumpJson()
+                    respond(cli, (j ?: "{\"count\":0,\"error\":\"无障碍服务未连接\"}").toByteArray())
+                }
+
                 else -> respond(cli, "unknown command\n".toByteArray())
             }
         } catch (e: Exception) {

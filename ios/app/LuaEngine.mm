@@ -43,16 +43,19 @@ static int l_print(lua_State *L) {
     NSMutableString *out = maOut(L);
     int n = lua_gettop(L);
     lua_getglobal(L, "tostring");
+    NSMutableString *line = [NSMutableString string];
     for (int i = 1; i <= n; i++) {
         lua_pushvalue(L, -1);
         lua_pushvalue(L, i);
         lua_call(L, 1, 1);
         const char *s = lua_tostring(L, -1);
-        if (i > 1) [out appendString:@"\t"];
-        if (s) [out appendString:[NSString stringWithUTF8String:s] ?: @"?"];
+        if (i > 1) [line appendString:@"\t"];
+        if (s) [line appendString:[NSString stringWithUTF8String:s] ?: @"?"];
         lua_pop(L, 1);
     }
-    [out appendString:@"\n"];
+    [line appendString:@"\n"];
+    [out appendString:line];
+    maEngineLogAppend(line);   // 镜像落盘：IDE 日志流
     return 0;
 }
 
@@ -651,6 +654,36 @@ static int l_getScreenResolution(lua_State *L) {
 
 // ---------------- 日志控制台（设备端 logdir/log.txt） ----------------
 static NSString *maLogPath(void) { return [MatisuLogDir() stringByAppendingPathComponent:@"log.txt"]; }
+
+// ---- 引擎输出日志（logdir/engine.log）：所有 print 镜像落盘，供 PC IDE 日志流拉取 ----
+// 与 Android 侧 EngineLog 对齐：追加写、超 256KB 时保留尾部 128KB 截断。
+static NSString *maEngineLogPath(void) { return [MatisuLogDir() stringByAppendingPathComponent:@"engine.log"]; }
+static void maEngineLogAppend(NSString *text) {
+    if (!text.length) return;
+    @autoreleasepool {
+        NSString *p = maEngineLogPath();
+        NSFileManager *fm = [NSFileManager defaultManager];
+        [fm createDirectoryAtPath:[p stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
+        NSData *d = [text dataUsingEncoding:NSUTF8StringEncoding];
+        if (![fm fileExistsAtPath:p]) {
+            [d writeToFile:p atomically:YES];
+            return;
+        }
+        NSDictionary *attr = [fm attributesOfItemAtPath:p error:nil];
+        unsigned long long sz = [attr fileSize];
+        if (sz > 256 * 1024) {
+            NSFileHandle *rh = [NSFileHandle fileHandleForReadingAtPath:p];
+            [rh seekToFileOffset:sz - 128 * 1024];
+            NSData *tail = [rh readDataToEndOfFile];
+            [rh closeFile];
+            [tail writeToFile:p atomically:YES];
+        }
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
+        [fh seekToEndOfFile];
+        [fh writeData:d];
+        [fh closeFile];
+    }
+}
 static void maLogAppend(NSString *level, NSString *msg) {
     @autoreleasepool {
         NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
@@ -936,18 +969,21 @@ static int l_printSvc(lua_State *L) {
     if (!gSvcOut) gSvcOut = [NSMutableString string];
     int n = lua_gettop(L);
     lua_getglobal(L, "tostring");
-    [gSvcOutLock lock];
+    NSMutableString *line = [NSMutableString string];
     for (int i = 1; i <= n; i++) {
         lua_pushvalue(L, -1);
         lua_pushvalue(L, i);
         lua_call(L, 1, 1);
         const char *s = lua_tostring(L, -1);
-        if (i > 1) [gSvcOut appendString:@"\t"];
-        if (s) [gSvcOut appendString:[NSString stringWithUTF8String:s] ?: @"?"];
+        if (i > 1) [line appendString:@"\t"];
+        if (s) [line appendString:[NSString stringWithUTF8String:s] ?: @"?"];
         lua_pop(L, 1);
     }
-    [gSvcOut appendString:@"\n"];
+    [line appendString:@"\n"];
+    [gSvcOutLock lock];
+    [gSvcOut appendString:line];
     [gSvcOutLock unlock];
+    maEngineLogAppend(line);   // 镜像落盘：IDE 日志流
     return 0;
 }
 

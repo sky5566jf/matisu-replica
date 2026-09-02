@@ -212,6 +212,47 @@ class AutoAccessibilityService : AccessibilityService() {
         return sb.toString()
     }
 
+    /** 节点树 JSON dump（供 IDE 节点查看器）：含 bounds/text/desc/class/id/状态位，深度优先。
+     *  节点数超 3000 截断防大包。根包一层 {pkg, count, root}。 */
+    fun dumpJson(): String {
+        val root = rootInActiveWindow ?: return "{\"count\":0}"
+        val counter = intArrayOf(0)
+        val rootJ = nodeToJson(root, 0, counter) ?: org.json.JSONObject()
+        val top = org.json.JSONObject()
+        top.put("pkg", root.packageName?.toString() ?: "")
+        top.put("count", counter[0])
+        top.put("truncated", counter[0] >= 3000)
+        top.put("root", rootJ)
+        return top.toString()
+    }
+
+    private fun nodeToJson(node: AccessibilityNodeInfo?, depth: Int, counter: IntArray): org.json.JSONObject? {
+        if (node == null || counter[0] >= 3000) return null
+        counter[0]++
+        val j = org.json.JSONObject()
+        val r = android.graphics.Rect()
+        node.getBoundsInScreen(r)
+        j.put("b", intArrayOf(r.left, r.top, r.right, r.bottom).let { org.json.JSONArray(it) })
+        node.text?.let { j.put("text", it.toString()) }
+        node.contentDescription?.let { j.put("desc", it.toString()) }
+        node.viewIdResourceName?.let { j.put("id", it) }
+        j.put("cls", (node.className ?: "").toString().substringAfterLast('.'))
+        if (node.isClickable) j.put("click", true)
+        if (node.isCheckable) j.put("checkable", true)
+        if (node.isChecked) j.put("checked", true)
+        if (node.isEditable) j.put("edit", true)
+        if (node.isScrollable) j.put("scroll", true)
+        if (!node.isEnabled) j.put("disabled", true)
+        val kids = org.json.JSONArray()
+        for (i in 0 until node.childCount) {
+            val cj = nodeToJson(node.getChild(i), depth + 1, counter) ?: continue
+            kids.put(cj)
+        }
+        if (kids.length() > 0) j.put("kids", kids)
+        return j
+    }
+
+
     private fun dumpNode(node: AccessibilityNodeInfo?, depth: Int, sb: StringBuilder) {
         if (node == null) return
         sb.append("  ".repeat(depth))

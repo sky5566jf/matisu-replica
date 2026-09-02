@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>节点查看器 - MatisuAuto IDE</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #1b1e24; color: #d7dce2; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: #21252d; border-bottom: 1px solid #333; }
+  #topbar h2 { font-size: 14px; color: #8ab4f8; margin-right: 8px; }
+  .tb { background: #2d333d; color: #d7dce2; border: 1px solid #444; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px; }
+  .tb:hover { background: #3a4250; }
+  .tb.primary { background: #2b5278; border-color: #3c6d9c; }
+  #search { flex: 0 0 220px; background: #16181d; color: #d7dce2; border: 1px solid #444; border-radius: 4px; padding: 5px 8px; }
+  #meta { color: #7d8791; font-size: 12px; margin-left: auto; }
+  #main { flex: 1; display: flex; min-height: 0; }
+  #tree { flex: 0 0 46%; overflow: auto; padding: 6px; border-right: 1px solid #333; }
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #screenwrap { flex: 1; overflow: auto; position: relative; background: #101216; display: flex; align-items: flex-start; justify-content: center; padding: 8px; }
+  #screen { position: relative; display: inline-block; }
+  #screen img { display: block; max-width: 100%; }
+  #hlbox { position: absolute; border: 2px solid #ff5252; background: rgba(255,82,82,.15); pointer-events: none; display: none; z-index: 5; }
+  #detail { flex: 0 0 auto; max-height: 34%; overflow: auto; background: #21252d; border-top: 1px solid #333; padding: 8px 12px; font-family: Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
+  #code { margin-top: 6px; padding: 6px 8px; background: #16181d; border: 1px solid #3c6d9c; border-radius: 4px; color: #9ecbff; cursor: pointer; }
+  #code:hover { background: #1d2530; }
+  .node { padding: 1px 4px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+  .node:hover { background: #2d333d; }
+  .node.sel { background: #2b5278; }
+  .node .cls { color: #c792ea; }
+  .node .txt { color: #98c379; }
+  .node .did { color: #e5c07b; }
+  .node .tag { color: #7d8791; font-size: 11px; }
+  .kids { margin-left: 16px; }
+  .fold { display: inline-block; width: 14px; color: #7d8791; user-select: none; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <h2>节点查看器</h2>
+  <button class="tb primary" id="btnRefresh">刷新</button>
+  <input id="search" placeholder="搜索 text/desc/id…">
+  <span id="meta">-</span>
+</div>
+<div id="main">
+  <div id="tree"></div>
+  <div id="right">
+    <div id="screenwrap">
+      <div id="screen"><img id="shot" alt=""><div id="hlbox"></div></div>
+    </div>
+    <div id="detail">点击左侧节点查看详情</div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let treeData = null;
+let selEl = null;
+let scale = 1;
+
+async function refresh() {
+  $('meta').textContent = '加载中…';
+  try {
+    const [nt, img] = await Promise.all([
+      fetch('/api/nodetree').then((r) => r.json()),
+      fetch('/api/screen?t=' + Date.now()).then((r) => (r.ok ? r.blob() : null)),
+    ]);
+    if (nt.error && !nt.root) { $('meta').textContent = '⚠ ' + nt.error; $('tree').innerHTML = ''; treeData = null; return; }
+    treeData = nt;
+    $('meta').textContent = `${nt.pkg || ''} · ${nt.count || 0} 节点${nt.truncated ? '（已截断）' : ''}`;
+    renderTree();
+    if (img) {
+      const url = URL.createObjectURL(img);
+      $('shot').src = url;
+      $('shot').onload = () => {
+        scale = $('shot').clientWidth / $('shot').naturalWidth;
+        positionHl();
+      };
+    }
+  } catch (e) { $('meta').textContent = '⚠ ' + e.message; }
+}
+
+function nodeLabel(n) {
+  const parts = [];
+  if (n.text) parts.push(`<span class="txt">"${escapeHtml(n.text.slice(0, 24))}"</span>`);
+  else if (n.desc) parts.push(`<span class="txt">[${escapeHtml(n.desc.slice(0, 24))}]</span>`);
+  if (n.id) parts.push(`<span class="did">${escapeHtml(n.id.split('/').pop())}</span>`);
+  const tags = [];
+  if (n.click) tags.push('可点');
+  if (n.edit) tags.push('输入');
+  if (n.scroll) tags.push('滚动');
+  return `<span class="cls">${escapeHtml(n.cls || '?')}</span> ${parts.join(' ')} <span class="tag">${tags.join(' ')}</span>`;
+}
+
+function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderTree() {
+  $('tree').innerHTML = '';
+  if (!treeData || !treeData.root) { $('tree').textContent = '无节点数据'; return; }
+  $('tree').appendChild(buildNode(treeData.root, 0));
+}
+
+function buildNode(n, depth) {
+  const wrap = document.createElement('div');
+  const row = document.createElement('div');
+  row.className = 'node';
+  row._data = n;
+  const hasKids = n.kids && n.kids.length;
+  row.innerHTML = `<span class="fold">${hasKids ? '▾' : ' '}</span>` + nodeLabel(n);
+  row.onclick = (e) => { e.stopPropagation(); selectNode(row, n); };
+  if (hasKids) {
+    row.querySelector('.fold').onclick = (e) => {
+      e.stopPropagation();
+      const k = wrap.querySelector('.kids');
+      const hide = k.classList.toggle('hidden');
+      row.querySelector('.fold').textContent = hide ? '▸' : '▾';
+    };
+  }
+  wrap.appendChild(row);
+  if (hasKids) {
+    const kids = document.createElement('div');
+    kids.className = 'kids';
+    n.kids.forEach((c) => kids.appendChild(buildNode(c, depth + 1)));
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+function selectNode(el, n) {
+  if (selEl) selEl.classList.remove('sel');
+  selEl = el; el.classList.add('sel');
+  const b = n.b || [0, 0, 0, 0];
+  let info = `class: ${n.cls}\nbounds: [${b[0]},${b[1]}][${b[2]},${b[3]}]  (${b[2] - b[0]}x${b[3] - b[1]})`;
+  if (n.text) info += `\ntext: ${n.text}`;
+  if (n.desc) info += `\ndesc: ${n.desc}`;
+  if (n.id) info += `\nid: ${n.id}`;
+  const flags = ['click', 'checkable', 'checked', 'edit', 'scroll', 'disabled'].filter((k) => n[k]);
+  if (flags.length) info += `\nflags: ${flags.join(', ')}`;
+  const cx = ((b[0] + b[2]) / 2) | 0, cy = ((b[1] + b[3]) / 2) | 0;
+  let code = '';
+  if (n.text) code = `-- 按文本点击\ntap(${cx}, ${cy})  -- ${n.text.slice(0, 16)}`;
+  else code = `tap(${cx}, ${cy})`;
+  $('detail').innerHTML = escapeHtml(info) + `<div id="code" title="点击复制">${escapeHtml(code)}</div>`;
+  $('code').onclick = () => { navigator.clipboard.writeText(code); $('code').textContent = '已复制 ✓'; setTimeout(() => ($('code').textContent = code), 800); };
+  positionHl();
+}
+
+function positionHl() {
+  if (!selEl || !selEl._data || !selEl._data.b) { $('hlbox').style.display = 'none'; return; }
+  const b = selEl._data.b;
+  const img = $('shot');
+  if (!img.clientWidth) return;
+  scale = img.clientWidth / img.naturalWidth;
+  const box = $('hlbox');
+  box.style.display = 'block';
+  box.style.left = b[0] * scale + 'px';
+  box.style.top = b[1] * scale + 'px';
+  box.style.width = (b[2] - b[0]) * scale + 'px';
+  box.style.height = (b[3] - b[1]) * scale + 'px';
+}
+
+// 搜索：命中节点高亮并展开祖先
+$('search').oninput = (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.node').forEach((el) => {
+    const n = el._data;
+    const hit = !q || (n.text || '').toLowerCase().includes(q) || (n.desc || '').toLowerCase().includes(q) || (n.id || '').toLowerCase().includes(q);
+    el.style.opacity = hit ? 1 : 0.25;
+    if (hit && q) {
+      let p = el.parentElement;
+      while (p && p !== $('tree')) {
+        if (p.classList.contains('kids')) p.classList.remove('hidden');
+        p = p.parentElement;
+      }
+    }
+  });
+};
+
+$('btnRefresh').onclick = refresh;
+window.addEventListener('resize', positionHl);
+refresh();
+</script>
+</body>
+</html>

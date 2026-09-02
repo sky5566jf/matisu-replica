@@ -81,6 +81,8 @@
   <a class="tb" href="/zhuazhua" target="_blank" style="text-decoration:none;display:inline-block">截图工具(抓抓)</a>
   <select id="devsel"></select>
   <button class="tb" id="btnDevMgr" title="设备管理">⚙</button>
+  <button class="tb" onclick="window.open('/nodes','_blank')" title="节点查看器">节点树</button>
+  <button class="tb" onclick="window.open('/zhuazhua','_blank')" title="抓抓">抓抓</button>
 </div>
 <div id="filetabs"></div>
 
@@ -370,6 +372,7 @@ async function loadDevices() {
 $('devsel').onchange = async (e) => {
   await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'switch', id: e.target.value }) });
   tabs = []; activeTab = -1; $('code').value = ''; renderTabs();
+  logOff = 0;   // 换设备后重新拉全量日志
   loadDevices();
   loadFiles();
   log('切换设备: ' + e.target.selectedOptions[0].text);
@@ -408,12 +411,29 @@ $('code').addEventListener('keydown', (e) => {
   }
 });
 
+// ============ 设备日志流（engine.log 轮询追加） ============
+let logOff = 0;
+let logPollTimer = null;
+async function pollDeviceLog() {
+  try {
+    const r = await (await fetch('/api/logtail?off=' + logOff)).json();
+    if (typeof r.off === 'number') logOff = r.off;
+    if (r.data) {
+      const el = $('logout');
+      el.textContent += r.data;
+      el.scrollTop = el.scrollHeight;
+    }
+  } catch (_) { /* 设备离线时下轮再试 */ }
+}
+logPollTimer = setInterval(pollDeviceLog, 2000);
+
 loadDevices();
 loadFiles();
 refreshState();
 loadApis();
 syncGutter();
 renderHl();
+pollDeviceLog();
 </script>
 </body>
 </html>

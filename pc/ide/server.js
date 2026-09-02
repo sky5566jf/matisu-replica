@@ -142,6 +142,7 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/') return send(res, 200, fs.readFileSync(path.join(__dirname, 'index.html')), 'text/html; charset=utf-8');
   if (p === '/zhuazhua') return send(res, 200, fs.readFileSync(path.join(__dirname, 'zhuazhua.html')), 'text/html; charset=utf-8');
+  if (p === '/nodes') return send(res, 200, fs.readFileSync(path.join(__dirname, 'nodes.html')), 'text/html; charset=utf-8');
 
   // ---- API 契约清单（从 core.lua 解析：分节注释 + _stub 函数名 + 表方法）----
   if (p === '/api/apis') {
@@ -271,6 +272,23 @@ const server = http.createServer(async (req, res) => {
     else out6 = await engineSock('state');
     if (b.action === 'state') { try { return send(res, 200, String(out6)); } catch (_) { return send(res, 200, '{}'); } }
     return send(res, 200, JSON.stringify({ ok: String(out6).trim() === 'OK' }));
+  }
+
+  // ---- 引擎日志流（双端 logtail 协议一致：{off, data}）----
+  if (p === '/api/logtail') {
+    const off = parseInt(u.searchParams.get('off') || '0', 10);
+    const out = await engineSock('logtail ' + (off | 0), 15000);
+    const s = out ? String(out).trim() : '';
+    if (!s.startsWith('{')) return send(res, 200, JSON.stringify({ off: off | 0, data: '', offline: true }));
+    return send(res, 200, s);
+  }
+
+  // ---- 节点查看器（Android=nodetree 无障碍节点树；iOS=uinode AX 节点（需 tweak/授权））----
+  if (p === '/api/nodetree') {
+    const out = await engineSock(bridge.CFG.target === 'android' ? 'nodetree' : 'uinode', 15000);
+    const s = out ? String(out).trim() : '';
+    if (!s.startsWith('{')) return send(res, 502, JSON.stringify({ count: 0, error: '设备无响应或不支持节点查询' }));
+    return send(res, 200, s);
   }
 
   // ---- 设备 CRUD ----
