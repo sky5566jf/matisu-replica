@@ -56,6 +56,23 @@ class AutoAccessibilityService : AccessibilityService() {
         registerControl()
         startEngine()
         LuaEngine.autoRun()
+        // 投屏授权弹窗可能早于服务连接出现（事件不重放）——连接后补点几次
+        if (pendingAutoAcceptProjection) retryAutoAccept(0)
+    }
+
+    /** 服务刚连上时补点投屏授权「立即开始」（窗口事件在服务连接前发出就不会重放） */
+    private fun retryAutoAccept(attempt: Int) {
+        if (!pendingAutoAcceptProjection || attempt >= 10) return
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            val root = rootInActiveWindow
+            val btn = findButtonText(root, listOf("立即开始", "Start now", "开始", "START NOW"))
+            if (btn != null) {
+                btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                pendingAutoAcceptProjection = false
+            } else {
+                retryAutoAccept(attempt + 1)
+            }
+        }, 500)
     }
 
     override fun onDestroy() {
