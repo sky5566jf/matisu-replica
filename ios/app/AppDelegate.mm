@@ -45,9 +45,21 @@
         NSString *dir  = [host isEqualToString:@"workdir"] ? MatisuRunScriptsDir() : MatisuLogDir();
         NSString *title = [host isEqualToString:@"workdir"] ? @"工作目录" : @"日志";
         UINavigationController *nav = (UINavigationController *)self.window.rootViewController;
-        if (nav && [nav.topViewController isKindOfClass:[MainVC class]]) {
+        if (nav) {
             FileListVC *vc = [[FileListVC alloc] initWithDir:dir title:title];
-            [nav pushViewController:vc animated:NO];
+            // 先回到主界面再 push：否则上次已经停在某个文件列表页时，
+            // 栈顶不是 MainVC（旧写法直接 return），scheme 会被静默忽略。
+            // 例如 PC 端先拉起 workdir 再拉 logdir，第二种情况不会生效。
+            void (^go)(void) = ^{
+                [nav popToRootViewControllerAnimated:NO];
+                [nav pushViewController:vc animated:NO];
+            };
+            if (nav.presentedViewController) {
+                // 有弹窗（如删除确认）时先收起，否则 push 后新页面被弹窗压住看不见
+                [nav dismissViewControllerAnimated:NO completion:go];
+            } else {
+                go();
+            }
         }
     }
     return YES;
