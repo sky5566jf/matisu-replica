@@ -102,8 +102,10 @@ static UILabel *maSectionTitle(UIView *parent, NSString *text, CGFloat y, CGFloa
     y += 30;
 
     // ---- 常驻保活：默认启动，不展示 ----
-    // 后台线程拉起：EnsureStarted 内含 fork + waitpid，放主线程会卡住首屏。
-    dispatch_async(dispatch_get_global_queue(0, 0), ^{ MatisuWatchdogResume(); });
+    // 后台线程：ServiceStart = EnsureStarted 看门狗 + 立即 spawnTarget 拉 daemon，
+    // 打开 app 几秒内 :18182 就在；用 WatchdogResume 的话 daemon 要等 3 次探活
+    // 失败（约 15s）才被拉起，状态行会误显示"已停止"。
+    dispatch_async(dispatch_get_global_queue(0, 0), ^{ MatisuServiceStart(); });
 
     // ---- 文件浏览器 ----
     maSectionTitle(cv, @"文件浏览", y, w);
