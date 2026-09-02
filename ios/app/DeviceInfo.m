@@ -15,6 +15,9 @@
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import <net/if.h>
+#import <netinet/in.h>
+#import <sys/socket.h>
+#import <unistd.h>
 #import <string.h>
 #import <dlfcn.h>
 
@@ -83,22 +86,51 @@ static NSString *friendlyModelName(NSString *mid) {
     return r.length ? r : mid;
 }
 
-/// 本机局域网 IP：优先 Wi-Fi（en0），无 Wi-Fi 时退回蜂窝（pdp_ip*）
+/// 本机局域网 IP：优先 Wi-Fi（en*），其次蜂窝（pdp_ip*）。
+/// awdl/llw/lo 是点对点与回环虚拟接口，不算"局域网 IP"。
 static NSString *localIP(void) {
+    NSString *res = @"";
     struct ifaddrs *ifa = NULL;
-    if (getifaddrs(&ifa) != 0) return @"";
-    NSString *wifi = @"", *cell = @"";
-    for (struct ifaddrs *p = ifa; p; p = p->ifa_next) {
-        if (!p->ifa_addr || p->ifa_addr->sa_family != AF_INET) continue;
-        char buf[INET_ADDRSTRLEN] = {0};
-        if (!inet_ntop(AF_INET, &((struct sockaddr_in *)p->ifa_addr)->sin_addr, buf, sizeof(buf))) continue;
-        NSString *ip = [NSString stringWithUTF8String:buf] ?: @"";
-        if (!ip.length || [ip hasPrefix:@"127."]) continue;
-        if (!strncmp(p->ifa_name, "en0", 3))            { if (!wifi.length) wifi = ip; }
-        else if (!strncmp(p->ifa_name, "pdp_ip", 6))    { if (!cell.length) cell = ip; }
+    if (getifaddrs(&ifa) == 0) {
+        NSString *wifi = @"", *cell = @"", *other = @"";
+        for (struct ifaddrs *p = ifa; p; p = p->ifa_next) {
+            if (!p->ifa_addr || p->ifa_addr->sa_family != AF_INET) continue;
+            const char *n = p->ifa_name ?: "";
+            char buf[INET_ADDRSTRLEN] = {0};
+            if (!inet_ntop(AF_INET, &((struct sockaddr_in *)p->ifa_addr)->sin_addr, buf, sizeof(buf))) continue;
+            NSString *ip = [NSString stringWithUTF8String:buf] ?: @"";
+            if (!ip.length || [ip hasPrefix:@"127."]) continue;
+            if (!strncmp(n, "lo", 2) || !strncmp(n, "awdl", 4) || !strncmp(n, "llw", 3)) continue;
+            if (!strncmp(n, "en", 2))          { if (!wifi.length) wifi = ip; }
+            else if (!strncmp(n, "pdp_ip", 6)) { if (!cell.length) cell = ip; }
+            else if (!other.length)              other = ip;
+        }
+        freeifaddrs(ifa);
+        res = wifi.length ? wifi : (cell.length ? cell : other);
     }
-    freeifaddrs(ifa);
-    return wifi.length ? wifi : cell;
+    // 兜底：UDP connect 到公网地址只查路由表、不发数据包，getifaddrs 被限制时
+    // 仍能拿到本机出口 IP（真机 daemon 上下文实测 getifaddrs 可能返回空）。
+    if (!res.length) {
+        int s = socket(AF_INET, SOCK_DGRAM, 0);
+        if (s >= 0) {
+            struct sockaddr_in dst;
+            memset(&dst, 0, sizeof(dst));
+            dst.sin_family = AF_INET;
+            dst.sin_port = htons(53);
+            dst.sin_addr.s_addr = inet_addr("8.8.8.8");
+            if (connect(s, (struct sockaddr *)&dst, sizeof(dst)) == 0) {
+                struct sockaddr_in me;
+                socklen_t len = sizeof(me);
+                if (getsockname(s, (struct sockaddr *)&me, &len) == 0) {
+                    char buf[INET_ADDRSTRLEN] = {0};
+                    if (inet_ntop(AF_INET, &me.sin_addr, buf, sizeof(buf)))
+                        res = [NSString stringWithUTF8String:buf] ?: @"";
+                }
+            }
+            close(s);
+        }
+    }
+    return res;
 }
 
 /// 数据分区容量。/var/mobile 是用户数据挂载点，最贴近"设置→通用→容量"语义；
