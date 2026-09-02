@@ -143,6 +143,22 @@ const server = http.createServer(async (req, res) => {
   if (p === '/') return send(res, 200, fs.readFileSync(path.join(__dirname, 'index.html')), 'text/html; charset=utf-8');
   if (p === '/zhuazhua') return send(res, 200, fs.readFileSync(path.join(__dirname, 'zhuazhua.html')), 'text/html; charset=utf-8');
   if (p === '/nodes') return send(res, 200, fs.readFileSync(path.join(__dirname, 'nodes.html')), 'text/html; charset=utf-8');
+  // CodeMirror 6 + LSP 客户端打包产物（esbuild IIFE，全局名 MatisuEditor）
+  if (p === '/editor.js') {
+    const f = path.join(__dirname, 'editor-build', 'bundle.js');
+    if (!fs.existsSync(f)) return send(res, 404, '// bundle 缺失，前端自动回退 textarea');
+    return send(res, 200, fs.readFileSync(f), 'application/javascript; charset=utf-8');
+  }
+  // LSP 可用性 + 工作区参数（前端据此决定是否升级 CodeMirror 编辑器）
+  if (p === '/api/lsp') {
+    const { pathToFileURL } = require('url');
+    const ok = fs.existsSync(LSP_EXE);
+    return send(res, 200, JSON.stringify({
+      ok,
+      rootUri: pathToFileURL(path.join(__dirname, 'scripts') + path.sep).href,
+      libraryUri: fs.existsSync(LSP_META) ? pathToFileURL(LSP_META + path.sep).href : null,
+    }));
+  }
 
   // ---- API 契约清单（从 core.lua 解析：分节注释 + _stub 函数名 + 表方法）----
   if (p === '/api/apis') {
@@ -426,6 +442,126 @@ const server = http.createServer(async (req, res) => {
   }
 
   send(res, 404, JSON.stringify({ error: 'not found' }));
+});
+
+// ---- LSP 桥：/ws/lsp WebSocket <-> lua-language-server stdio（零依赖 WS 实现）----
+const crypto = require('crypto');
+const { spawn } = require('child_process');
+const LSP_EXE = path.join(__dirname, 'lsp', 'lls', 'bin', 'lua-language-server.exe');
+const LSP_META = path.join(__dirname, 'lsp', 'meta'); // MatisuAuto API 注解目录
+const LSP_SCRIPTS = path.join(__dirname, 'scripts');
+
+// 关键：LLS 只认 workspace root（rootUri=scripts/）下的 .luarc.json；
+// initializationOptions.settings / cwd 下的 luarc 均不生效（实测 3.19.1）。
+// 启动时自动生成，把 meta 注解目录挂进 workspace.library。
+function ensureLspConfig() {
+  try {
+    if (!fs.existsSync(LSP_SCRIPTS)) fs.mkdirSync(LSP_SCRIPTS, { recursive: true });
+    const luarc = path.join(LSP_SCRIPTS, '.luarc.json');
+    const want = JSON.stringify({
+      'runtime.version': 'Lua 5.4',
+      'workspace.library': [LSP_META.replace(/\\/g, '/')],
+      'workspace.checkThirdParty': false,
+      'telemetry.enable': false,
+    }, null, 2);
+    if (!fs.existsSync(luarc) || fs.readFileSync(luarc, 'utf8') !== want) {
+      fs.writeFileSync(luarc, want);
+      console.log('[LSP] 已生成 ' + luarc);
+    }
+  } catch (e) { console.log('[LSP] .luarc.json 生成失败: ' + e.message); }
+}
+ensureLspConfig();
+
+function wsAccept(key) {
+  return crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+}
+/** 解析 WS 帧（客户端→服务端必带掩码）；返回 {opcode, payload} 或 null（数据不足） */
+function wsParse(buf) {
+  if (buf.length < 2) return null;
+  const opcode = buf[0] & 0x0f;
+  let len = buf[1] & 0x7f;
+  let off = 2;
+  if (len === 126) { if (buf.length < 4) return null; len = buf.readUInt16BE(2); off = 4; }
+  else if (len === 127) { if (buf.length < 10) return null; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+  const masked = (buf[1] & 0x80) !== 0;
+  const maskOff = off;
+  if (masked) off += 4;
+  if (buf.length < off + len) return null;
+  let payload = buf.slice(off, off + len);
+  if (masked) {
+    const mask = buf.slice(maskOff, maskOff + 4);
+    payload = Buffer.from(payload);
+    for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
+  }
+  return { opcode, payload, rest: buf.slice(off + len) };
+}
+function wsFrame(opcode, payload) {
+  const len = payload.length;
+  let head;
+  if (len < 126) { head = Buffer.from([0x80 | opcode, len]); }
+  else if (len < 65536) { head = Buffer.alloc(4); head[0] = 0x80 | opcode; head[1] = 126; head.writeUInt16BE(len, 2); }
+  else { head = Buffer.alloc(10); head[0] = 0x80 | opcode; head[1] = 127; head.writeBigUInt64BE(BigInt(len), 2); }
+  return Buffer.concat([head, payload]);
+}
+
+server.on('upgrade', (req, socket) => {
+  const u = new URL(req.url, 'http://x');
+  if (u.pathname !== '/ws/lsp' || !fs.existsSync(LSP_EXE)) { socket.destroy(); return; }
+  const key = req.headers['sec-websocket-key'];
+  if (!key) { socket.destroy(); return; }
+  socket.write(
+    'HTTP/1.1 101 Switching Protocols\r\n' +
+    'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+    `Sec-WebSocket-Accept: ${wsAccept(key)}\r\n\r\n`
+  );
+  socket.setNoDelay(true);
+
+  // 每连接一个 LSP 子进程（单用户 IDE，隔离最稳）
+  const child = spawn(LSP_EXE, [], {
+    cwd: path.join(__dirname, 'lsp'),
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
+  child.on('error', () => { try { socket.destroy(); } catch (_) {} });
+
+  // LSP stdout (Content-Length 帧) -> WS text
+  let lspBuf = Buffer.alloc(0);
+  child.stdout.on('data', (d) => {
+    lspBuf = Buffer.concat([lspBuf, d]);
+    for (;;) {
+      const sep = lspBuf.indexOf('\r\n\r\n');
+      if (sep < 0) break;
+      const head = lspBuf.slice(0, sep).toString('ascii');
+      const m = head.match(/Content-Length:\s*(\d+)/i);
+      if (!m) { lspBuf = lspBuf.slice(sep + 4); continue; }
+      const n = parseInt(m[1], 10);
+      if (lspBuf.length < sep + 4 + n) break;
+      const body = lspBuf.slice(sep + 4, sep + 4 + n);
+      lspBuf = lspBuf.slice(sep + 4 + n);
+      try { socket.write(wsFrame(1, body)); } catch (_) {}
+    }
+  });
+
+  // WS frame -> LSP stdin
+  let wsBuf = Buffer.alloc(0);
+  socket.on('data', (d) => {
+    wsBuf = Buffer.concat([wsBuf, d]);
+    for (;;) {
+      const f = wsParse(wsBuf);
+      if (!f) break;
+      wsBuf = f.rest;
+      if (f.opcode === 8) { try { socket.end(); } catch (_) {} continue; } // close
+      if (f.opcode === 9) { try { socket.write(wsFrame(10, f.payload)); } catch (_) {} continue; } // ping->pong
+      if (f.opcode !== 1 && f.opcode !== 2) continue;
+      const head = Buffer.from(`Content-Length: ${f.payload.length}\r\n\r\n`, 'ascii');
+      try { child.stdin.write(Buffer.concat([head, f.payload])); } catch (_) {}
+    }
+  });
+  const cleanup = () => { try { child.kill(); } catch (_) {} };
+  socket.on('close', cleanup);
+  socket.on('error', cleanup);
+  child.on('exit', () => { try { socket.end(); } catch (_) {} });
+
+  console.log('[LSP] 会话建立 pid=' + child.pid);
 });
 
 server.listen(PORT, '127.0.0.1', () => {

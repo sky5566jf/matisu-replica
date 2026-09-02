@@ -49,6 +49,10 @@
   #hl .c { color: #6a9955; }   /* 注释 */
   #hl .n { color: #b5cea8; }   /* 数字 */
   #hl .a { color: #4ec9b0; }   /* 契约 API */
+  /* CodeMirror 宿主（LSP 可用时替换 overlay 编辑器） */
+  #cmhost { display: none; position: absolute; inset: 0; overflow: hidden; }
+  #cmhost .cm-editor { height: 100%; }
+  #cmhost .cm-scroller { overflow: auto; }
   /* 函数面板 */
   #fnsearch { width: calc(100% - 12px); margin: 4px 6px; background: #1b1e23; color: #c8cdd5; border: 1px solid #3f3f46; padding: 3px 6px; font-size: 12px; }
   #fnlist { flex: 1; overflow-y: auto; padding: 2px 4px; }
@@ -109,6 +113,7 @@
   <div id="editor">
     <div id="gutter">1</div>
     <div id="editwrap">
+      <div id="cmhost"></div>
       <pre id="hl"></pre>
       <textarea id="code" spellcheck="false">-- MatisuAuto 脚本
 -- 左侧选文件或直接编辑；F5 运行 / 常驻运行 / 停止
@@ -138,11 +143,58 @@ print("screen: " .. w .. "x" .. h)
   <span style="margin-left:auto" id="stdev"></span>
 </div>
 
+<script src="/editor.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let files = [];
 let tabs = [];          // {name, code, dirty}
 let activeTab = -1;
+
+// ============ 编辑器抽象（CodeMirror+LSP 可用则升级，否则 textarea 兜底） ============
+let ED = null;          // CodeMirror 实例
+let curUri = null;      // 当前文档的 LSP URI
+let lspRoot = null;     // /api/lsp 返回的 rootUri
+let edSuppress = false; // 程序化 setCode 不触发 dirty
+
+function getCode() { return ED ? ED.getDoc() : $('code').value; }
+function setCode(text, name) {
+  if (ED) {
+    curUri = name && lspRoot ? lspRoot + name : null;
+    edSuppress = true;
+    try { ED.setDoc(text, curUri); } finally { edSuppress = false; }
+  } else {
+    $('code').value = text;
+    syncGutter(); renderHl();
+  }
+}
+// LSP 可用性探测 + 编辑器升级（失败静默回退 textarea）
+(async function upgradeEditor() {
+  try {
+    if (typeof MatisuEditor === 'undefined' || !MatisuEditor.createEditor) return;
+    const info = await (await fetch('/api/lsp')).json();
+    if (!info.ok) return;
+    lspRoot = info.rootUri;
+    $('cmhost').style.display = 'block';
+    $('hl').style.display = 'none';
+    $('code').style.display = 'none';
+    $('gutter').style.display = 'none';
+    ED = MatisuEditor.createEditor({
+      parent: $('cmhost'),
+      doc: getCode(),
+      getUri: () => curUri,
+      lspUrl: (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/lsp',
+      onChange: () => { if (!edSuppress) markDirty(); },
+    });
+    if (activeTab >= 0) setCode(tabs[activeTab].code, tabs[activeTab].name);
+    try {
+      await ED.connectLsp(info.rootUri, info.libraryUri);
+      log('LSP 已连接：API 补全 / 悬浮文档 / 语法诊断已启用');
+      $('stinfo').textContent = '就绪 · LSP';
+    } catch (e) {
+      log('LSP 连接失败（编辑器仍可用）：' + e.message);
+    }
+  } catch (e) { /* bundle 或接口异常：保持 textarea */ }
+})();
 
 // ============ 日志 ============
 function log(s) {
@@ -228,6 +280,12 @@ function renderFnList(q) {
   document.querySelectorAll('.fnitem').forEach((el) => el.onclick = () => insertAtCursor(el.dataset.f));
 }
 function insertAtCursor(text) {
+  if (ED) {
+    const v = ED.view, sel = v.state.selection.main;
+    v.dispatch({ changes: { from: sel.from, to: sel.to, insert: text }, selection: { anchor: sel.from + text.length } });
+    v.focus();
+    return;
+  }
   const ta = $('code');
   const st = ta.selectionStart, en = ta.selectionEnd;
   ta.value = ta.value.slice(0, st) + text + ta.value.slice(en);
@@ -239,7 +297,7 @@ $('fnsearch').addEventListener('input', (e) => renderFnList(e.target.value));
 
 // ============ 标签页 ============
 function markDirty() {
-  if (activeTab >= 0) { tabs[activeTab].code = $('code').value; tabs[activeTab].dirty = true; renderTabs(); }
+  if (activeTab >= 0) { tabs[activeTab].code = getCode(); tabs[activeTab].dirty = true; renderTabs(); }
 }
 function renderTabs() {
   $('filetabs').innerHTML = tabs.map((t, i) =>
@@ -248,8 +306,8 @@ function renderTabs() {
     if (e.target.dataset.x !== undefined) {
       tabs.splice(+e.target.dataset.x, 1);
       if (activeTab >= tabs.length) activeTab = tabs.length - 1;
-      if (activeTab >= 0) $('code').value = tabs[activeTab].code; else $('code').value = '';
-      renderTabs(); syncGutter();
+      if (activeTab >= 0) setCode(tabs[activeTab].code, tabs[activeTab].name); else setCode('');
+      renderTabs();
       return;
     }
     switchTab(+el.dataset.i);
@@ -258,8 +316,8 @@ function renderTabs() {
 function switchTab(i) {
   if (i < 0 || i >= tabs.length) return;
   activeTab = i;
-  $('code').value = tabs[i].code;
-  renderTabs(); syncGutter(); renderHl();
+  setCode(tabs[i].code, tabs[i].name);
+  renderTabs();
 }
 function openTab(name, code) {
   const ex = tabs.findIndex((t) => t.name === name);
@@ -292,8 +350,8 @@ $('btnNew').onclick = () => {
 $('btnSave').onclick = async () => {
   if (activeTab < 0) { log('没有打开的文件'); return; }
   const t = tabs[activeTab];
-  const r = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: t.name, code: $('code').value }) })).json();
-  if (r.ok) { t.code = $('code').value; t.dirty = false; renderTabs(); log('已保存 ' + t.name); loadFiles(); }
+  const r = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: t.name, code: getCode() }) })).json();
+  if (r.ok) { t.code = getCode(); t.dirty = false; renderTabs(); log('已保存 ' + t.name); loadFiles(); }
   else log('保存失败 ' + t.name);
 };
 $('btnDel').onclick = async () => {
@@ -302,7 +360,7 @@ $('btnDel').onclick = async () => {
   if (!confirm('删除 ' + t.name + ' ?')) return;
   await fetch('/api/script?name=' + encodeURIComponent(t.name), { method: 'DELETE' });
   log('已删除 ' + t.name);
-  tabs.splice(activeTab, 1); activeTab = -1; $('code').value = '';
+  tabs.splice(activeTab, 1); activeTab = -1; setCode('');
   renderTabs(); loadFiles();
 };
 
@@ -322,7 +380,7 @@ $('btnRun').onclick = runCurrent;
 $('btnRun2').onclick = runCurrent;
 
 $('btnSvc').onclick = async () => {
-  const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'start', code: $('code').value }) })).json();
+  const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'start', code: getCode() }) })).json();
   log(r.ok ? '常驻脚本已启动' : '常驻启动失败（已有在跑？）');
   refreshState();
 };
@@ -371,7 +429,7 @@ async function loadDevices() {
 }
 $('devsel').onchange = async (e) => {
   await fetch('/api/devices', { method: 'POST', body: JSON.stringify({ op: 'switch', id: e.target.value }) });
-  tabs = []; activeTab = -1; $('code').value = ''; renderTabs();
+  tabs = []; activeTab = -1; setCode(''); renderTabs();
   logOff = 0;   // 换设备后重新拉全量日志
   loadDevices();
   loadFiles();

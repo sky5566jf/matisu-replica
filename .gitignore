@@ -36,3 +36,11 @@ __pycache__/
 *.pyc
 ci_fail*.log
 ci_log.zip
+
+# PC IDE LSP（lua-language-server 二进制体积大，不入仓；部署时解压 lls.zip 或另行下载）
+pc/ide/lsp/lls/
+pc/ide/lsp/lls.zip
+# IDE 运行时用户脚本目录（含自动生成的 .luarc.json）
+pc/ide/scripts/
+# 测试截图
+pc/ide/editor-build/ide_editor_ui.png
