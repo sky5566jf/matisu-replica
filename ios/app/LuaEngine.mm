@@ -39,6 +39,9 @@ static NSMutableString *maOut(lua_State *L) {
     return s;
 }
 
+// 前向声明：print 镜像落盘（定义在日志控制台段）
+static void maEngineLogAppend(NSString *text);
+
 static int l_print(lua_State *L) {
     NSMutableString *out = maOut(L);
     int n = lua_gettop(L);
