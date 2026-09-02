@@ -1,6 +1,7 @@
 #import "AppDelegate.h"
 #import "ControlServer.h"
 #import "MainVC.h"
+#import "MatisuPaths.h"
 #import "Watchdog.h"
 
 @implementation AppDelegate
@@ -28,7 +29,8 @@
     MatisuWatchdogEnsureStarted();
 }
 
-// matisuauto://start | stop | restart | watchdog —— 供快捷指令 / PC 端远程触发
+// matisuauto://start | stop | restart | watchdog | workdir | logdir
+// —— 供快捷指令 / PC 端远程触发，workdir/logdir 用于拉起 app 到指定页面
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary *)options {
     NSString *host = url.host.lowercaseString ?: @"";
     if ([host isEqualToString:@"start"]) {
@@ -39,6 +41,14 @@
         MatisuWatchdogResume();
     } else if ([host isEqualToString:@"watchdog"]) {
         MatisuWatchdogEnsureStarted();
+    } else if ([host isEqualToString:@"workdir"] || [host isEqualToString:@"logdir"]) {
+        NSString *dir  = [host isEqualToString:@"workdir"] ? MatisuRunScriptsDir() : MatisuLogDir();
+        NSString *title = [host isEqualToString:@"workdir"] ? @"工作目录" : @"日志";
+        UINavigationController *nav = (UINavigationController *)self.window.rootViewController;
+        if (nav && [nav.topViewController isKindOfClass:[MainVC class]]) {
+            FileListVC *vc = [[FileListVC alloc] initWithDir:dir title:title];
+            [nav pushViewController:vc animated:NO];
+        }
     }
     return YES;
 }
