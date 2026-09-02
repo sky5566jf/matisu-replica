@@ -386,7 +386,8 @@ static NSString *maSize(unsigned long long b) {
                                                                message:msg
                                                         preferredStyle:UIAlertControllerStyleAlert];
     [ac addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    __weak typeof(self) ws = self;
+    // 注意：本文件是 ObjC++（.mm），C++ 模式下 typeof 不可用，须写显式类型
+    __weak FileListVC *ws = self;
     [ac addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
         [ws doDelete:names];
     }]];
@@ -500,7 +501,8 @@ static NSString *maSize(unsigned long long b) {
     trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
     if (tv.isEditing) return nil;
     NSString *name = self.files[ip.row];
-    __weak typeof(self) ws = self;
+    // 注意：本文件是 ObjC++（.mm），C++ 模式下 typeof 不可用，须写显式类型
+    __weak FileListVC *ws = self;
     UIContextualAction *del = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive
                                                                     title:@"删除"
                                                                   handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
