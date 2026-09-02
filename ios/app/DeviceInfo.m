@@ -10,7 +10,148 @@
 #import <UIKit/UIKit.h>
 #import <sys/sysctl.h>
 #import <sys/types.h>
+#import <sys/statvfs.h>
+#import <sys/mount.h>
+#import <ifaddrs.h>
+#import <arpa/inet.h>
+#import <net/if.h>
+#import <string.h>
 #import <dlfcn.h>
+
+/// 机器标识 -> 友好机型名。未收录的机型原样回退显示标识（如 iPhone19,1），
+/// 保证信息不丢失。表只需覆盖 Apple 公开过的 identifier。
+static NSString *friendlyModelName(NSString *mid) {
+    if (!mid.length) return @"";
+    static NSDictionary *map = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        map = @{
+            @"iPhone1,1": @"iPhone",              @"iPhone1,2": @"iPhone 3G",
+            @"iPhone2,1": @"iPhone 3GS",
+            @"iPhone3,1": @"iPhone 4",            @"iPhone3,2": @"iPhone 4",   @"iPhone3,3": @"iPhone 4",
+            @"iPhone4,1": @"iPhone 4S",
+            @"iPhone5,1": @"iPhone 5",            @"iPhone5,2": @"iPhone 5",
+            @"iPhone5,3": @"iPhone 5c",           @"iPhone5,4": @"iPhone 5c",
+            @"iPhone6,1": @"iPhone 5s",           @"iPhone6,2": @"iPhone 5s",
+            @"iPhone7,1": @"iPhone 6 Plus",       @"iPhone7,2": @"iPhone 6",
+            @"iPhone8,1": @"iPhone 6s",           @"iPhone8,2": @"iPhone 6s Plus",
+            @"iPhone8,4": @"iPhone SE (第1代)",
+            @"iPhone9,1": @"iPhone 7",            @"iPhone9,2": @"iPhone 7 Plus",
+            @"iPhone9,3": @"iPhone 7",            @"iPhone9,4": @"iPhone 7 Plus",
+            @"iPhone10,1": @"iPhone 8",           @"iPhone10,2": @"iPhone 8 Plus",
+            @"iPhone10,3": @"iPhone X",           @"iPhone10,4": @"iPhone 8",
+            @"iPhone10,5": @"iPhone 8 Plus",      @"iPhone10,6": @"iPhone X",
+            @"iPhone11,2": @"iPhone XS",          @"iPhone11,4": @"iPhone XS Max",
+            @"iPhone11,6": @"iPhone XS Max",      @"iPhone11,8": @"iPhone XR",
+            @"iPhone12,1": @"iPhone 11",          @"iPhone12,3": @"iPhone 11 Pro",
+            @"iPhone12,5": @"iPhone 11 Pro Max",  @"iPhone12,8": @"iPhone SE (第2代)",
+            @"iPhone13,1": @"iPhone 12 mini",     @"iPhone13,2": @"iPhone 12",
+            @"iPhone13,3": @"iPhone 12 Pro",      @"iPhone13,4": @"iPhone 12 Pro Max",
+            @"iPhone14,2": @"iPhone 13 Pro",      @"iPhone14,3": @"iPhone 13 Pro Max",
+            @"iPhone14,4": @"iPhone 13 mini",     @"iPhone14,5": @"iPhone 13",
+            @"iPhone14,6": @"iPhone SE (第3代)",
+            @"iPhone14,7": @"iPhone 14",          @"iPhone14,8": @"iPhone 14 Plus",
+            @"iPhone15,2": @"iPhone 14 Pro",      @"iPhone15,3": @"iPhone 14 Pro Max",
+            @"iPhone15,4": @"iPhone 15",          @"iPhone15,5": @"iPhone 15 Plus",
+            @"iPhone16,1": @"iPhone 15 Pro",      @"iPhone16,2": @"iPhone 15 Pro Max",
+            @"iPhone17,1": @"iPhone 16 Pro",      @"iPhone17,2": @"iPhone 16 Pro Max",
+            @"iPhone17,3": @"iPhone 16",          @"iPhone17,4": @"iPhone 16 Plus",
+            @"iPhone17,5": @"iPhone 16e",
+            @"iPhone18,1": @"iPhone 17 Pro",      @"iPhone18,2": @"iPhone 17 Pro Max",
+            @"iPhone18,3": @"iPhone 17",          @"iPhone18,4": @"iPhone Air",
+            // iPad（常用机型）
+            @"iPad6,11": @"iPad (第5代)",         @"iPad6,12": @"iPad (第5代)",
+            @"iPad7,5":  @"iPad (第6代)",         @"iPad7,6":  @"iPad (第6代)",
+            @"iPad7,11": @"iPad (第7代)",         @"iPad7,12": @"iPad (第7代)",
+            @"iPad11,6": @"iPad (第8代)",         @"iPad11,7": @"iPad (第8代)",
+            @"iPad12,1": @"iPad (第9代)",         @"iPad12,2": @"iPad (第9代)",
+            @"iPad13,18":@"iPad (第10代)",        @"iPad13,19":@"iPad (第10代)",
+            @"iPad4,1":  @"iPad Air",             @"iPad4,2":  @"iPad Air",
+            @"iPad5,3":  @"iPad Air 2",           @"iPad5,4":  @"iPad Air 2",
+            @"iPad11,3": @"iPad Air (第3代)",     @"iPad11,4": @"iPad Air (第3代)",
+            @"iPad13,1": @"iPad Air (第4代)",     @"iPad13,2": @"iPad Air (第4代)",
+            @"iPad13,16":@"iPad Air (第5代)",     @"iPad13,17":@"iPad Air (第5代)",
+            @"iPad2,5":  @"iPad mini",            @"iPad2,6":  @"iPad mini",
+            @"iPad4,4":  @"iPad mini 2",          @"iPad4,5":  @"iPad mini 2",
+            @"iPad4,7":  @"iPad mini 3",          @"iPad4,8":  @"iPad mini 3",
+            @"iPad5,1":  @"iPad mini 4",          @"iPad5,2":  @"iPad mini 4",
+            @"iPad11,1": @"iPad mini (第5代)",    @"iPad11,2": @"iPad mini (第5代)",
+            @"iPad14,1": @"iPad mini (第6代)",    @"iPad14,2": @"iPad mini (第6代)",
+        };
+    });
+    NSString *r = map[mid];
+    return r.length ? r : mid;
+}
+
+/// 本机局域网 IP：优先 Wi-Fi（en0），无 Wi-Fi 时退回蜂窝（pdp_ip*）
+static NSString *localIP(void) {
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) != 0) return @"";
+    NSString *wifi = @"", *cell = @"";
+    for (struct ifaddrs *p = ifa; p; p = p->ifa_next) {
+        if (!p->ifa_addr || p->ifa_addr->sa_family != AF_INET) continue;
+        char buf[INET_ADDRSTRLEN] = {0};
+        if (!inet_ntop(AF_INET, &((struct sockaddr_in *)p->ifa_addr)->sin_addr, buf, sizeof(buf))) continue;
+        NSString *ip = [NSString stringWithUTF8String:buf] ?: @"";
+        if (!ip.length || [ip hasPrefix:@"127."]) continue;
+        if (!strncmp(p->ifa_name, "en0", 3))            { if (!wifi.length) wifi = ip; }
+        else if (!strncmp(p->ifa_name, "pdp_ip", 6))    { if (!cell.length) cell = ip; }
+    }
+    freeifaddrs(ifa);
+    return wifi.length ? wifi : cell;
+}
+
+/// 数据分区容量。/var/mobile 是用户数据挂载点，最贴近"设置→通用→容量"语义；
+/// 取不到时退回 / 。free 用 f_bavail（已排除系统保留空间），与系统显示一致。
+static void storageBytes(unsigned long long *total, unsigned long long *freeBytes) {
+    *total = 0; *freeBytes = 0;
+    struct statvfs st;
+    if (statvfs("/var/mobile", &st) != 0 && statvfs("/", &st) != 0) return;
+    unsigned long long bs = st.f_frsize ? (unsigned long long)st.f_frsize : (unsigned long long)st.f_bsize;
+    *total     = bs * (unsigned long long)st.f_blocks;
+    *freeBytes = bs * (unsigned long long)st.f_bavail;
+}
+
+/// 用户在"设置→通用→关于本机"里设置的设备名（这台是 se2-2）。
+///
+/// iOS 16+ 起 UIDevice.name 对第三方 app 恒返回 "iPhone"（沙箱屏蔽），
+/// 本 app 带 no-sandbox 权限，可直接读 SystemConfiguration 动态存储：
+///   preferences.plist → Sets/<CurrentSet>/System/ComputerName
+/// 拿不到时退回顶层 System/System/ComputerName、以及 HostNames 段。
+static NSString *userDeviceName(void) {
+    NSString *name = @"";
+    NSData *d = [NSData dataWithContentsOfFile:@"/var/preferences/SystemConfiguration/preferences.plist"];
+    id plist = d.length ? [NSPropertyListSerialization propertyListWithData:d options:0 format:NULL error:nil] : nil;
+    if ([plist isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *root = (NSDictionary *)plist;
+        // 候选 System 字典：优先当前生效的 Set，其次顶层 System
+        NSMutableArray *cands = [NSMutableArray array];
+        id sets = root[@"Sets"];
+        id cur  = root[@"CurrentSet"];
+        if ([sets isKindOfClass:[NSDictionary class]] && [cur isKindOfClass:[NSString class]]) {
+            id set = ((NSDictionary *)sets)[cur];
+            if ([set isKindOfClass:[NSDictionary class]]) {
+                id sys = ((NSDictionary *)set)[@"System"];
+                if ([sys isKindOfClass:[NSDictionary class]]) [cands addObject:sys];
+            }
+        }
+        id sys0 = root[@"System"];
+        if ([sys0 isKindOfClass:[NSDictionary class]]) {
+            id sys = ((NSDictionary *)sys0)[@"System"];
+            if ([sys isKindOfClass:[NSDictionary class]]) [cands addObject:sys];
+            else                                          [cands addObject:sys0];
+        }
+        for (NSDictionary *s in cands) {
+            for (NSString *k in @[@"ComputerName", @"HostName", @"LocalHostName"]) {
+                id v = s[k];
+                if ([v isKindOfClass:[NSString class]] && [v length]) { name = v; break; }
+            }
+            if (name.length) break;
+        }
+    }
+    if (!name.length) name = [UIDevice currentDevice].name ?: @"";   // 兜底
+    return name;
+}
 
 static NSString *machineId(void) {
     size_t len = 0;
@@ -87,11 +228,18 @@ NSData* _Nullable MatisuDeviceInfoJSON(void) {
         if (scale <= 0) scale = 1;
         CGRect nb = scr.nativeBounds;       // 像素（始终竖向基准）
         UIDevice *dev = [UIDevice currentDevice];
+        NSString *mid = machineId();
+        unsigned long long stTotal = 0, stFree = 0;
+        storageBytes(&stTotal, &stFree);
 
         info = [NSMutableDictionary dictionary];
-        info[@"name"]          = dev.name ?: @"";
-        info[@"model"]         = machineId();
+        info[@"name"]          = userDeviceName();
+        info[@"model"]         = mid;
+        info[@"modelFriendly"] = friendlyModelName(mid);
         info[@"modelName"]     = dev.model ?: @"";
+        info[@"localIp"]       = localIP();
+        info[@"storageTotal"]  = @(stTotal);
+        info[@"storageFree"]   = @(stFree);
         info[@"systemName"]    = dev.systemName ?: @"iOS";
         info[@"systemVersion"] = dev.systemVersion ?: @"";
         info[@"sdk"]           = @([dev.systemVersion integerValue]);   // iOS 主版本号
