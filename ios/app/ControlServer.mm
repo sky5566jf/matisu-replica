@@ -126,34 +126,19 @@ static char *MANextCommand(int cli, NSMutableData *acc) {
     return NULL;
 }
 
-static void* MAServerLoop(void* arg) {
-    (void)arg;
-    int srv = socket(AF_INET, SOCK_STREAM, 0);
-    if (srv < 0) { perror("socket"); return NULL; }
-    int opt = 1;
-    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(18182);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) < 0) { perror("bind"); close(srv); return NULL; }
-    if (listen(srv, 4) < 0) { perror("listen"); close(srv); return NULL; }
-
-    NSLog(@"[MatisuAuto] control server listening on :18182");
-
-    while (1) {
-        int cli = accept(srv, NULL, NULL);
-        if (cli < 0) continue;
-        char buf[4096];
-        ssize_t n;
-        // 每连接一个 autoreleasepool：screencap/uinode 在非主线程产生大量
-        // autoreleased 对象（UIImage/PNG/JSON），无 pool 会累积泄漏直至
-        // jetsam per-process-limit 杀进程（真机实证 10 连发即崩）。
-        @autoreleasepool {
-        NSMutableData *acc = [NSMutableData data];
+// 连接处理（每连接独立线程）：run/runfile 是同步执行，脚本含无限循环时
+// 单线程 accept 循环会被整体堵死——看门狗探活失败会误杀重启（2026-09-02 真机实证：
+// runfile 一个 while(true) 脚本后整个 :18182 拒连）。one-shot 各自 newstate、
+// 常驻服务本就独立线程，触控/截图等子系统此前已与常驻脚本线程并发，不引入新风险类。
+static void* MAClientLoop(void* arg) {
+    int cli = (int)(intptr_t)arg;
+    char buf[4096];
+    ssize_t n;
+    // 每连接一个 autoreleasepool：screencap/uinode 在非主线程产生大量
+    // autoreleased 对象（UIImage/PNG/JSON），无 pool 会累积泄漏直至
+    // jetsam per-process-limit 杀进程（真机实证 10 连发即崩）。
+    @autoreleasepool {
+    NSMutableData *acc = [NSMutableData data];
         while ((n = recv(cli, buf, sizeof(buf), 0)) > 0) {
             [acc appendBytes:buf length:n];
             for (;;) {
@@ -380,8 +365,38 @@ static void* MAServerLoop(void* arg) {
                 free(line);
             }
         }
-        } // @autoreleasepool
-        close(cli);
+    } // @autoreleasepool
+    close(cli);
+    return NULL;
+}
+
+static void* MAServerLoop(void* arg) {
+    (void)arg;
+    int srv = socket(AF_INET, SOCK_STREAM, 0);
+    if (srv < 0) { perror("socket"); return NULL; }
+    int opt = 1;
+    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(18182);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) < 0) { perror("bind"); close(srv); return NULL; }
+    if (listen(srv, 4) < 0) { perror("listen"); close(srv); return NULL; }
+
+    NSLog(@"[MatisuAuto] control server listening on :18182");
+
+    while (1) {
+        int cli = accept(srv, NULL, NULL);
+        if (cli < 0) continue;
+        pthread_t ctid;
+        if (pthread_create(&ctid, NULL, MAClientLoop, (void *)(intptr_t)cli) == 0) {
+            pthread_detach(ctid);
+        } else {
+            close(cli);
+        }
     }
     return NULL;
 }
