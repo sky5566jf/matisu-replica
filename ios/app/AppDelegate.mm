@@ -42,7 +42,7 @@
     } else if ([host isEqualToString:@"watchdog"]) {
         MatisuWatchdogEnsureStarted();
     } else if ([host isEqualToString:@"workdir"] || [host isEqualToString:@"logdir"]) {
-        NSString *dir  = [host isEqualToString:@"workdir"] ? MatisuRunScriptsDir() : MatisuLogDir();
+        NSString *dir  = [host isEqualToString:@"workdir"] ? MatisuWorkDir() : MatisuLogDir();
         NSString *title = [host isEqualToString:@"workdir"] ? @"工作目录" : @"日志";
         UINavigationController *nav = (UINavigationController *)self.window.rootViewController;
         if (nav) {

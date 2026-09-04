@@ -197,7 +197,7 @@ static UILabel *maSectionTitle(UIView *parent, NSString *text, CGFloat y, CGFloa
 }
 - (void)openWork {
     [self.navigationController pushViewController:
-        [[FileListVC alloc] initWithDir:MatisuRunScriptsDir() title:@"工作目录"] animated:YES];
+        [[FileListVC alloc] initWithDir:MatisuWorkDir() title:@"工作目录"] animated:YES];
 }
 @end
 

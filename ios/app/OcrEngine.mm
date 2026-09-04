@@ -65,9 +65,7 @@ const float DET_BOX_THRESH = 0.5f;
 const float DET_UNCLIP = 1.6f;
 
 std::string modelPath(const char *name) {
-    // 模型放 app bundle ocr/ 或 <数据区>/ocr/（后者优先，方便单独更新）
-    NSString *p1 = [MatisuOcrDir() stringByAppendingString:@(name)];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:p1]) return p1.UTF8String;
+    // 模型随 app 分发，放 bundle 内 ocr/（数据区不再存模型）
     NSString *p2 = [[[NSBundle mainBundle] bundlePath] stringByAppendingFormat:@"/ocr/%s", name];
     return p2.UTF8String;
 }
