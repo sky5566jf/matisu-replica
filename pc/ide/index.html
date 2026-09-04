@@ -252,6 +252,8 @@
 
   /* 调试输出页 */
   #logout { flex: 1; overflow-y: auto; background: #15181d; font-family: Consolas, monospace; font-size: 12px; color: #b5cea8; padding: 6px; white-space: pre-wrap; }
+  .jref { color: #8ab4f8; cursor: pointer; text-decoration: underline dotted; }
+  .jref:hover { color: #cfe3ff; background: #1f3552; }
 
   #rtabs { display: flex; background: #21252d; flex: none; border-top: 1px solid #101215; }
   .rtab { padding: 5px 10px; font-size: 12px; color: #9aa4b0; cursor: pointer; user-select: none; }
@@ -588,12 +590,21 @@ function renderLog() {
   const q = $('logsearch').value.trim();
   logMarkIdx = -1;
   if (q) {
+    // 搜索态不做链接化（mark 标签会干扰跳转 span），保持纯高亮
     const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     el.innerHTML = LOG_LINES.map((l) => esc(l).replace(re, (m) => '<mark>' + m + '</mark>')).join('\n');
   } else {
-    el.innerHTML = esc(LOG_LINES.join('\n'));
+    el.innerHTML = LOG_LINES.map(logHtml).join('\n');
   }
   el.scrollTop = el.scrollHeight;
+}
+// 日志链接化：[文件:行号] 前缀与错误行里的 xxx.lua:N 都可点击跳转
+function logHtml(s) {
+  let h = esc(s);
+  h = h.replace(/\[([^\[\]:\s]+):(\d+)\]/g, (m, f, l) => `<span class="jref" data-f="${f}" data-l="${l}">${m}</span>`);
+  h = h.replace(/(^|[\s>])([^\[\]\s:>][^\[\]\s:]*\.lua):(\d+)(?=[:\s]|$)/g,
+    (m, pre, f, l) => `${pre}<span class="jref" data-f="${f}" data-l="${l}">${f}:${l}</span>`);
+  return h;
 }
 function logAppend(s) {
   String(s).split('\n').forEach((l) => LOG_LINES.push(l));
@@ -601,7 +612,7 @@ function logAppend(s) {
   const q = $('logsearch').value.trim();
   const el = $('logout');
   if (q) { renderLog(); return; }
-  el.innerHTML = esc(LOG_LINES.join('\n'));
+  el.innerHTML = LOG_LINES.map(logHtml).join('\n');
   el.scrollTop = el.scrollHeight;
 }
 function logTs() {
@@ -897,6 +908,46 @@ function jumpLine(n) {
     $('code').selectionStart = $('code').selectionEnd = pos;
   }
 }
+
+// ============ 调试输出 [文件:行号] 点击跳转 ============
+// 优先级：已开标签 → 当前工程文件树 → 设备脚本目录
+function findTreeNode(nodes, base) {
+  for (const n of nodes || []) {
+    if (n.d) { const r = findTreeNode(n.c, base); if (r) return r; }
+    else if (n.n === base) return n.p;
+  }
+  return null;
+}
+async function jumpToLogRef(fname, lineno) {
+  const base = String(fname).split(/[\\/]/).pop();
+  const ti = tabs.findIndex((t) => t.name === base);
+  if (ti >= 0) { switchTab(ti); jumpLine(lineno); return; }
+  if (proj && Array.isArray(proj.tree)) {
+    const hit = findTreeNode(proj.tree, base);
+    if (hit) {
+      if (hit.toLowerCase().endsWith('.rc')) { openTab(base, '', { type: 'proj', p: hit }, 'rc'); return; }
+      try {
+        const r = await (await fetch('/api/file?p=' + encodeURIComponent(hit))).json();
+        openTab(base, r.code || '', { type: 'proj', p: hit });
+        jumpLine(lineno);
+        return;
+      } catch (_) {}
+    }
+  }
+  try {
+    const r = await (await fetch('/api/script?name=' + encodeURIComponent(base))).json();
+    if (r && typeof r.code === 'string' && r.code) {
+      openTab(base, r.code, { type: 'dev', name: base });
+      jumpLine(lineno);
+      return;
+    }
+  } catch (_) {}
+  log('调试输出跳转：找不到文件 ' + base);
+}
+$('logout').addEventListener('click', (e) => {
+  const sp = e.target.closest('.jref');
+  if (sp) jumpToLogRef(sp.dataset.f, +sp.dataset.l);
+});
 
 // ============ 右侧页签切换（全局搜索 / 函数查询 / 调试输出） ============
 const RTAB_MAP = { search: ['rpgsearch', '全局搜索'], fn: ['rpfn', '函数查询'], log: ['rplog', '调试输出'] };
@@ -1411,7 +1462,9 @@ async function runCurrent() {
   log('开始发送脚本到设备 ' + devName);
   const up = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: devName, code: getCode() }) })).json().catch(() => ({ ok: false }));
   if (!up.ok) { log('[错误] 同步脚本到设备失败：' + devName + '（检查设备是否已连接）'); return; }
+  runActive = true;
   const r = await (await fetch('/api/runfile', { method: 'POST', body: JSON.stringify({ name: devName }) })).json().catch(() => null);
+  runActive = false;
   if (!r) { log('[错误] 运行请求失败（设备无响应）'); return; }
   if (!r.ok) log('[错误] ' + (r.error || '未知'));
 }
@@ -1435,7 +1488,8 @@ $('btnCont').onclick = () => todo('继续(F9)');
 async function refreshState() {
   const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'state' }) })).json();
   $('svcstate').textContent = r.running ? '常驻: 运行中' : '常驻';
-  if (r.output) log('[常驻输出] ' + r.output.trim());
+  // 逐行带时间戳（原整块 dump 没有时间前缀且刷屏）
+  if (r.output) String(r.output).split('\n').filter((x) => x.trim()).forEach((l) => log('[常驻输出] ' + l));
 }
 
 // 导出打包
@@ -2194,6 +2248,7 @@ $('code').addEventListener('keydown', (e) => {
 
 // ============ 设备日志流 ============
 let logOff = 0;
+let runActive = false;   // F5 运行期间 true → 轮询加速到 400ms（平时 2s）
 async function pollDeviceLog() {
   try {
     const r = await (await fetch('/api/logtail?off=' + logOff)).json();
@@ -2202,7 +2257,10 @@ async function pollDeviceLog() {
     if (r.data) logAppend(r.data);
   } catch (_) { setConn(false); }
 }
-setInterval(pollDeviceLog, 2000);
+async function pollLoop() {
+  await pollDeviceLog();
+  setTimeout(pollLoop, runActive ? 400 : 2000);
+}
 
 loadDevices();
 loadProject();
@@ -2215,7 +2273,7 @@ renderHl();
 renderOutline();
 applyAutoSave();
 applyEdFontSize(IDE_SETTINGS.editorFontSize || 13, false);
-pollDeviceLog();
+pollLoop();
 </script>
 </body>
 </html>
