@@ -18,6 +18,7 @@
     "@codemirror/state": "^6.7.2",
     "@codemirror/view": "^6.43.10",
     "@lezer/highlight": "^1.2.3",
+    "@replit/codemirror-indentation-markers": "^6.5.3",
     "esbuild": "^0.28.2"
   }
 }

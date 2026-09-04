@@ -44,3 +44,10 @@ pc/ide/lsp/lls.zip
 pc/ide/scripts/
 # 测试截图
 pc/ide/editor-build/ide_editor_ui.png
+
+# PC IDE 运行时状态/用户工程（不入仓）
+pc/ide/workspace/
+pc/ide/devices.json
+pc/ide/hidden_projects.json
+pc/ide/project.json
+pc/ide/webdav_192.69.0.38_ocr/

@@ -2,7 +2,8 @@
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, HighlightStyle, indentOnInput, bracketMatching } from '@codemirror/language';
+import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, HighlightStyle, indentOnInput, bracketMatching, foldGutter, foldAll, unfoldAll, foldCode, unfoldCode, foldService, toggleFold as cmToggleFold, codeFolding, foldable, foldEffect, unfoldEffect, foldState } from '@codemirror/language';
+import { indentationMarkers } from '@replit/codemirror-indentation-markers';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { linter, lintGutter, setDiagnostics } from '@codemirror/lint';
 import { hoverTooltip } from '@codemirror/view';
@@ -107,7 +108,18 @@ const darkTheme = EditorView.theme({
   '.cm-panels': { backgroundColor: '#1c1f26', color: '#d6dbe2' },
   '.cm-lintRange-error': { textDecoration: 'underline wavy #f44747 1px' },
   '.cm-lintRange-warning': { textDecoration: 'underline wavy #cca700 1px' },
+  // 折叠标记：对齐原版 ⊞/⊟ 红色方块
+  '.cm-foldGutter .cm-gutterElement': { color: '#e05c66', cursor: 'pointer', fontSize: '12px', lineHeight: '18px', padding: '0 4px' },
+  '.cm-foldGutter .cm-gutterElement:hover': { color: '#ff7b84' },
 }, { dark: true });
+
+// 折叠标记 DOM：⊟=可展开（已折叠块） / ⊞=可折叠 —— 与原版一致的方块图形
+function foldMarkerDOM(open) {
+  const el = document.createElement('span');
+  el.textContent = open ? '⊟' : '⊞';
+  el.title = open ? '展开' : '折叠';
+  return el;
+}
 
 // ---------------- LSP <-> CM6 桥 ----------------
 function posToOffset(doc, pos) {
@@ -175,6 +187,137 @@ function lspHover(getLsp, getUri) {
   });
 }
 
+// ---------------- Lua 语法折叠 ----------------
+// 不能用「按缩进」判定：用户脚本缩进普遍不规范（顶层 end 缩进 4、函数体 return 缩进 0…），
+// 按缩进折会出现错位、留下孤儿 end，且每行向后扫描是 O(n²)，大文件卡顿。
+// 这里一次全文档扫描（跳过字符串/注释/长括号），用关键字栈配对出所有块，结果与缩进无关。
+// 可识别块：function…end / if…then…end / while…do…end / for…do…end / repeat…until / do…end / --[[ 多行注释 ]]
+// 规则：块必须跨 ≥2 行，单行的 if/function 不生成折叠标记。
+const LUA_OPEN = new Set(['then', 'do', 'repeat', 'function']);
+const LUA_CLOSE = new Set(['end', 'until']);
+const LUA_MID = new Set(['else', 'elseif']);
+
+// 扫描全文，返回块列表 [{startLine, endLine, depth, comment?}]（行号从 1 开始，depth 0=顶层块）
+function scanLuaBlocks(state) {
+  const doc = state.doc;
+  const text = doc.toString();
+  const n = text.length;
+  const blocks = [];
+  const stack = [];
+  let i = 0;
+  let pendingElseif = false;   // elseif 后紧跟的 then 是与 elseif 配对的，不新开块
+
+  while (i < n) {
+    const c = text[i];
+
+    // 换行
+    if (c === '\n') { i++; continue; }
+
+    // 注释
+    if (c === '-' && text[i + 1] === '-') {
+      i += 2;
+      if (text[i] === '[') {           // --[[ 长注释（含 --[==[ 等级别）→ 跨行时生成折叠块
+        let eq = 0, j = i + 1;
+        while (text[j] === '=') { eq++; j++; }
+        if (text[j] === '[') {
+          const startOff = i - 2;      // 从 "--" 算起
+          const closeStr = ']' + '='.repeat(eq) + ']';
+          const k = text.indexOf(closeStr, j + 1);
+          const endOff = k < 0 ? n : k + closeStr.length;
+          const startLine = doc.lineAt(startOff).number;
+          const endLine = doc.lineAt(endOff - 1).number;
+          if (endLine > startLine) blocks.push({ startLine, endLine, depth: stack.length, comment: true });
+          i = endOff;
+          continue;
+        }
+      }
+      const nl = text.indexOf('\n', i);   // 行注释
+      i = nl < 0 ? n : nl;
+      continue;
+    }
+
+    // 字符串 / 长括号
+    if (c === '"' || c === "'") {
+      const q = c; i++;
+      while (i < n) {
+        if (text[i] === '\\') { i += 2; continue; }
+        if (text[i] === q) { i++; break; }
+        if (text[i] === '\n') break;      // Lua 短字符串不能跨行，防御性终止
+        i++;
+      }
+      continue;
+    }
+    if (c === '[') {
+      let eq = 0, j = i + 1;
+      while (text[j] === '=') { eq++; j++; }
+      if (text[j] === '[') {
+        const closeStr = ']' + '='.repeat(eq) + ']';
+        const k = text.indexOf(closeStr, j + 1);
+        i = k < 0 ? n : k + closeStr.length;
+        continue;
+      }
+    }
+
+    // 标识符 / 关键字
+    if (/[A-Za-z_]/.test(c)) {
+      let j = i;
+      while (j < n && /[A-Za-z0-9_]/.test(text[j])) j++;
+      const word = text.slice(i, j);
+      i = j;
+      // 跳过 t.end / obj:function 这类字段访问（前面是 . 或 :）
+      const prev = (text[i - word.length - 1] || '').trim();
+      const isField = prev === '.' || prev === ':';
+      if (!isField) {
+        if (LUA_OPEN.has(word)) {
+          if (word === 'then' && pendingElseif) {
+            pendingElseif = false;             // elseif ... then 净变化为 0
+          } else {
+            stack.push({ line: doc.lineAt(i - word.length).number, depth: stack.length });
+          }
+        } else if (LUA_CLOSE.has(word)) {
+          const top = stack.pop();
+          if (top) {
+            blocks.push({ startLine: top.line, endLine: doc.lineAt(i - word.length).number, depth: top.depth });
+          }
+          pendingElseif = false;
+        } else if (LUA_MID.has(word)) {
+          if (word === 'elseif') pendingElseif = true;
+        }
+      }
+      continue;
+    }
+
+    i++;
+  }
+  // 未闭合的块（文件被截断 / 正在编辑中）丢弃，避免折叠到文末
+  return blocks;
+}
+
+// 缓存：CM6 的 state 不可变，doc 一变 state 就是新对象，据此失效
+let _blockCache = { state: null, byLine: null, blocks: null };
+function luaBlocks(state) {
+  if (_blockCache.state === state) return _blockCache;
+  const blocks = scanLuaBlocks(state);
+  const byLine = new Map();   // startLine -> endLine（同一行多个块起点时取最外层=endLine 最大）
+  for (const b of blocks) {
+    if (b.endLine <= b.startLine) continue;   // 单行块不生成折叠标记
+    const cur = byLine.get(b.startLine);
+    if (!cur || b.endLine > cur) byLine.set(b.startLine, b.endLine);
+  }
+  _blockCache = { state, byLine, blocks };
+  return _blockCache;
+}
+
+const luaFoldService = foldService.of((state, lineStart) => {
+  const { byLine } = luaBlocks(state);
+  const ln = state.doc.lineAt(lineStart).number;
+  const endLn = byLine.get(ln);
+  if (!endLn) return null;
+  const from = state.doc.line(ln).to;
+  const to = state.doc.line(endLn).to;
+  return to > from ? { from, to } : null;
+});
+
 // ---------------- 对外工厂 ----------------
 export function createEditor({ parent, doc, getUri, lspUrl, onChange }) {
   let lsp = null;
@@ -189,6 +332,24 @@ export function createEditor({ parent, doc, getUri, lspUrl, onChange }) {
       doc: doc || '',
       extensions: [
         lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), drawSelection(),
+        foldGutter({ markerDOM: foldMarkerDOM }), luaFoldService,
+        // 对齐原版：折叠后行尾不显示「…」占位框，展开只走 gutter 标记（保留 class 供 edFold 检测折叠态）
+        codeFolding({
+          placeholderDOM: (view, onclick) => {
+            const el = document.createElement('span');
+            el.className = 'cm-foldPlaceholder';
+            el.onclick = onclick;
+            el.title = '展开';
+            el.style.cssText = 'display:inline-block;width:0;min-width:0;padding:0;margin:0;cursor:pointer;';
+            return el;
+          },
+        }),
+        indentationMarkers({
+          markerType: 'fullScope',
+          thickness: 1,
+          hideFirstIndent: true,
+          colors: { dark: '#5a333b', activeDark: '#b04a54' },
+        }),
         history(), indentOnInput(), bracketMatching(), closeBrackets(),
         keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap, indentWithTab]),
         StreamLanguage.define(lua),
@@ -261,5 +422,58 @@ export function createEditor({ parent, doc, getUri, lspUrl, onChange }) {
       openDoc(curUri, view.state.doc.toString());
     },
     get lspReady() { return !!(lsp && lsp.ready); },
+    foldAll() {
+      // 全部折叠：所有跨≥2行的块全部折起（含顶层 function 与多行注释），每个 function 折成一行。
+      // 已实测 CM foldState 允许嵌套范围共存（foldExists 只排斥完全相同范围），
+      // 因此无需跳过顶层：外层折叠盖住内层标记，点 ⊞ 展开外层后内层仍是折叠态——正是原版行为。
+      const state = view.state;
+      const { blocks } = luaBlocks(state);
+      if (!blocks.length) return;
+      const list = blocks.filter((b) => b.endLine > b.startLine);
+      // 外层先折（同起点范围大的优先），保证嵌套 range 有序提交
+      list.sort((a, b) => a.startLine - b.startLine || (b.endLine - a.endLine));
+      const eff = [];
+      for (const b of list) {
+        const from = state.doc.line(b.startLine).to;
+        const to = state.doc.line(b.endLine).to;
+        if (to > from) eff.push(foldEffect.of({ from, to }));
+      }
+      if (eff.length) view.dispatch({ effects: eff });
+    },
+    unfoldAll() {
+      // 全部展开：对当前折叠集合逐个发 unfoldEffect
+      const state = view.state;
+      const ds = state.field(foldState, false);
+      if (!ds) return;
+      const toUnfold = [];
+      ds.between(0, state.doc.length, (from, to) => { toUnfold.push({ from, to }); });
+      if (toUnfold.length) view.dispatch({ effects: toUnfold.map((r) => unfoldEffect.of(r)) });
+    },
+    getFoldCount() {
+      // 当前折叠数量（比数 DOM placeholder 可靠：隐形占位符在虚拟滚动下可能未渲染）
+      const state = view.state;
+      const ds = state.field(foldState, false);
+      if (!ds) return 0;
+      let c = 0;
+      ds.between(0, state.doc.length, () => { c++; });
+      return c;
+    },
+    // 语法扫描出的所有可折叠块 [{startLine,endLine,depth}]，1-based，供调试/状态展示
+    getFoldRanges() { return luaBlocks(view.state).blocks.slice(); },
+    // 当前处于折叠状态的块 [{startLine,endLine}]
+    getFolds() {
+      const state = view.state;
+      const ds = state.field(foldState, false);
+      if (!ds) return [];
+      const out = [];
+      ds.between(0, state.doc.length, (from, to) => {
+        out.push({ startLine: state.doc.lineAt(from).number, endLine: state.doc.lineAt(to).number });
+      });
+      return out;
+    },
+    toggleFold() {
+      // 折叠/展开切换：当前行有折叠则展开，否则折叠可折叠区域（保留原行为作备用）
+      cmToggleFold(view);
+    },
   };
 }

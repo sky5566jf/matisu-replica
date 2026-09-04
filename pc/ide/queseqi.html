@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>MatisuAuto 抓抓工具</title>
+<title>MatisuAuto 取色器</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
@@ -76,7 +76,7 @@
 <body>
 
 <div id="titlebar">
-  <span class="tt">MatisuAuto 抓抓工具</span>
+  <span class="tt">MatisuAuto 取色器</span>
   <div id="tabs"></div>
   <select id="devsel"></select>
   <button id="btnDevMgr" title="设备管理" style="background:#2d333b;color:#c8cdd5;border:1px solid #454c56;padding:3px 8px;border-radius:3px;cursor:pointer">⚙</button>
@@ -204,7 +204,7 @@ async function takeShot() {
   applyZoom();
   renderMarks();
   $('titlebar').querySelector('.tt').textContent =
-    `MatisuAuto 抓抓工具  当前截图尺寸: ${imgW}x${imgH}  逻辑: ${devW}x${devH}`;
+    `MatisuAuto 取色器  当前截图尺寸: ${imgW}x${imgH}  逻辑: ${devW}x${devH}`;
 }
 function renderTabs() {
   $('tabs').innerHTML = shots.map((s) =>
