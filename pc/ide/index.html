@@ -1029,11 +1029,7 @@ async function loadProject() {
     if (Array.isArray(r.projects)) allProjects = r.projects;
     else allProjects = [];
   } catch (_) { proj = null; allProjects = []; }
-  // 默认展开活动工程 + 三目录
-  if (proj) {
-    if (treeOpen.size === 0) ['脚本', '资源', '界面'].forEach((d) => treeOpen.add(d));
-    projOpen.add(path_norm(proj.root));              // 活动项目默认展开
-  }
+  // 启动默认所有项目折叠；点击项目名时才展开（切换工程的点击处理里会自行 add projOpen/treeOpen）
   renderTree();
 }
 function ficoClass(name) {
