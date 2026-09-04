@@ -26,9 +26,11 @@
     <dict/>
 
     <!-- ===== 常驻保活（对齐原版 RootService 的做法，取其中公开键部分） ===== -->
-    <!-- 后台唤醒：fetch 由系统按使用习惯调度，processing 给 BGTaskScheduler 用 -->
+    <!-- 后台唤醒：fetch 由系统按使用习惯调度，processing 给 BGTaskScheduler 用，
+         network-authentication 配合 NEHotspotHelper 重启自启（WiFi 关联类后台唤醒） -->
     <key>UIBackgroundModes</key>
     <array>
+        <string>network-authentication</string>
         <string>fetch</string>
         <string>processing</string>
     </array>

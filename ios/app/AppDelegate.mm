@@ -3,6 +3,7 @@
 #import "MainVC.h"
 #import "MatisuPaths.h"
 #import "Watchdog.h"
+#import "MatisuHotspotManager.h"
 
 @implementation AppDelegate
 
@@ -14,6 +15,11 @@
 
     // 常驻保活：TrollStore 下没有 LaunchDaemon，靠看门狗在掉线后重新拉起守护进程
     MatisuWatchdogEnsureStarted();
+
+    // 重启自启：注册 NEHotspotHelper（WiFi 关联事件冷启动 App 的唯一巨魔机制）
+    // + SCNetworkReachability 兜底。重启手机后系统一连 WiFi 就会把 App 拉起，
+    // 回调里调 MatisuServiceStart() 恢复 18182 服务，PC 端即可通过 WiFi 重连。
+    MatisuHotspotManagerStart();
 
     // 冷启动兜底：先给守护进程 2.5s 让路，若端口仍空闲再由 GUI 自己顶上，
     // 避免两个进程抢 18182（谁先 bind 谁服务，另一个被 watchdog 视为"已恢复"）
