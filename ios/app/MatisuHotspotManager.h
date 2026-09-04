@@ -11,6 +11,9 @@
 // 调 Watchdog 的 MatisuServiceStart()，无需再 posix_spawn 独立 supervisor。
 #import <Foundation/Foundation.h>
 
+@interface MatisuHotspotManager : NSObject
+@end
+
 #ifdef __cplusplus
 extern "C" {
 #endif
