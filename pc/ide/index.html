@@ -411,9 +411,9 @@ print("screen: " .. w .. "x" .. h)
   <!-- 右列（可左右拉伸） -->
   <div id="rsplit"></div>
   <div id="right">
-    <div id="rphead"><span id="rpheadtitle">全局搜索</span><span class="rparrow" id="rparrow">▼</span></div>
+    <div id="rphead"><span id="rpheadtitle">调试输出</span><span class="rparrow" id="rparrow">▼</span></div>
     <div id="rpbody">
-      <div class="rpage active" id="rpgsearch">
+      <div class="rpage" id="rpgsearch">
         <div class="rtoolrow">
           <input id="gsearch" placeholder="请输入要搜索的代码片段…">
           <button class="mini" id="btnGSearch">查找本工程</button>
@@ -429,7 +429,7 @@ print("screen: " .. w .. "x" .. h)
         </div>
         <div id="fnlist"></div>
       </div>
-      <div class="rpage" id="rplog">
+      <div class="rpage active" id="rplog">
         <div class="rtoolrow">
           <input id="logsearch" placeholder="搜索日志…">
           <button class="mini" id="btnLogPrev">上一个</button>
@@ -440,9 +440,9 @@ print("screen: " .. w .. "x" .. h)
       </div>
     </div>
     <div id="rtabs">
-      <div class="rtab active" data-t="search">全局搜索</div>
+      <div class="rtab" data-t="search">全局搜索</div>
       <div class="rtab" data-t="fn">函数查询</div>
-      <div class="rtab" data-t="log">调试输出</div>
+      <div class="rtab active" data-t="log">调试输出</div>
     </div>
   </div>
 </div>
