@@ -72,6 +72,8 @@ static NSString *maPrintMirror(lua_State *L, NSString *line) {
     NSString *where = w ? [NSString stringWithUTF8String:w] : @"";
     lua_pop(L, 1);
     if (!where.length) return line;
+    // luaL_where 格式为 "chunk:line: "（冒号后带空格），剥掉尾部空白与冒号
+    where = [where stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if ([where hasSuffix:@":"]) where = [where substringToIndex:where.length - 1];
     return [NSString stringWithFormat:@"[%@] %@", where, line];
 }
