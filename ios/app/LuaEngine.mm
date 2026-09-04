@@ -935,6 +935,8 @@ static int l_openUrl(lua_State *L) {
 NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName) {
     if (!source) return nil;
     NSString *chunk = chunkName.length ? chunkName : @"=script";
+    // 纯文件名加 '@' 前缀（Lua 视作文件名 chunk：错误/行号显示 "main.lua:9:" 而非 [string "..."]）
+    if (![chunk hasPrefix:@"="] && ![chunk hasPrefix:@"@"]) chunk = [@"@" stringByAppendingString:chunk];
     NSMutableString *out = [NSMutableString string];
     lua_State *L = luaL_newstate();
     if (!L) return @{ @"ok": @NO, @"output": @"", @"error": @"luaL_newstate failed" };
@@ -947,7 +949,7 @@ NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName)
     registerFns(L, l_print);
 
     // 引擎生命周期日志（镜像进 engine.log，IDE 调试输出可见）
-    NSString *disp = [chunk hasPrefix:@"="] ? [chunk substringFromIndex:1] : chunk;
+    NSString *disp = [chunk hasPrefix:@"="] || [chunk hasPrefix:@"@"] ? [chunk substringFromIndex:1] : chunk;
     maEngineLogAppend([NSString stringWithFormat:@"开始运行脚本 %@\n", disp]);
 
     NSMutableDictionary *r = [NSMutableDictionary dictionary];
