@@ -64,6 +64,9 @@
   #btnStep { background: #505a66; } #btnStep:hover { background: #5f6b78; }
   #btnStepIn { background: #434c57; } #btnStepIn:hover { background: #525c69; }
   #btnCont { background: #38404a; } #btnCont:hover { background: #47505c; }
+  /* 按钮联动禁用态：置灰、去 hover 高亮与按下效果（运行中只有「停止」亮，空闲时只有「运行/调试」亮） */
+  #dbgbtns .tb:disabled, #dbgbtns .tb:disabled:hover, #dbgbtns .tb:disabled:active {
+    background: #3a414b; color: #78828d; cursor: default; filter: none; text-shadow: none; }
   #svcstate { font-size: 11px; color: #7d8791; text-align: center; padding: 2px 0; }
   #vartable { flex: 1; border-left: 1px solid #101215; font-size: 11px; min-width: 0; display: flex; flex-direction: column; }
   #vartable .vhead { display: flex; background: #21252d; color: #8ab4f8; flex: none; font-weight: 600; }
@@ -1448,6 +1451,7 @@ btnDel.onclick = async () => {
 // 经 logtail 流式回显；「开始运行脚本/脚本停止运行」也由设备端引擎记录（时间=设备侧真实时刻）。
 // 本函数只发 IDE 侧状态消息（发送/同步失败/请求失败），r.output 不再重复打印。
 async function runCurrent() {
+  if (runActive) return;   // 已在运行：按钮/快捷键均忽略
   if (activeTab >= 0 && tabs[activeTab].kind === 'rc') { log('rc 是资源容器，不能运行——请运行 .lua 脚本'); return; }
   if (activeTab >= 0 && tabs[activeTab].dirty) await saveCur();
   const name = activeTab >= 0 ? tabs[activeTab].name : null;
@@ -1458,17 +1462,32 @@ async function runCurrent() {
   log('开始发送脚本到设备 ' + devName);
   const up = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: devName, code: getCode() }) })).json().catch(() => ({ ok: false }));
   if (!up.ok) { log('[错误] 同步脚本到设备失败：' + devName + '（检查设备是否已连接）'); return; }
-  runActive = true;
+  runActive = true; updateDbgBtns(true);
   const r = await (await fetch('/api/runfile', { method: 'POST', body: JSON.stringify({ name: devName }) })).json().catch(() => null);
-  runActive = false;
+  runActive = false; updateDbgBtns(false);
   if (!r) { log('[错误] 运行请求失败（设备无响应）'); return; }
   if (!r.ok) log('[错误] ' + (r.error || '未知'));
 }
 $('btnRun2').onclick = runCurrent;
 
+// ============ 调试面板按钮联动 ============
+// 空闲：运行/调试可用；运行中（F5 在跑 或 常驻运行中）：仅「停止」可用。
+// 加密运行/单步/步入/继续为未实现占位，常灰。
+function updateDbgBtns(running) {
+  $('btnRun2').disabled = running;
+  $('btnStop2').disabled = !running;
+  $('btnDbg').disabled = running;
+  $('btnEnc').disabled = true;
+  $('btnStep').disabled = true;
+  $('btnStepIn').disabled = true;
+  $('btnCont').disabled = true;
+}
+updateDbgBtns(false);
+
 $('btnEnc').onclick = () => todo('加密运行');
 
 async function stopSvc() {
+  if ($('btnStop2').disabled) return;   // 空闲时 F6/按钮不动作
   await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'stop' }) });
   log('已请求停止脚本');
   setTimeout(refreshState, 800);
@@ -1484,6 +1503,7 @@ $('btnCont').onclick = () => todo('继续(F9)');
 async function refreshState() {
   const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'state' }) })).json();
   $('svcstate').textContent = r.running ? '常驻: 运行中' : '常驻';
+  updateDbgBtns(runActive || !!r.running);   // 常驻运行中同样只保留「停止」可用
   // 逐行带时间戳（原整块 dump 没有时间前缀且刷屏）
   if (r.output) String(r.output).split('\n').filter((x) => x.trim()).forEach((l) => log('[常驻输出] ' + l));
 }
