@@ -13,6 +13,10 @@ extern "C" {
 /// 每次调用新建独立 lua_State（脚本间隔离）；print 输出收集进 output。
 NSDictionary* _Nullable MatisuLuaRun(NSString *source);
 
+/// 同 MatisuLuaRun，chunkName 指定 chunk 名（runfile 传真实文件名，
+/// 引擎日志/错误信息即带 [文件:行号] 定位）。
+NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName);
+
 // ---- 常驻脚本（单实例服务态）----
 /// 后台线程启动常驻脚本；已在跑返回 NO（先 MatisuLuaStop）。
 BOOL MatisuLuaStart(NSString *source);

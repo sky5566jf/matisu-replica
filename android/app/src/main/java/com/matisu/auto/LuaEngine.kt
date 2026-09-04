@@ -33,8 +33,7 @@ object LuaEngine {
     var scriptDir: File? = null
 
     // ---------------- 函数注册 ----------------
-    private fun registerFns(g: Globals, out: StringBuilder, checkStop: () -> Boolean) {
-        val svc = AutoAccessibilityService.instance
+    private fun registerFns(g: Globals, out: StringBuilder, checkStop: () -> Boolean) {        val svc = AutoAccessibilityService.instance
 
         g.set("print", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
@@ -168,13 +167,37 @@ object LuaEngine {
         })
     }
 
+    /** print 包装：加 [chunk:line] 定位前缀（依赖 debug 库；iOS 端由 luaL_where 原生实现） */
+    private const val PRINT_WRAP = """
+        local _p = print
+        local _gi = debug and debug.getinfo or nil
+        print = function(...)
+          local loc = ""
+          if _gi then
+            local ok, info = pcall(_gi, 2, "Sl")
+            if ok and info and info.currentline and info.currentline > 0 then
+              loc = "[" .. tostring(info.short_src or "?") .. ":" .. tostring(info.currentline) .. "] "
+            end
+          end
+          local n = select("#", ...)
+          local parts = {}
+          for i = 1, n do parts[i] = tostring(select(i, ...)) end
+          _p(loc .. table.concat(parts, "\t"))
+        end
+    """
+
+    private fun wrapPrintLoc(g: Globals) {
+        try { g.load(PRINT_WRAP.trimIndent(), "=printwrap").call() } catch (_: Throwable) {}
+    }
+
     // ---------------- one-shot ----------------
-    fun run(source: String): RunResult {
+    fun run(source: String, chunk: String = "script"): RunResult {
         val out = StringBuilder()
         return try {
-            val g = JsePlatform.standardGlobals()
+            val g = JsePlatform.debugGlobals()
             registerFns(g, out) { false }
-            g.load(source, "script").call()
+            wrapPrintLoc(g)
+            g.load(source, chunk).call()
             RunResult(true, out.toString())
         } catch (e: Throwable) {
             RunResult(false, out.toString(), e.message ?: e.toString())
@@ -190,8 +213,9 @@ object LuaEngine {
         svcThread = Thread {
             val out = svcOut
             try {
-                val g = JsePlatform.standardGlobals()
+                val g = JsePlatform.debugGlobals()
                 registerFns(g, out) { svcStop }
+                wrapPrintLoc(g)
                 g.load(source, "service").call()
             } catch (e: Throwable) {
                 val msg = e.message ?: ""

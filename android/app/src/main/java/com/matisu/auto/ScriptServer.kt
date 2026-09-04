@@ -82,7 +82,8 @@ class ScriptServer(private val port: Int = 18183) {
                 "runfile" -> {
                     val f = dir?.let { File(it, arg) }
                     val j = if (f != null && f.isFile) {
-                        val r = LuaEngine.run(f.readText())
+                        // chunk 名传真实文件名 → print 日志带 [文件:行号] 定位
+                        val r = LuaEngine.run(f.readText(), arg)
                         JSONObject().put("ok", r.ok).put("output", r.output).apply {
                             if (r.error != null) put("error", r.error)
                         }

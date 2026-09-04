@@ -41,6 +41,7 @@ static NSMutableString *maOut(lua_State *L) {
 
 // 前向声明：print 镜像落盘（定义在日志控制台段）
 static void maEngineLogAppend(NSString *text);
+static NSString *maPrintMirror(lua_State *L, NSString *line);
 
 static int l_print(lua_State *L) {
     NSMutableString *out = maOut(L);
@@ -58,8 +59,21 @@ static int l_print(lua_State *L) {
     }
     [line appendString:@"\n"];
     [out appendString:line];
-    maEngineLogAppend(line);   // 镜像落盘：IDE 日志流
+    // 引擎日志镜像（IDE 日志流）：带 [文件:行号] 定位前缀；output 缓冲保持原文
+    maEngineLogAppend(maPrintMirror(L, line));
     return 0;
+}
+
+// print 镜像行加定位前缀：luaL_where(1) 取调用方 chunk:line（"main.lua:42:"）
+// output 缓冲（run 指令回传/读文件复用）不受影响，仅落盘镜像带前缀。
+static NSString *maPrintMirror(lua_State *L, NSString *line) {
+    luaL_where(L, 1);
+    const char *w = lua_tostring(L, -1);
+    NSString *where = w ? [NSString stringWithUTF8String:w] : @"";
+    lua_pop(L, 1);
+    if (!where.length) return line;
+    if ([where hasSuffix:@":"]) where = [where substringToIndex:where.length - 1];
+    return [NSString stringWithFormat:@"[%@] %@", where, line];
 }
 
 static int l_tap(lua_State *L) {
@@ -660,10 +674,14 @@ static NSString *maLogPath(void) { return [MatisuLogDir() stringByAppendingPathC
 
 // ---- 引擎输出日志（logdir/engine.log）：所有 print 镜像落盘，供 PC IDE 日志流拉取 ----
 // 与 Android 侧 EngineLog 对齐：追加写、超 256KB 时保留尾部 128KB 截断。
+// 每次追加自动加 [HH:mm:ss.SSS] 时间戳（IDE 端直接显示，时间=设备侧真实时刻）。
 static NSString *maEngineLogPath(void) { return [MatisuLogDir() stringByAppendingPathComponent:@"engine.log"]; }
 static void maEngineLogAppend(NSString *text) {
     if (!text.length) return;
     @autoreleasepool {
+        NSDateFormatter *tsf = [[NSDateFormatter alloc] init];
+        tsf.dateFormat = @"HH:mm:ss.SSS";
+        text = [NSString stringWithFormat:@"[%@] %@", [tsf stringFromDate:[NSDate date]], text];
         NSString *p = maEngineLogPath();
         NSFileManager *fm = [NSFileManager defaultManager];
         [fm createDirectoryAtPath:[p stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
@@ -914,8 +932,9 @@ static int l_openUrl(lua_State *L) {
     return 1;
 }
 
-NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
+NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName) {
     if (!source) return nil;
+    NSString *chunk = chunkName.length ? chunkName : @"=script";
     NSMutableString *out = [NSMutableString string];
     lua_State *L = luaL_newstate();
     if (!L) return @{ @"ok": @NO, @"output": @"", @"error": @"luaL_newstate failed" };
@@ -927,8 +946,12 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
 
     registerFns(L, l_print);
 
+    // 引擎生命周期日志（镜像进 engine.log，IDE 调试输出可见）
+    NSString *disp = [chunk hasPrefix:@"="] ? [chunk substringFromIndex:1] : chunk;
+    maEngineLogAppend([NSString stringWithFormat:@"开始运行脚本 %@\n", disp]);
+
     NSMutableDictionary *r = [NSMutableDictionary dictionary];
-    int status = luaL_loadbufferx(L, source.UTF8String, (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], "=script", "t");
+    int status = luaL_loadbufferx(L, source.UTF8String, (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], chunk.UTF8String, "t");
     if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
     if (status == LUA_OK) {
         r[@"ok"] = @YES;
@@ -946,8 +969,13 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
             r[@"error"] = msg;
         }
     }
+    maEngineLogAppend(@"脚本停止运行\n");
     lua_close(L);
     return r;
+}
+
+NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
+    return MatisuLuaRunNamed(source, @"=script");
 }
 
 // ============================================================
@@ -986,7 +1014,7 @@ static int l_printSvc(lua_State *L) {
     [gSvcOutLock lock];
     [gSvcOut appendString:line];
     [gSvcOutLock unlock];
-    maEngineLogAppend(line);   // 镜像落盘：IDE 日志流
+    maEngineLogAppend(maPrintMirror(L, line));   // 镜像落盘：IDE 日志流
     return 0;
 }
 

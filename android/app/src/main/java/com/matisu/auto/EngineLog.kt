@@ -25,7 +25,10 @@ object EngineLog {
         val f = logFile ?: return
         try {
             f.parentFile?.mkdirs()
-            if (f.length() > MAX) f.writeText(s) else f.appendText(s)
+            // 每条加 [HH:mm:ss.SSS] 时间戳（设备侧真实时刻，IDE 调试输出直接显示）
+            val ts = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+            val stamped = "[$ts] $s"
+            if (f.length() > MAX) f.writeText(stamped) else f.appendText(stamped)
         } catch (_: Exception) {}
     }
 }

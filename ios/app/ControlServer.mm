@@ -228,10 +228,11 @@ static void* MAClientLoop(void* arg) {
                     sendLE(cli, json ? json.bytes : NULL, json ? json.length : 0);
                 } else if (strncmp(line, "runfile ", 8) == 0 && line[8]) {
                     // runfile <相对路径>：执行 scripts 目录下脚本（one-shot）
+                    // chunk 名传真实文件名 → 引擎日志/错误信息带 [文件:行号] 定位
                     NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:@(line + 8)];
                     NSString *src = [NSString stringWithContentsOfFile:f encoding:NSUTF8StringEncoding error:nil];
                     NSDictionary *r = src
-                        ? MatisuLuaRun(src)
+                        ? MatisuLuaRunNamed(src, @(line + 8))
                         : @{ @"ok": @NO, @"output": @"", @"error": [NSString stringWithFormat:@"script not found: %@", @(line + 8)] };
                     NSData *json2 = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
                     sendLE(cli, json2 ? json2.bytes : NULL, json2 ? json2.length : 0);
