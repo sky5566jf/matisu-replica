@@ -46,11 +46,11 @@ jobs:
           BIN=$(find .theos/obj/MatisuAuto.app -name MatisuAuto -type f 2>/dev/null | head -1)
           [ -z "$BIN" ] && { echo "!! binary not built"; exit 1; }
           rm -rf /tmp/tipa
-          mkdir -p /tmp/tipa/Payload/MatisuAuto.app/ocr
+          mkdir -p /tmp/tipa/Payload/MatisuAuto.app
           cp "$BIN" /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto
           cp Info.plist Entitlements.plist /tmp/tipa/Payload/MatisuAuto.app/
           cp AppIcon60x60@2x.png AppIcon60x60@3x.png /tmp/tipa/Payload/MatisuAuto.app/ 2>/dev/null || true
-          cp ../ocr/onnx/det.onnx ../ocr/onnx/rec.onnx ../ocr/onnx/dict.txt /tmp/tipa/Payload/MatisuAuto.app/ocr/
+          # OCR 模型不再打进 app 包：数据区 ocr/ 由 app 首启自动创建，模型放数据区
           LDID="$THEOS/bin/ldid"; [ -x "$LDID" ] || LDID=$(command -v ldid || true)
           if [ -n "$LDID" ]; then
             "$LDID" -SEntitlements.plist /tmp/tipa/Payload/MatisuAuto.app/MatisuAuto && echo "signed with ldid"
@@ -58,7 +58,7 @@ jobs:
             echo "!! ldid not found; TrollStore will re-sign on install"
           fi
           echo "== tipa app contents =="
-          ls -la /tmp/tipa/Payload/MatisuAuto.app /tmp/tipa/Payload/MatisuAuto.app/ocr
+          ls -la /tmp/tipa/Payload/MatisuAuto.app
           cd /tmp/tipa && zip -r "$GITHUB_WORKSPACE/matisu-auto.tipa" Payload
           echo "tipa size: $(wc -c < $GITHUB_WORKSPACE/matisu-auto.tipa) bytes"
 

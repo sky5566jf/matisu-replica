@@ -65,9 +65,12 @@ const float DET_BOX_THRESH = 0.5f;
 const float DET_UNCLIP = 1.6f;
 
 std::string modelPath(const char *name) {
-    // 模型随 app 分发，放 bundle 内 ocr/（数据区不再存模型）
-    NSString *p2 = [[[NSBundle mainBundle] bundlePath] stringByAppendingFormat:@"/ocr/%s", name];
-    return p2.UTF8String;
+    // 模型不随 app 分发，统一放数据区 ocr/（/var/mobile/Media/<bundle id>/ocr/）
+    NSString *p = [MatisuOcrDir() stringByAppendingFormat:@"/%s", name];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:p]) {
+        ocrLog("model missing: %s (请将 %s 放入数据区 ocr/ 目录)", name, name);
+    }
+    return p.UTF8String;
 }
 
 bool initEngine() {
