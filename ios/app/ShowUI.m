@@ -9,7 +9,7 @@
 #import <UIKit/UIKit.h>
 
 // ---------------- 全局状态 ----------------
-static volatile NSString *gResultJson = nil;   // JS 回传 {"Submit":0/1,"Data":[...]}
+static NSString *gResultJson = nil;   // JS 回传 {"Submit":0/1,"Data":[...]}（semaphore wait 自带内存屏障，无需 volatile）
 static dispatch_semaphore_t gSem = nil;
 static UIWindow *gShowWin = nil;
 static WKWebView *gShowWeb = nil;
@@ -278,7 +278,7 @@ static NSString *BuildHtml(NSDictionary *utable) {
 NSArray<NSString *> *MatisuShowUIRun(NSDictionary *uitable) {
     if (![uitable isKindOfClass:[NSDictionary class]]) return @[@"0"];
     NSString *html = BuildHtml(uitable);
-    long timerSec = [uitable[@"timer"] respondsToSelector:@selector(longValue)] ? [utable[@"timer"] longValue] : 0;
+    long timerSec = [uitable[@"timer"] respondsToSelector:@selector(longValue)] ? [uitable[@"timer"] longValue] : 0;
     gResultJson = nil;
     gSem = dispatch_semaphore_create(0);
 
@@ -340,7 +340,7 @@ NSArray<NSString *> *MatisuShowUIRun(NSDictionary *uitable) {
         if (cfgName.length) {
             NSString *p = UicfgPath(cfgName);
             if (p) {
-                NSString *joined = [out.subarrayFromIndex:1 componentsJoinedByString:@"###"];
+                NSString *joined = [[out subarrayWithRange:NSMakeRange(1, out.count - 1)] componentsJoinedByString:@"###"];
                 NSString *content = [NSString stringWithFormat:@"ui_input::::%@", joined];
                 [content writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil];
             }
