@@ -1,10 +1,8 @@
 package com.matisu.auto
 
-import android.app.AlertDialog
 import android.content.Context
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -30,7 +28,6 @@ import java.util.concurrent.TimeUnit
 object ShowUI {
     @Volatile private var resultJson: String? = null
     private var latch: CountDownLatch? = null
-    private var dialog: AlertDialog? = null
 
     class Bridge {
         @JavascriptInterface
@@ -47,28 +44,38 @@ object ShowUI {
         latch = l
         val html = buildHtml(uitable)
         val timerSec = uitable.optInt("timer", 0)
-        val ready = CountDownLatch(1)
-        var web: WebView? = null
-        var dlg: AlertDialog? = null
+        // 悬浮窗授权检查（Service 上下文不能弹 Dialog，必须走 WindowManager overlay）
+        if (!android.provider.Settings.canDrawOverlays(ctx)) {
+            EngineLog.append("[WARN] showUI: 需要悬浮窗权限（系统设置-应用-显示在其他应用上层）\n")
+            return null
+        }
         val main = android.os.Handler(android.os.Looper.getMainLooper())
+        var added = false
+        var web: WebView? = null
         main.post {
-            val w = WebView(ctx)
-            w.settings.javaScriptEnabled = true
-            w.settings.domStorageEnabled = true
-            w.addJavascriptInterface(Bridge(), "MatisuBridge")
-            w.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) { ready.countDown() }
+            try {
+                val w = WebView(ctx)
+                w.settings.javaScriptEnabled = true
+                w.settings.domStorageEnabled = true
+                w.addJavascriptInterface(Bridge(), "MatisuBridge")
+                w.setBackgroundColor(-1)
+                val type = if (android.os.Build.VERSION.SDK_INT >= 26)
+                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else
+                    @Suppress("DEPRECATION") android.view.WindowManager.LayoutParams.TYPE_PHONE
+                val p = android.view.WindowManager.LayoutParams(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    type,
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    android.graphics.PixelFormat.TRANSLUCENT)
+                (ctx.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).addView(w, p)
+                web = w
+                added = true
+                w.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+            } catch (t: Throwable) {
+                EngineLog.append("[WARN] showUI addView FAILED: ${t.message}\n")
+                l.countDown()
             }
-            w.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
-            val builder = AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Light_NoActionBar_Fullscreen)
-                .setView(w)
-                .setCancelable(false)
-            dlg = builder.create()
-            dlg?.show()
-            dlg?.window?.setLayout(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT)
-            web = w
         }
         try {
             // JS 里的 timer 到时也会自动提交；这里只兜底总超时
@@ -78,11 +85,13 @@ object ShowUI {
             }
         } catch (_: InterruptedException) {
         }
-        main.post {
-            try { dlg?.dismiss() } catch (_: Throwable) {}
-            try { web?.destroy() } catch (_: Throwable) {}
+        if (added) {
+            main.post {
+                try { web?.let { (ctx.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).removeView(it) } } catch (_: Throwable) {}
+                try { web?.destroy() } catch (_: Throwable) {}
+            }
+            Thread.sleep(300)
         }
-        dialog = dlg
         return resultJson
     }
 
