@@ -4,6 +4,7 @@
 #import "MatisuPaths.h"
 #import "Watchdog.h"
 #import "MatisuHotspotManager.h"
+#import "ShowUI.h"
 
 @implementation AppDelegate
 
@@ -27,6 +28,9 @@
                    dispatch_get_main_queue(), ^{
         if (!MatisuPortInUse(18182)) MatisuControlServerStart();
     });
+
+    // showUI 桥：daemon 的 showUI 转发到本进程渲染（127.0.0.1:18185）
+    MatisuShowUIStartListener();
     return YES;
 }
 

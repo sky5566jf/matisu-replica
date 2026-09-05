@@ -275,8 +275,135 @@ static NSString *BuildHtml(NSDictionary *utable) {
 }
 
 // ---------------- 主入口 ----------------
+// daemon（--daemon headless）不能上屏 → showUI 转发给 GUI app（127.0.0.1:18185）渲染；
+// app 进程内（或转发不可达且在 app 内）直接本进程建 UIWindow。
+// 端口协议：4 字节大端长度 + uitable JSON；响应 4 字节大端长度 + 结果数组 JSON。
+#define SHOWUI_BRIDGE_PORT 18185
+
+static NSArray<NSString *> *MatisuShowUIRunLocal(NSDictionary *uitable);
+
+/// daemon → GUI app 转发；成功返回结果数组，连接失败返回 nil
+static NSArray<NSString *> *ForwardToApp(NSDictionary *uitable, NSTimeInterval total) {
+    NSData *body = [NSJSONSerialization dataWithJSONObject:uitable options:0 error:nil];
+    if (!body.length) return nil;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return nil;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(SHOWUI_BRIDGE_PORT);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(fd);
+        return nil;
+    }
+    struct timeval tv = { (int)total, 0 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    uint32_t n = (uint32_t)htonl((uint32_t)body.length);
+    BOOL ok = write(fd, &n, 4) == 4 && write(fd, body.bytes, body.length) == (ssize_t)body.length;
+    NSArray *out = nil;
+    if (ok) {
+        uint32_t hn = 0;
+        if (read(fd, &hn, 4) == 4 && hn > 0 && hn < 16 * 1024 * 1024) {
+            uint32_t len = ntohl(hn);
+            NSMutableData *d = [NSMutableData dataWithLength:len];
+            uint32_t got = 0;
+            while (got < len) {
+                ssize_t r = read(fd, (uint8_t *)d.mutableBytes + got, len - got);
+                if (r <= 0) break;
+                got += (uint32_t)r;
+            }
+            if (got == len) {
+                id o = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                if ([o isKindOfClass:[NSArray class]]) out = o;
+            }
+        }
+    }
+    close(fd);
+    return out;
+}
+
 NSArray<NSString *> *MatisuShowUIRun(NSDictionary *uitable) {
     if (![uitable isKindOfClass:[NSDictionary class]]) return @[@"0"];
+    long timerSec = [uitable[@"timer"] respondsToSelector:@selector(longValue)] ? [uitable[@"timer"] longValue] : 0;
+    NSTimeInterval total = timerSec > 0 ? timerSec + 30.0 : 3600.0;
+    if (total > 7200.0) total = 7200.0;
+
+    BOOL isDaemon = [[NSProcessInfo processInfo].arguments containsObject:@"--daemon"];
+    if (isDaemon) {
+        NSArray *r = ForwardToApp(uitable, total);
+        if (r) return r;
+        NSLog(@"[MatisuAuto] showUI 转发失败：GUI app 未运行/未前台（18185 不可达），返回 0");
+        return @[@"0"];
+    }
+    return MatisuShowUIRunLocal(uitable);
+}
+
+// ---- GUI app 侧监听：收 daemon 转发的 showUI 请求，本进程渲染后回传 ----
+static void *ShowUIBridgeAccept(void *arg) {
+    int srv = (int)(intptr_t)arg;
+    for (;;) {
+        int cli = accept(srv, NULL, NULL);
+        if (cli < 0) break;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            @autoreleasepool {
+                uint32_t hn = 0;
+                uint32_t got = 0;
+                while (got < 4) {
+                    ssize_t r = read(cli, (char *)&hn + got, 4 - got);
+                    if (r <= 0) { close(cli); return; }
+                    got += (uint32_t)r;
+                }
+                uint32_t len = ntohl(hn);
+                if (len == 0 || len > 16 * 1024 * 1024) { close(cli); return; }
+                NSMutableData *d = [NSMutableData dataWithLength:len];
+                got = 0;
+                while (got < len) {
+                    ssize_t r = read(cli, (uint8_t *)d.mutableBytes + got, len - got);
+                    if (r <= 0) { close(cli); return; }
+                    got += (uint32_t)r;
+                }
+                id o = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                NSArray<NSString *> *res = [o isKindOfClass:[NSDictionary class]]
+                    ? MatisuShowUIRunLocal(o) : @[@"0"];
+                NSData *body = [NSJSONSerialization dataWithJSONObject:res options:0 error:nil];
+                if (body) {
+                    uint32_t n2 = (uint32_t)htonl((uint32_t)body.length);
+                    write(cli, &n2, 4);
+                    write(cli, body.bytes, body.length);
+                }
+                close(cli);
+            }
+        });
+    }
+    return NULL;
+}
+
+void MatisuShowUIStartListener(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        int srv = socket(AF_INET, SOCK_STREAM, 0);
+        if (srv < 0) return;
+        int reuse = 1;
+        setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(SHOWUI_BRIDGE_PORT);
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (bind(srv, (struct sockaddr *)&addr, sizeof(addr)) != 0 || listen(srv, 4) != 0) {
+            close(srv);
+            return;
+        }
+        pthread_t tid;
+        pthread_create(&tid, NULL, ShowUIBridgeAccept, (void *)(intptr_t)srv);
+        pthread_detach(tid);
+        NSLog(@"[MatisuAuto] showUI bridge listening on 127.0.0.1:%d", SHOWUI_BRIDGE_PORT);
+    });
+}
+
+static NSArray<NSString *> *MatisuShowUIRunLocal(NSDictionary *uitable) {
     NSString *html = BuildHtml(uitable);
     long timerSec = [uitable[@"timer"] respondsToSelector:@selector(longValue)] ? [uitable[@"timer"] longValue] : 0;
     gResultJson = nil;
