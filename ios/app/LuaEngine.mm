@@ -983,7 +983,7 @@ static int l_readFile(lua_State *L) {
     NSString *s = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil];
     if (s) { lua_pushstring(L, s.UTF8String); return 1; }
     NSData *d = [NSData dataWithContentsOfFile:p];   // 非UTF8按二进制读
-    if (d) { lua_pushlstring(L, d.bytes, d.length); return 1; }
+    if (d) { lua_pushlstring(L, (const char *)d.bytes, d.length); return 1; }
     lua_pushnil(L); return 1;
 }
 static int l_writeFile(lua_State *L) {

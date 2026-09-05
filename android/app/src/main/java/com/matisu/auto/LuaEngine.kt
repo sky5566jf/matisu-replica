@@ -602,7 +602,7 @@ object LuaEngine {
         g.set("fileSize", object : OneArgFunction() {
             override fun call(p: LuaValue): LuaValue {
                 val f = resolvePath(p.checkjstring())
-                return LuaValue.valueOf(if (f.isFile) f.length() else -1L)
+                return LuaValue.valueOf((if (f.isFile) f.length() else -1L).toDouble())
             }
         })
         g.set("fileExist", object : OneArgFunction() {
@@ -667,10 +667,10 @@ object LuaEngine {
         })
         // ---------------- 时间 / toast / 系统 getter ----------------
         g.set("systemTime", object : ZeroArg() {
-            override fun call0(): LuaValue = LuaValue.valueOf(System.currentTimeMillis())
+            override fun call0(): LuaValue = LuaValue.valueOf(System.currentTimeMillis().toDouble())
         })
         g.set("tickCount", object : ZeroArg() {
-            override fun call0(): LuaValue = LuaValue.valueOf((android.os.SystemClock.elapsedRealtime() - tickBase))
+            override fun call0(): LuaValue = LuaValue.valueOf((android.os.SystemClock.elapsedRealtime() - tickBase).toDouble())
         })
         g.set("getNetWorkTime", object : ZeroArg() {
             override fun call0(): LuaValue {
