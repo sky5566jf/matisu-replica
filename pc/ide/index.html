@@ -814,24 +814,29 @@ function insertAtCursor(text) {
 
 // ============ 帮助文档面板（左列表 + 右详情） ============
 let HELP_CACHE = null;          // {byName: {name: info}, bySrc: {file: [name]}}
+let HELP_LOADING = null;        // 加载中 promise（点击函数时若缓存未就绪则等待，避免永远停在「加载中」）
 let HELP_CURRENT = null;        // 当前显示的函数名
 async function loadHelpCache() {
-  try {
-    const r = await (await fetch('/api/help-list')).json();
-    const byName = {};
-    // 拉一次缓存：服务端按需填充；批量请求避免 N 次 RTT
-    await Promise.all(r.names.map(async (n) => {
-      const x = await (await fetch('/api/help?name=' + encodeURIComponent(n))).json();
-      if (x.ok) byName[n] = x.info;
-    }));
-    const bySrc = {};
-    Object.values(byName).forEach((info) => {
-      (bySrc[info.source] = bySrc[info.source] || []).push(info.name);
-    });
-    Object.values(bySrc).forEach((arr) => arr.sort());
-    HELP_CACHE = { byName };
-    // 仅缓存，按需调用 showHelp 显示
-  } catch (e) { /* 无帮助文档不致命 */ }
+  const doLoad = async () => {
+    try {
+      const r = await (await fetch('/api/help-list')).json();
+      const byName = {};
+      // 拉一次缓存：服务端按需填充；批量请求避免 N 次 RTT
+      await Promise.all(r.names.map(async (n) => {
+        const x = await (await fetch('/api/help?name=' + encodeURIComponent(n))).json();
+        if (x.ok) byName[n] = x.info;
+      }));
+      const bySrc = {};
+      Object.values(byName).forEach((info) => {
+        (bySrc[info.source] = bySrc[info.source] || []).push(info.name);
+      });
+      Object.values(bySrc).forEach((arr) => arr.sort());
+      HELP_CACHE = { byName };
+      // 仅缓存，按需调用 showHelp 显示
+    } catch (e) { /* 无帮助文档不致命 */ }
+  };
+  HELP_LOADING = doLoad();
+  return HELP_LOADING;
 }
 async function showHelp(name) {
   HELP_CURRENT = name;
@@ -840,7 +845,11 @@ async function showHelp(name) {
   document.querySelectorAll('#hptabs .hptab').forEach((x) => x.classList.toggle('active', x.dataset.h === 'help'));
   document.querySelectorAll('.hpage').forEach((x) => x.classList.toggle('active', x.id === 'hphelp'));
   const det = $('hpdetail');
-  if (!HELP_CACHE) { det.innerHTML = '<div class="empty">帮助文档加载中…</div>'; return; }
+  if (!HELP_CACHE) {
+    det.innerHTML = '<div class="empty">帮助文档加载中…</div>';
+    try { await HELP_LOADING; } catch (_) {}
+    if (!HELP_CACHE) return;   // 缓存加载失败：保持提示，不渲染
+  }
   let info = HELP_CACHE.byName[name];
   if (!info) {
     // 缓存没命中时按需请求
