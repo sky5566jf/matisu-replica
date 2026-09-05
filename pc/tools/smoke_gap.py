@@ -79,6 +79,12 @@ ck('aes.roundtrip', function()
     assert(dec == plain, m .. ' dec=' .. tostring(dec))
   end
 end)
+local function hex(s) return (s:gsub('.', function(c) return string.format('%02x', c:byte()) end)) end
+local VKEY, VPT = '2b7e151628aed2a6abf7158809cf4f3c', '6bc1bee22e409f96e93d7e117393172a'
+print('CIPHERHEX-ecb', hex(cryptLib.aes_crypt(VPT, VKEY, 'encrypt', 'ecb', nil, false)))
+print('CIPHERHEX-ctr', hex(cryptLib.aes_crypt(VPT, VKEY, 'encrypt', 'ctr', 'f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff', false)))
+print('CIPHERHEX-cfb', hex(cryptLib.aes_crypt(VPT, VKEY, 'encrypt', 'cfb', '000102030405060708090a0b0c0d0e0f', false)))
+print('CIPHERHEX-ofb', hex(cryptLib.aes_crypt(VPT, VKEY, 'encrypt', 'ofb', '000102030405060708090a0b0c0d0e0f', false)))
 ck('aes.keygen', function()
   local k32 = cryptLib.aes_keygen(32) assert(#k32 == 32, 'k32')
   local iv = cryptLib.aes_ivgen() assert(#iv == 16, 'iv')

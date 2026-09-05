@@ -526,6 +526,14 @@ static int l_decodeBase64(lua_State *L) {
 }
 
 // ---------------- cryptLib（AES: CCCryptor 全模式；RSA: Security.framework，PEM PKCS#1/#8/SPKI 互认） ----------------
+// AES-ECB 单块原语（公共 API），供流模式手工实现复用
+static BOOL maAesEcbBlock(const unsigned char *key, size_t klen, const unsigned char *in, unsigned char *out) {
+    size_t moved = 0;
+    return CCCrypt(kCCEncrypt, kCCAlgorithmAES128, kCCOptionECBMode, key, klen, NULL,
+                   in, 16, out, 16, &moved) == kCCSuccess;
+}
+// l_cryptAes：ecb/cbc 走 CCCrypt；cfb(=CFB8)/ofb(=OFB128)/ctr 用 ECB 单块原语手工实现，
+// 与 Android 端 aesEcbBlock 同一套字节级逻辑（PKCS7 在流模式下手工填充，两端一致）。
 static int l_cryptAes(lua_State *L) {
     size_t dlen = 0, klen = 0;
     const unsigned char *data = (const unsigned char *)luaL_checklstring(L, 1, &dlen);
@@ -535,35 +543,72 @@ static int l_cryptAes(lua_State *L) {
     const char *iv = luaL_optstring(L, 5, NULL);
     int padding = lua_isnoneornil(L, 6) ? 1 : lua_toboolean(L, 6);
     if (klen != 16 && klen != 24 && klen != 32) return luaL_error(L, "aes key length must be 16/24/32");
-    CCOperation ccop = strcmp(op, "encrypt") == 0 ? kCCEncrypt : kCCDecrypt;
-    CCMode m;
-    if      (!strcmp(mode, "ecb")) m = kCCModeECB;
-    else if (!strcmp(mode, "cbc")) m = kCCModeCBC;
-    else if (!strcmp(mode, "cfb")) m = kCCModeCFB;
-    else if (!strcmp(mode, "ofb")) m = kCCModeOFB;
-    else if (!strcmp(mode, "ctr")) m = kCCModeCTR;
+    BOOL enc = strcmp(op, "encrypt") == 0;
+    int m;   // 0=ecb 1=cbc 2=cfb8 3=ofb128 4=ctr
+    if      (!strcmp(mode, "ecb")) m = 0;
+    else if (!strcmp(mode, "cbc")) m = 1;
+    else if (!strcmp(mode, "cfb")) m = 2;
+    else if (!strcmp(mode, "ofb")) m = 3;
+    else if (!strcmp(mode, "ctr")) m = 4;
     else return luaL_error(L, "unsupported aes mode: %s", mode);
-    if (m != kCCModeECB && (!iv || strlen(iv) != 16))
+    if (m >= 2 && (!iv || strlen(iv) != 16))
         return luaL_error(L, "aes mode %s requires 16-byte iv", mode);
-    CCPadding p = (CCPadding)((padding && (m == kCCModeECB || m == kCCModeCBC)) ? 1 : 0);  // SPI: PKCS7=1/None=0
-    CCModeOptions opt2 = (m == kCCModeCTR) ? kCCModeOptionCTR_BE : 0;
-    CCCryptorRef cr = NULL;
-    CCCryptorStatus st = CCCryptorCreateWithMode(ccop, 0, m, p, iv, key, klen, NULL, 0, 0, opt2, &cr);
-    if (st != kCCSuccess) return luaL_error(L, "aes init failed %d", st);
-    NSMutableData *out = [NSMutableData dataWithCapacity:dlen + 32];
-    unsigned char buf[512 + 16];
-    size_t moved = 0, off = 0;
-    while (off < dlen) {
-        size_t chunk = dlen - off; if (chunk > 512) chunk = 512;
-        st = CCCryptorUpdate(cr, data + off, chunk, buf, sizeof(buf), &moved);
-        if (st != kCCSuccess) { CCCryptorRelease(cr); return luaL_error(L, "aes update failed %d", st); }
-        [out appendBytes:buf length:moved]; off += chunk;
+
+    if (m <= 1) {   // ECB/CBC：CCCrypt 直通
+        CCOptions opts = (m == 0 ? kCCOptionECBMode : 0) | (padding ? kCCOptionPKCS7Padding : 0);
+        size_t outsz = dlen + 32;
+        NSMutableData *out = [NSMutableData dataWithLength:outsz];
+        size_t moved = 0;
+        CCCryptorStatus st = CCCrypt(enc ? kCCEncrypt : kCCDecrypt, kCCAlgorithmAES128, opts,
+                                     key, klen, iv, data, dlen, out.mutableBytes, outsz, &moved);
+        if (st != kCCSuccess) return luaL_error(L, "aes crypt failed %d", st);
+        lua_pushlstring(L, (const char *)out.bytes, moved);
+        return 1;
     }
-    st = CCCryptorFinal(cr, buf, sizeof(buf), &moved);
-    if (st == kCCSuccess && moved) [out appendBytes:buf length:moved];
-    CCCryptorRelease(cr);
-    if (st != kCCSuccess) return luaL_error(L, "aes final failed %d", st);
-    lua_pushlstring(L, (const char *)out.bytes, (size_t)out.length);
+    // 流模式：PKCS7 手工填充/去填
+    const unsigned char *src = data;
+    NSMutableData *tmp = nil;
+    if (enc && padding) {
+        int pad = 16 - (int)(dlen % 16);
+        tmp = [NSMutableData dataWithLength:dlen + pad];
+        memcpy(tmp.mutableBytes, data, dlen);
+        memset((unsigned char *)tmp.mutableBytes + dlen, pad, pad);
+        src = tmp.bytes; dlen += pad;
+    } else if (!enc && padding) {
+        if (dlen == 0 || dlen % 16 != 0) return luaL_error(L, "aes decrypt: bad padded length");
+    }
+    unsigned char reg[16], ks[16];
+    memcpy(reg, iv, 16);
+    NSMutableData *out = [NSMutableData dataWithLength:dlen];
+    unsigned char *o = (unsigned char *)out.mutableBytes;
+    if (m == 4) {          // CTR：计数器大端自增，加解密同操作
+        for (size_t off = 0; off < dlen; off += 16) {
+            if (!maAesEcbBlock(key, klen, reg, ks)) return luaL_error(L, "aes crypt failed");
+            size_t n = (dlen - off) < 16 ? (dlen - off) : 16;
+            for (size_t i = 0; i < n; i++) o[off + i] = src[off + i] ^ ks[i];
+            for (int i = 15; i >= 0; i--) { reg[i] = (unsigned char)(reg[i] + 1); if (reg[i]) break; }
+        }
+    } else if (m == 3) {   // OFB128：寄存器自反馈
+        for (size_t off = 0; off < dlen; off += 16) {
+            if (!maAesEcbBlock(key, klen, reg, reg)) return luaL_error(L, "aes crypt failed");
+            size_t n = (dlen - off) < 16 ? (dlen - off) : 16;
+            for (size_t i = 0; i < n; i++) o[off + i] = src[off + i] ^ reg[i];
+        }
+    } else {               // CFB8：逐字节，密文反馈（加解密同反馈源）
+        for (size_t i = 0; i < dlen; i++) {
+            if (!maAesEcbBlock(key, klen, reg, ks)) return luaL_error(L, "aes crypt failed");
+            unsigned char c = src[i] ^ ks[0];
+            o[i] = c;
+            memmove(reg, reg + 1, 15);
+            reg[15] = c;
+        }
+    }
+    if (!enc && padding && dlen > 0) {
+        int pad = o[dlen - 1];
+        if (pad < 1 || pad > 16 || (size_t)pad > dlen) return luaL_error(L, "aes decrypt: bad padding");
+        dlen -= pad;
+    }
+    lua_pushlstring(L, (const char *)out.bytes, dlen);
     return 1;
 }
 static int l_cryptAesKeygen(lua_State *L) {

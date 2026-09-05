@@ -925,25 +925,24 @@ object LuaEngine {
                 val mode = args.checkjstring(4).lowercase()
                 val padding = args.optboolean(6, true)
                 if (keyB.size !in intArrayOf(16, 24, 32)) throw LuaError("aes key length must be 16/24/32")
-                val usePad = padding && (mode == "ecb" || mode == "cbc")
-                val transform = when (mode) {
-                    "ecb" -> "AES/ECB/" + if (usePad) "PKCS5Padding" else "NoPadding"
-                    "cbc" -> "AES/CBC/" + if (usePad) "PKCS5Padding" else "NoPadding"
-                    "cfb" -> "AES/CFB/NoPadding"
-                    "ofb" -> "AES/OFB/NoPadding"
-                    "ctr" -> "AES/CTR/NoPadding"
+                val enc = op == "encrypt"
+                val m = when (mode) {
+                    "ecb" -> 0; "cbc" -> 1; "cfb" -> 2; "ofb" -> 3; "ctr" -> 4
                     else -> throw LuaError("unsupported aes mode: $mode")
                 }
-                val c = Cipher.getInstance(transform)
-                val ks = SecretKeySpec(keyB, "AES")
-                val opMode = if (op == "encrypt") Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE
-                if (mode == "ecb") {
-                    c.init(opMode, ks)
-                } else {
+                if (m >= 2) {   // 流模式：手工实现（与 iOS 同一套字节级逻辑）
                     val ivB = luaBytes(args.checkstring(5))
                     if (ivB.size != 16) throw LuaError("aes mode $mode requires 16-byte iv")
-                    c.init(opMode, ks, IvParameterSpec(ivB))
+                    return LuaString.valueOf(aesStream(m, keyB, ivB, data, enc, padding))
                 }
+                val usePad = padding
+                val transform = if (m == 0) "AES/ECB/" + if (usePad) "PKCS5Padding" else "NoPadding"
+                                else "AES/CBC/" + if (usePad) "PKCS5Padding" else "NoPadding"
+                val c = Cipher.getInstance(transform)
+                val ks = SecretKeySpec(keyB, "AES")
+                val opMode = if (enc) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE
+                if (m == 0) c.init(opMode, ks)
+                else c.init(opMode, ks, IvParameterSpec(luaBytes(args.checkstring(5))))
                 return LuaString.valueOf(c.doFinal(data))
             }
         }
@@ -1151,6 +1150,61 @@ object LuaEngine {
         val b = ByteArray(s.m_length)
         s.copyInto(0, b, 0, s.m_length)
         return b
+    }
+
+    /** AES-ECB 单块原语（16B→16B），供流模式手工实现复用（与 iOS maAesEcbBlock 同逻辑） */
+    private fun aesEcbBlock(key: ByteArray, input: ByteArray): ByteArray {
+        val c = Cipher.getInstance("AES/ECB/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
+        return c.doFinal(input)
+    }
+
+    /** 流模式 cfb(=CFB8)/ofb(=OFB128)/ctr 手工实现，与 iOS 端同一套字节级逻辑；PKCS7 手工填充 */
+    private fun aesStream(m: Int, key: ByteArray, iv: ByteArray, data: ByteArray, enc: Boolean, padding: Boolean): ByteArray {
+        var src = data
+        if (enc && padding) {
+            val pad = 16 - src.size % 16
+            src = src + ByteArray(pad) { pad.toByte() }
+        } else if (!enc && padding) {
+            if (src.isEmpty() || src.size % 16 != 0) throw LuaError("aes decrypt: bad padded length")
+        }
+        var reg = iv.copyOf()
+        val out = ByteArray(src.size)
+        when (m) {
+            4 -> {  // CTR：计数器大端自增
+                var off = 0
+                while (off < src.size) {
+                    val ks = aesEcbBlock(key, reg)
+                    val n = minOf(16, src.size - off)
+                    for (i in 0 until n) out[off + i] = (src[off + i].toInt() xor ks[i].toInt()).toByte()
+                    for (i in 15 downTo 0) { reg[i] = (reg[i] + 1).toByte(); if (reg[i].toInt() != 0) break }
+                }
+            }
+            3 -> {  // OFB128：寄存器自反馈
+                var off = 0
+                while (off < src.size) {
+                    reg = aesEcbBlock(key, reg)
+                    val n = minOf(16, src.size - off)
+                    for (i in 0 until n) out[off + i] = (src[off + i].toInt() xor reg[i].toInt()).toByte()
+                    off += 16
+                }
+            }
+            else -> {  // CFB8：逐字节，密文反馈
+                for (i in src.indices) {
+                    val ks = aesEcbBlock(key, reg)
+                    val c = (src[i].toInt() xor ks[0].toInt()).toByte()
+                    out[i] = c
+                    reg = reg.copyOfRange(1, 16) + c
+                }
+            }
+        }
+        var len = out.size
+        if (!enc && padding) {
+            val pad = out[out.size - 1].toInt() and 0xFF
+            if (pad < 1 || pad > 16 || pad > out.size) throw LuaError("aes decrypt: bad padding")
+            len = out.size - pad
+        }
+        return if (len == out.size) out else out.copyOf(len)
     }
 
     // ---------------- DER/PEM 小工具（RSA PKCS#1 <-> SPKI/PKCS#8，与 iOS maDerToPkcs1 同源） ----------------
