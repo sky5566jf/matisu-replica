@@ -1302,7 +1302,7 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "findPicAllPoint", l_findPicAllPoint }, { "findCircle", l_findCircle },
         { "findMultiColor", l_findMultiColor },
         { "httpGet", l_httpGet }, { "httpPost", l_httpPost },
-        { "MD5", l_MD5 }, { "encodeBase64", l_encodeBase64 }, { "decodeBase64", l_decodeBase64 },
+        { "MD5", l_MD5 }, { "sha1", l_sha1 }, { "encodeBase64", l_encodeBase64 }, { "decodeBase64", l_decodeBase64 },
         { "readPasteboard", l_readPasteboard }, { "writePasteboard", l_writePasteboard },
         { "runApp", l_runApp }, { "openUrl", l_openUrl },
         { "stopApp", l_stopApp }, { "appIsRunning", l_appIsRunning },
