@@ -545,7 +545,7 @@ static int l_cryptAes(lua_State *L) {
     else return luaL_error(L, "unsupported aes mode: %s", mode);
     if (m != kCCModeECB && (!iv || strlen(iv) != 16))
         return luaL_error(L, "aes mode %s requires 16-byte iv", mode);
-    CCPadding p = (padding && (m == kCCModeECB || m == kCCModeCBC)) ? kCCPaddingPKCS7 : kCCPaddingNone;
+    CCPadding p = (CCPadding)((padding && (m == kCCModeECB || m == kCCModeCBC)) ? 1 : 0);  // SPI: PKCS7=1/None=0
     CCModeOptions opt2 = (m == kCCModeCTR) ? kCCModeOptionCTR_BE : 0;
     CCCryptorRef cr = NULL;
     CCCryptorStatus st = CCCryptorCreateWithMode(ccop, 0, m, p, iv, key, klen, NULL, 0, 0, opt2, &cr);
