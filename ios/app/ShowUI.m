@@ -3,6 +3,9 @@
 // 确认返回 1,值...；取消返回 0；config 持久化 'ui_input::::' 前缀 + '###' 拼接。
 // iOS 特性：Service/后台线程不能直接建 UI → 主线程建独立 UIWindow（windowLevel 最高），
 // 引擎线程用 semaphore 阻塞等 WKScriptMessageHandler 回传结果。
+// POSIX 网络头必须最前（Darwin module 要求 sockaddr_in 先于其他模块化头导入）。
+#import <sys/socket.h>
+#import <netinet/in.h>
 #import "ShowUI.h"
 #import "MatisuPaths.h"
 #import <WebKit/WebKit.h>
