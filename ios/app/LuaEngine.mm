@@ -396,17 +396,18 @@ static int l_cmpColorExT(lua_State *L) {
 static int l_colorDiff(lua_State *L) {
     unsigned int c1 = (unsigned int)luaL_checkinteger(L, 1);
     unsigned int c2 = (unsigned int)luaL_checkinteger(L, 2);
-    int r1 = (c1 >> 16) & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = c1 & 0xFF;
-    int r2 = (c2 >> 16) & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = c2 & 0xFF;
+    // BBGGRR：低字节是 R（对齐原版文档与 core.lua/Android）
+    int r1 = c1 & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = (c1 >> 16) & 0xFF;
+    int r2 = c2 & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = (c2 >> 16) & 0xFF;
     lua_pushinteger(L, abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2));
     return 1;
 }
-// colorToRGB(c) -> r,g,b
+// colorToRGB(c) -> r,g,b（BBGGRR：低字节是 R）
 static int l_colorToRGB(lua_State *L) {
     unsigned int c = (unsigned int)luaL_checkinteger(L, 1);
-    lua_pushinteger(L, (c >> 16) & 0xFF);
-    lua_pushinteger(L, (c >> 8) & 0xFF);
     lua_pushinteger(L, c & 0xFF);
+    lua_pushinteger(L, (c >> 8) & 0xFF);
+    lua_pushinteger(L, (c >> 16) & 0xFF);
     return 3;
 }
 
