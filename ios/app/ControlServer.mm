@@ -236,6 +236,66 @@ static void* MAClientLoop(void* arg) {
                         : @{ @"ok": @NO, @"output": @"", @"error": [NSString stringWithFormat:@"script not found: %@", @(line + 8)] };
                     NSData *json2 = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
                     sendLE(cli, json2 ? json2.bytes : NULL, json2 ? json2.length : 0);
+                } else if (strncmp(line, "bpset ", 6) == 0 && line[6]) {
+                    // bpset <base64(json {"lines":[...]})>：设置下次 runfiledbg 的断点行号（1 起）
+                    NSData *d = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:line + 6] options:0];
+                    id o = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+                    NSArray *lines = [o isKindOfClass:[NSDictionary class]] ? o[@"lines"] : nil;
+                    MatisuDbgSetBreakpoints([lines isKindOfClass:[NSArray class]] ? lines : @[]);
+                    sendOK(cli);
+                } else if (strncmp(line, "runfiledbg ", 11) == 0 && line[11]) {
+                    // runfiledbg <相对路径>：调试运行——命中断点时先发暂停帧
+                    // {"paused":true,"line":N,"source":...,"locals":[[序号,名,值],...],"globals":[...],"stack":N}，
+                    // 恢复由其他连接的 dbggo/dbgstep/dbgstop 触发；脚本结束后发最终帧（与 runfile 同构）。
+                    NSString *f = [MatisuScriptDir() stringByAppendingPathComponent:@(line + 11)];
+                    NSString *src = [NSString stringWithContentsOfFile:f encoding:NSUTF8StringEncoding error:nil];
+                    if (!src) {
+                        NSDictionary *e = @{ @"ok": @NO, @"output": @"", @"error": [NSString stringWithFormat:@"script not found: %@", @(line + 11)] };
+                        NSData *je = [NSJSONSerialization dataWithJSONObject:e options:0 error:nil];
+                        sendLE(cli, je ? je.bytes : NULL, je ? je.length : 0);
+                    } else {
+                        // 会话复位（信号量计数吸收恢复/暂停竞态）
+                        gDbgPauseSem = dispatch_semaphore_create(0);
+                        gDbgResumeSem = dispatch_semaphore_create(0);
+                        MatisuDbgBeginSession();
+                        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+                            NSDictionary *r = MatisuLuaRunNamedDbg(src, @(line + 11));
+                            MatisuDbgEndSession();
+                            gDbgResult = r;
+                            gDbgDone = YES;
+                            dispatch_semaphore_signal(gDbgPauseSem);   // 唤醒组帧循环发最终帧
+                        });
+                        for (;;) {
+                            dispatch_semaphore_wait(gDbgPauseSem, DISPATCH_TIME_FOREVER);
+                            NSData *frame = nil;
+                            if (gDbgDone) {
+                                frame = [NSJSONSerialization dataWithJSONObject:(gDbgResult ?: @{}) options:0 error:nil];
+                            } else {
+                                frame = [NSJSONSerialization dataWithJSONObject:(gDbgPausedInfo ?: @{ @"paused": @YES }) options:0 error:nil];
+                            }
+                            sendLE(cli, frame ? frame.bytes : NULL, frame ? frame.length : 0);
+                            if (gDbgDone) break;
+                            // 已发暂停帧：引擎线程阻塞等恢复；本连接回循环等下一次暂停/完成
+                        }
+                    }
+                } else if (strcmp(line, "dbggo") == 0) {
+                    // 恢复执行到下一断点/结束
+                    BOOL ok = MatisuDbgGo();
+                    NSDictionary *r = @{ @"ok": @(ok) };
+                    NSData *j = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, j ? j.bytes : NULL, j ? j.length : 0);
+                } else if (strcmp(line, "dbgstep") == 0) {
+                    // 单步：下一行再暂停
+                    BOOL ok = MatisuDbgStep();
+                    NSDictionary *r = @{ @"ok": @(ok) };
+                    NSData *j = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, j ? j.bytes : NULL, j ? j.length : 0);
+                } else if (strcmp(line, "dbgstop") == 0) {
+                    // 终止调试中的脚本
+                    BOOL ok = MatisuDbgStop();
+                    NSDictionary *r = @{ @"ok": @(ok) };
+                    NSData *j = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil];
+                    sendLE(cli, j ? j.bytes : NULL, j ? j.length : 0);
                 } else if (strncmp(line, "upload ", 7) == 0 && line[7]) {
                     // upload <b64(相对路径)> <b64(内容)>：写 scripts 目录
                     NSString *rest = [@(line + 7) stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];

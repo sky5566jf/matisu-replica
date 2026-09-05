@@ -36,6 +36,29 @@ NSString* _Nullable MatisuEntryScriptSource(void);
 /// 脚本根目录（= MatisuRunScriptsDir()，mobile 可写）
 NSString* _Nonnull MatisuScriptDir(void);
 
+// ---- 断点调试（runfiledbg 会话；状态进程级，跨 18182 连接共享）----
+/// 设置断点行号列表（1 起；下次 runfiledbg 生效）
+void MatisuDbgSetBreakpoints(NSArray<NSNumber *> *lines);
+/// 恢复执行（无会话返回 NO）
+BOOL MatisuDbgGo(void);
+/// 单步（下一行再暂停；无会话返回 NO）
+BOOL MatisuDbgStep(void);
+/// 终止调试中的脚本（无会话返回 NO）
+BOOL MatisuDbgStop(void);
+/// runfiledbg 开始前调用：复位会话标记并置 active
+void MatisuDbgBeginSession(void);
+/// 调试运行结束时调用
+void MatisuDbgEndSession(void);
+/// runfiledbg 专用：与 MatisuLuaRunNamed 相同，但挂 line hook 命中断点暂停；
+/// 暂停时 gDbgPausedInfo 就绪并 signal gDbgPauseSem，恢复等 gDbgResumeSem（ControlServer 组帧）
+NSDictionary* _Nullable MatisuLuaRunNamedDbg(NSString *source, NSString *chunkName);
+/// 调试会话全局状态（ControlServer 使用）：gDbgPauseSem/gDbgResumeSem/gDbgDone/gDbgResult/gDbgPausedInfo 等直接 extern
+extern dispatch_semaphore_t gDbgPauseSem;
+extern dispatch_semaphore_t gDbgResumeSem;
+extern volatile BOOL gDbgDone;
+extern NSDictionary *gDbgResult;
+extern NSDictionary *gDbgPausedInfo;
+
 #ifdef __cplusplus
 }
 #endif

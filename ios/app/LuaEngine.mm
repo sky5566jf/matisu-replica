@@ -1044,7 +1044,106 @@ static NSArray<NSArray<NSString *> *> *maDumpGlobals(lua_State *L) {
     return rows;
 }
 
-NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName) {
+// ---------------- 断点调试会话（runfiledbg；状态进程级，跨 18182 连接共享） ----------------
+// 线程模型：引擎线程在 line hook 命中断点 → 抓状态 → signal gDbgPauseSem → 等 gDbgResumeSem；
+// runfiledbg 处理线程等 gDbgPauseSem（暂停发暂停帧/完成发最终帧）；dbggo/dbgstep/dbgstop 在
+// 其他连接上 signal gDbgResumeSem。信号量计数天然吸收「恢复先于等待」的竞态。
+dispatch_semaphore_t gDbgPauseSem = nil;
+dispatch_semaphore_t gDbgResumeSem = nil;
+volatile BOOL gDbgDone = NO;
+NSDictionary *gDbgResult = nil;
+NSDictionary *gDbgPausedInfo = nil;
+static NSMutableArray<NSNumber *> *gDbgLines = nil;   // 断点行号（1 起）
+static volatile BOOL gDbgStepOnce = NO;               // 单步标记（dbgstep 置位）
+static volatile BOOL gDbgStopReq = NO;                // dbgstop 请求
+static volatile BOOL gDbgActive = NO;                 // 调试模式运行中
+
+void MatisuDbgSetBreakpoints(NSArray<NSNumber *> *lines) {
+    if (!gDbgLines) gDbgLines = [NSMutableArray array];
+    @synchronized(gDbgLines) {
+        [gDbgLines setArray:lines ?: @[]];
+    }
+    maEngineLogAppend([NSString stringWithFormat:@"[dbg] 断点设置: %@\n", lines ?: @[]]);
+}
+
+BOOL MatisuDbgGo(void) {
+    if (!gDbgActive) return NO;
+    gDbgStepOnce = NO;
+    dispatch_semaphore_signal(gDbgResumeSem);
+    return YES;
+}
+
+BOOL MatisuDbgStep(void) {
+    if (!gDbgActive) return NO;
+    gDbgStepOnce = YES;
+    dispatch_semaphore_signal(gDbgResumeSem);
+    return YES;
+}
+
+BOOL MatisuDbgStop(void) {
+    if (!gDbgActive) return NO;
+    gDbgStopReq = YES;
+    gRunStop = YES;                       // 未暂停时靠 hook 中断
+    dispatch_semaphore_signal(gDbgResumeSem);   // 暂停中直接唤醒退出
+    return YES;
+}
+
+/// runfiledbg 开始前调用：复位会话标记并置 active
+void MatisuDbgBeginSession(void) {
+    gDbgStepOnce = NO;
+    gDbgStopReq = NO;
+    gDbgDone = NO;
+    gDbgResult = nil;
+    gDbgPausedInfo = nil;
+    gDbgActive = YES;
+}
+
+/// 调试运行结束时调用（后台线程跑完 MatisuLuaRunNamedDbg 后）
+void MatisuDbgEndSession(void) {
+    gDbgActive = NO;
+}
+
+/// 暂停现场抓取：当前行/局部变量/调用栈深度/全局变量快照
+static NSDictionary *maDbgCapture(lua_State *L, lua_Debug *ar, NSInteger line) {
+    NSMutableArray<NSArray<NSString *> *> *locals = [NSMutableArray array];
+    for (int i = 1; ; i++) {
+        const char *nm = lua_getlocal(L, ar, i);
+        if (!nm) break;
+        if (strcmp(nm, "(*temporary)") != 0) {
+            const char *v = lua_isstring(L, -1) ? lua_tostring(L, -1) : NULL;
+            NSString *val = v ? [NSString stringWithUTF8String:v]
+                              : [NSString stringWithFormat:@"<%s>", luaL_typename(L, -1)];
+            [locals addObject:@[ @(i).stringValue, [NSString stringWithUTF8String:nm] ?: @"?", val ]];
+        }
+        lua_pop(L, 1);
+    }
+    lua_Debug d;
+    int depth = 0;
+    while (lua_getstack(L, depth, &d)) depth++;
+    NSString *src = ar->source ? [NSString stringWithUTF8String:ar->source] : @"";
+    return @{ @"line": @(line), @"source": src, @"locals": locals,
+              @"globals": maDumpGlobals(L), @"stack": @(depth) };
+}
+
+// 调试模式 hook：line 事件查断点/单步；count 事件保留 gRunStop 中断能力（单行死循环无 line 事件）
+static void dbgLineHook(lua_State *L, lua_Debug *ar) {
+    if (gRunStop) luaL_error(L, "__MATISU_STOP__");
+    if (ar->event != LUA_HOOKLINE || !gDbgActive) return;
+    lua_getinfo(L, "Sl", ar);
+    NSInteger ln = ar->currentline;
+    BOOL hit = gDbgStepOnce;
+    if (!hit && gDbgLines) {
+        @synchronized(gDbgLines) { hit = [gDbgLines containsObject:@(ln)]; }
+    }
+    if (!hit) return;
+    gDbgPausedInfo = maDbgCapture(L, ar, ln);
+    gDbgStepOnce = NO;
+    dispatch_semaphore_signal(gDbgPauseSem);                  // 通知 handler 发暂停帧
+    dispatch_semaphore_wait(gDbgResumeSem, DISPATCH_TIME_FOREVER);   // 等 dbggo/dbgstep/dbgstop
+    if (gDbgStopReq) luaL_error(L, "__MATISU_STOP__");
+}
+
+static NSDictionary *maRunImpl(NSString *source, NSString *chunkName, BOOL dbg) {
     if (!source) return nil;
     NSString *chunk = chunkName.length ? chunkName : @"=script";
     // 纯文件名加 '@' 前缀（Lua 视作文件名 chunk：错误/行号显示 "main.lua:9:" 而非 [string "..."]）
@@ -1062,11 +1161,12 @@ NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName)
 
     // 引擎生命周期日志（镜像进 engine.log，IDE 调试输出可见）
     NSString *disp = [chunk hasPrefix:@"="] || [chunk hasPrefix:@"@"] ? [chunk substringFromIndex:1] : chunk;
-    maEngineLogAppend([NSString stringWithFormat:@"开始运行脚本 %@\n", disp]);
+    maEngineLogAppend([NSString stringWithFormat:@"开始运行脚本 %@%@\n", disp, dbg ? @"（调试模式）" : @""]);
 
     NSMutableDictionary *r = [NSMutableDictionary dictionary];
     gRunStop = NO;
-    lua_sethook(L, runHook, LUA_MASKCOUNT, 50);   // stop 命令 → gRunStop → 下一拍中断
+    if (dbg) lua_sethook(L, dbgLineHook, LUA_MASKLINE | LUA_MASKCOUNT, 50);   // line 查断点 + count 保 stop
+    else     lua_sethook(L, runHook, LUA_MASKCOUNT, 50);                      // stop 命令 → gRunStop → 下一拍中断
     int status = luaL_loadbufferx(L, source.UTF8String, (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], chunk.UTF8String, "t");
     if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
     lua_sethook(L, NULL, 0, 0);
@@ -1096,6 +1196,15 @@ NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName)
     r[@"globals"] = maDumpGlobals(L);   // 调试面板变量表：脚本结束后全局变量快照
     lua_close(L);
     return r;
+}
+
+NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName) {
+    return maRunImpl(source, chunkName, NO);
+}
+
+/// 调试模式运行：line hook 命中断点暂停，ControlServer 的 runfiledbg 负责组帧
+NSDictionary* _Nullable MatisuLuaRunNamedDbg(NSString *source, NSString *chunkName) {
+    return maRunImpl(source, chunkName, YES);
 }
 
 NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
