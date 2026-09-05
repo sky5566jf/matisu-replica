@@ -74,7 +74,8 @@
   #vartable .vhead .vno, #vartable .vrow .vno { width: 20px; flex: none; border-right: 1px solid #101215; text-align: center; }
   #vartable .vhead .vname { flex: 2; min-width: 52px; border-right: 1px solid #101215; }
   #vartable .vhead .vval { flex: 3; }
-  #vartable .vrow { display: flex; color: #5a6370; flex: 1; align-items: center; border-bottom: 1px solid #1a1d23; min-height: 20px; }
+  #vartable .vrow { display: flex; color: #5a6370; flex: 1; align-items: center; border-bottom: 1px solid #1a1d23; min-height: 20px; cursor: pointer; }
+  #vartable .vrow.vcopy { background: #2e4d33 !important; }
   #vartable .vrow:last-child { border-bottom: none; }
   #vartable .vrow:nth-child(even) { background: #23272e; }
   #vartable .vrow .vno { width: 22px; flex: none; border-right: 1px solid #101215; text-align: center; align-self: stretch; display: flex; align-items: center; justify-content: center; padding: 0; }
@@ -262,6 +263,8 @@
 
   /* 调试输出页 */
   #logout { flex: 1; overflow-y: auto; background: #15181d; font-family: Consolas, monospace; font-size: 12px; color: #b5cea8; padding: 6px; white-space: pre-wrap; }
+  .log-err { color: #f48771; }
+  .log-life { color: #6a7480; font-style: italic; }
   .jref { color: #8ab4f8; cursor: pointer; text-decoration: underline dotted; }
   .jref:hover { color: #cfe3ff; background: #1f3552; }
 
@@ -607,12 +610,14 @@ function renderLog() {
   }
   el.scrollTop = el.scrollHeight;
 }
-// 日志链接化：[文件:行号] 前缀与错误行里的 xxx.lua:N 都可点击跳转
+// 日志链接化：[文件:行号] 前缀与错误行里的 xxx.lua:N 都可点击跳转；行分类配色（错误红/生命周期暗灰）
 function logHtml(s) {
   let h = esc(s);
   h = h.replace(/\[([^\[\]:\s]+):(\d+)\]/g, (m, f, l) => `<span class="jref" data-f="${f}" data-l="${l}">${m}</span>`);
   h = h.replace(/(^|[\s>])([^\[\]\s:>][^\[\]\s:]*\.lua):(\d+)(?=[:\s]|$)/g,
     (m, pre, f, l) => `${pre}<span class="jref" data-f="${f}" data-l="${l}">${f}:${l}</span>`);
+  if (/\] \[错误\]/.test(s) || /^\[错误\]/.test(s)) return `<span class="log-err">${h}</span>`;
+  if (/\] (开始运行脚本|脚本停止运行|脚本已停止)/.test(s)) return `<span class="log-life">${h}</span>`;
   return h;
 }
 function logAppend(s) {
@@ -689,6 +694,19 @@ function renderVartable(globals) {
   }).join('');
 }
 $('varFns').onchange = () => renderVartable();
+// 点击变量行 → 复制「名字 = 值」（title 里存了完整未截断文本）
+$('varrows').onclick = async (ev) => {
+  const row = ev.target.closest('.vrow');
+  if (!row || !row.title) return;
+  try { await navigator.clipboard.writeText(row.title); }
+  catch (_) {
+    const ta = document.createElement('textarea');
+    ta.value = row.title; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+  row.classList.add('vcopy');
+  setTimeout(() => row.classList.remove('vcopy'), 600);
+};
 
 // ============ 行号 + 高亮 ============
 function syncGutter() {
@@ -1515,12 +1533,15 @@ async function runCurrent() {
   const up = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: devName, code: getCode() }) })).json().catch(() => ({ ok: false }));
   if (!up.ok) { log('[错误] 同步脚本到设备失败：' + devName + '（检查设备是否已连接）'); return; }
   runActive = true; updateDbgBtns(true);
+  const t0 = performance.now();
   const r = await (await fetch('/api/runfile', { method: 'POST', body: JSON.stringify({ name: devName }) })).json().catch(() => null);
   runActive = false; updateDbgBtns(false);
   if (!r) { log('[错误] 运行请求失败（设备无响应）'); return; }
   renderVartable(r.globals);   // 变量表：脚本结束后全局变量快照
-  if (!r.ok) log('[错误] ' + (r.error || '未知'));
-  else if (r.stopped) log('脚本已停止');
+  const cost = ((performance.now() - t0) / 1000).toFixed(2);
+  if (!r.ok) { log('[错误] ' + (r.error || '未知') + `（${cost}s）`); return; }
+  if (r.stopped) log('脚本已停止');
+  log(`运行结束，耗时 ${cost}s`);
 }
 $('btnRun2').onclick = runCurrent;
 
