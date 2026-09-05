@@ -13,11 +13,35 @@
 #import <UIKit/UIKit.h>
 
 // ---------------- 全局状态 ----------------
-static NSString *gResultJson = nil;   // JS 回传 {"Submit":0/1,"Data":[...]}（semaphore wait 自带内存屏障，无需 volatile）
+static volatile NSString *gResultJson = nil;   // JS 回传 {"Submit":0/1,"Data":[...]}（semaphore wait 自带内存屏障，无需 volatile）
 static dispatch_semaphore_t gSem = nil;
 static UIWindow *gShowWin = nil;
 static WKWebView *gShowWeb = nil;
 static id<WKScriptMessageHandler> gBridge = nil;
+
+// 诊断日志：daemon 与 app 两进程同写 <logdir>/showui.log（带进程角色标记）
+static void SULog(NSString *tag, NSString *msg) {
+    @autoreleasepool {
+        static NSLock *lk = nil;
+        if (!lk) lk = [NSLock new];
+        NSDateFormatter *f = [[NSDateFormatter alloc] init];
+        f.dateFormat = @"HH:mm:ss.SSS";
+        BOOL isDaemon = [[NSProcessInfo processInfo].arguments containsObject:@"--daemon"];
+        NSString *line = [NSString stringWithFormat:@"[%@][%@][%@] %@\n",
+                          [f stringFromDate:[NSDate date]], isDaemon ? @"daemon" : @"app", tag, msg];
+        [lk lock];
+        NSString *p = [MatisuLogDir() stringByAppendingPathComponent:@"showui.log"];
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
+        if (!fh) {
+            [line writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        } else {
+            [fh seekToEndOfFile];
+            [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            [fh closeFile];
+        }
+        [lk unlock];
+    }
+}
 
 @interface ShowUIBridge : NSObject <WKScriptMessageHandler>
 @property (assign) dispatch_semaphore_t sem;
@@ -25,6 +49,11 @@ static id<WKScriptMessageHandler> gBridge = nil;
 @implementation ShowUIBridge
 - (void)userContentController:(WKUserContentController *)ucc
       didReceiveScriptMessage:(WKScriptMessage *)message {
+    SULog(@"jsmsg", [NSString stringWithFormat:@"body class=%@ head=%@",
+                     [message.body class],
+                     ([NSString stringWithFormat:@"%@", message.body].length > 120
+                      ? [[NSString stringWithFormat:@"%@", message.body] substringToIndex:120]
+                      : [NSString stringWithFormat:@"%@", message.body])]);
     if (![message.body isKindOfClass:[NSString class]]) return;
     gResultJson = [message.body copy];
     dispatch_semaphore_signal(self.sem);
@@ -291,13 +320,14 @@ static NSArray<NSString *> *ForwardToApp(NSDictionary *uitable, NSTimeInterval t
     NSData *body = [NSJSONSerialization dataWithJSONObject:uitable options:0 error:nil];
     if (!body.length) return nil;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return nil;
+    if (fd < 0) { SULog(@"fwd", @"socket() failed"); return nil; }
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(SHOWUI_BRIDGE_PORT);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        SULog(@"fwd", [NSString stringWithFormat:@"connect 18185 failed: %s", strerror(errno)]);
         close(fd);
         return nil;
     }
@@ -306,6 +336,7 @@ static NSArray<NSString *> *ForwardToApp(NSDictionary *uitable, NSTimeInterval t
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     uint32_t n = (uint32_t)htonl((uint32_t)body.length);
     BOOL ok = write(fd, &n, 4) == 4 && write(fd, body.bytes, body.length) == (ssize_t)body.length;
+    SULog(@"fwd", ok ? @"request sent" : @"send failed");
     NSArray *out = nil;
     if (ok) {
         uint32_t hn = 0;
@@ -318,10 +349,13 @@ static NSArray<NSString *> *ForwardToApp(NSDictionary *uitable, NSTimeInterval t
                 if (r <= 0) break;
                 got += (uint32_t)r;
             }
+            SULog(@"fwd", [NSString stringWithFormat:@"resp got=%u/%u", got, len]);
             if (got == len) {
                 id o = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
                 if ([o isKindOfClass:[NSArray class]]) out = o;
             }
+        } else {
+            SULog(@"fwd", @"read header failed/closed");
         }
     }
     close(fd);
@@ -335,10 +369,14 @@ NSArray<NSString *> *MatisuShowUIRun(NSDictionary *uitable) {
     if (total > 7200.0) total = 7200.0;
 
     BOOL isDaemon = [[NSProcessInfo processInfo].arguments containsObject:@"--daemon"];
+    SULog(@"run", [NSString stringWithFormat:@"MatisuShowUIRun isDaemon=%d total=%.0fs", isDaemon, total]);
     if (isDaemon) {
         NSArray *r = ForwardToApp(uitable, total);
-        if (r) return r;
-        NSLog(@"[MatisuAuto] showUI 转发失败：GUI app 未运行/未前台（18185 不可达），返回 0");
+        if (r) {
+            SULog(@"run", [NSString stringWithFormat:@"forward result: %@", r]);
+            return r;
+        }
+        SULog(@"run", @"forward FAILED → return 0");
         return @[@"0"];
     }
     return MatisuShowUIRunLocal(uitable);
@@ -369,8 +407,10 @@ static void *ShowUIBridgeAccept(void *arg) {
                     got += (uint32_t)r;
                 }
                 id o = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                SULog(@"bridge", [NSString stringWithFormat:@"request len=%u parsed=%@", len, [o isKindOfClass:[NSDictionary class]] ? @"dict" : @"BAD"]);
                 NSArray<NSString *> *res = [o isKindOfClass:[NSDictionary class]]
                     ? MatisuShowUIRunLocal(o) : @[@"0"];
+                SULog(@"bridge", [NSString stringWithFormat:@"local result: %@", res]);
                 NSData *body = [NSJSONSerialization dataWithJSONObject:res options:0 error:nil];
                 if (body) {
                     uint32_t n2 = (uint32_t)htonl((uint32_t)body.length);
@@ -446,6 +486,7 @@ static NSArray<NSString *> *MatisuShowUIRunLocal(NSDictionary *uitable) {
 
     NSString *res = gResultJson;
     gResultJson = nil;
+    SULog(@"local", [NSString stringWithFormat:@"semaphore released, res=%@", res ?: @"(nil)"]);
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             [gShowWeb.configuration.userContentController removeScriptMessageHandlerForName:@"matisu"];
