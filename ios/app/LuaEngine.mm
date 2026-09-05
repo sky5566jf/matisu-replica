@@ -393,9 +393,15 @@ static int l_cmpColorExT(lua_State *L) {
 
 // ---------------- 颜色工具 ----------------
 // colorDiff(c1,c2)：两色（0xRRGGBB）三通道差的绝对值和，0=完全相同，上限 765
+// 颜色参数：字符串按 16 进制解析（"BBGGRR"/"0x..."），数字直取（字符串经 lua 强转会变十进制，必须自己 strtoul）
+static unsigned int maColorArg(lua_State *L, int idx) {
+    if (lua_type(L, idx) == LUA_TSTRING)
+        return (unsigned int)strtoul(lua_tostring(L, idx), NULL, 16);
+    return (unsigned int)luaL_checkinteger(L, idx);
+}
 static int l_colorDiff(lua_State *L) {
-    unsigned int c1 = (unsigned int)luaL_checkinteger(L, 1);
-    unsigned int c2 = (unsigned int)luaL_checkinteger(L, 2);
+    unsigned int c1 = maColorArg(L, 1);
+    unsigned int c2 = maColorArg(L, 2);
     // BBGGRR：低字节是 R（对齐原版文档与 core.lua/Android）
     int r1 = c1 & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = (c1 >> 16) & 0xFF;
     int r2 = c2 & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = (c2 >> 16) & 0xFF;
@@ -404,7 +410,7 @@ static int l_colorDiff(lua_State *L) {
 }
 // colorToRGB(c) -> r,g,b（BBGGRR：低字节是 R）
 static int l_colorToRGB(lua_State *L) {
-    unsigned int c = (unsigned int)luaL_checkinteger(L, 1);
+    unsigned int c = maColorArg(L, 1);
     lua_pushinteger(L, c & 0xFF);
     lua_pushinteger(L, (c >> 8) & 0xFF);
     lua_pushinteger(L, (c >> 16) & 0xFF);
