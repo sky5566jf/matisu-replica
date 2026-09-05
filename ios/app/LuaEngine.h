@@ -22,6 +22,8 @@ NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName)
 BOOL MatisuLuaStart(NSString *source);
 /// 请求停止常驻脚本（hook 中断，luaL_error 抛出 "__MATISU_STOP__"）。
 void MatisuLuaStop(void);
+/// 请求停止 one-shot(F5) 脚本（count hook + sleep 切片检查 gRunStop）。
+void MatisuLuaRunStop(void);
 BOOL MatisuLuaRunning(void);
 /// 取走常驻脚本累计 print 输出（线程安全，取后清空）。
 NSString* _Nonnull MatisuLuaDrainOutput(void);

@@ -1520,6 +1520,7 @@ async function runCurrent() {
   if (!r) { log('[错误] 运行请求失败（设备无响应）'); return; }
   renderVartable(r.globals);   // 变量表：脚本结束后全局变量快照
   if (!r.ok) log('[错误] ' + (r.error || '未知'));
+  else if (r.stopped) log('脚本已停止');
 }
 $('btnRun2').onclick = runCurrent;
 

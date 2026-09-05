@@ -20,10 +20,11 @@ import java.io.File
  */
 object LuaEngine {
 
-    data class RunResult(val ok: Boolean, val output: String, val error: String? = null, val globals: String? = null)
+    data class RunResult(val ok: Boolean, val output: String, val error: String? = null, val globals: String? = null, val stopped: Boolean = false)
 
     private var svcThread: Thread? = null
-    @Volatile private var svcStop = false
+    @Volatile var svcStop = false
+    @Volatile var runStop = false   // one-shot(F5) 停止标志（ScriptServer stop 命令置位）
     @Volatile var svcRunning = false
         private set
     private val svcOut = StringBuilder()
@@ -153,14 +154,26 @@ object LuaEngine {
         })
         g.set("sleep", object : OneArgFunction() {
             override fun call(s: LuaValue): LuaValue {
-                Thread.sleep((s.checkdouble() * 1000).toLong())
+                var left = (s.checkdouble() * 1000).toLong()
+                while (left > 0) {
+                    if (checkStop()) throw LuaError("__MATISU_STOP__")
+                    val step = if (left > 50) 50 else left
+                    Thread.sleep(step)
+                    left -= step
+                }
                 if (checkStop()) throw LuaError("__MATISU_STOP__")
                 return NIL
             }
         })
         g.set("mSleep", object : OneArgFunction() {
             override fun call(ms: LuaValue): LuaValue {
-                Thread.sleep(ms.checklong())
+                var left = ms.checklong()
+                while (left > 0) {
+                    if (checkStop()) throw LuaError("__MATISU_STOP__")
+                    val step = if (left > 50) 50 else left
+                    Thread.sleep(step)
+                    left -= step
+                }
                 if (checkStop()) throw LuaError("__MATISU_STOP__")
                 return NIL
             }
@@ -194,11 +207,16 @@ object LuaEngine {
     fun run(source: String, chunk: String = "script"): RunResult {
         val out = StringBuilder()
         val g = JsePlatform.debugGlobals()
+        runStop = false
         return try {
-            registerFns(g, out) { false }
+            registerFns(g, out) { svcStop || runStop }
             wrapPrintLoc(g)
             g.load(source, chunk).call()
             RunResult(true, out.toString(), globals = dumpGlobals(g))
+        } catch (e: LuaError) {
+            if ((e.message ?: "").contains("__MATISU_STOP__"))
+                RunResult(true, out.toString(), globals = dumpGlobals(g), stopped = true)
+            else RunResult(false, out.toString(), e.message ?: e.toString(), globals = dumpGlobals(g))
         } catch (e: Throwable) {
             RunResult(false, out.toString(), e.message ?: e.toString(), globals = dumpGlobals(g))
         }
@@ -281,6 +299,7 @@ object LuaEngine {
     @Synchronized
     fun stop() {
         if (svcRunning) svcStop = true
+        runStop = true   // one-shot(F5)：sleep 切片下一拍中断
     }
 
     fun drainOutput(): String = synchronized(outLock) {

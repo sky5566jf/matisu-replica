@@ -87,6 +87,7 @@ class ScriptServer(private val port: Int = 18183) {
                         JSONObject().put("ok", r.ok).put("output", r.output).apply {
                             if (r.error != null) put("error", r.error)
                             if (r.globals != null) put("globals", org.json.JSONArray(r.globals))
+                            if (r.stopped) put("stopped", true)
                         }
                     } else JSONObject().put("ok", false).put("output", "").put("error", "script not found: $arg")
                     respond(cli, j.toString().toByteArray())

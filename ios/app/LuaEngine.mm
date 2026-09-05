@@ -148,12 +148,31 @@ static int l_getPixelColor(lua_State *L) {
     return 1;
 }
 
+// ---- 脚本停止通道：gSvcStop=常驻 / gRunStop=one-shot(F5)，stop 命令置位 ----
+static volatile BOOL gSvcStop = NO;
+static volatile BOOL gRunStop = NO;
+static BOOL maStopRequested(void) { return gSvcStop || gRunStop; }
+static void runHook(lua_State *L, lua_Debug *ar);   // 定义在下方引擎服务态段
+
 static int l_sleep(lua_State *L) {
-    usleep((useconds_t)(luaL_checknumber(L, 1) * 1000000));
+    lua_Integer ms = (lua_Integer)(luaL_checknumber(L, 1) * 1000);
+    lua_Integer left = ms > 0 ? ms : 0;
+    while (left > 0) {
+        if (maStopRequested()) return luaL_error(L, "__MATISU_STOP__");
+        lua_Integer step = left > 50 ? 50 : left;
+        usleep((useconds_t)(step * 1000));
+        left -= step;
+    }
     return 0;
 }
 static int l_mSleep(lua_State *L) {
-    usleep((useconds_t)(luaL_checkinteger(L, 1) * 1000));
+    lua_Integer left = luaL_checkinteger(L, 1);
+    while (left > 0) {
+        if (maStopRequested()) return luaL_error(L, "__MATISU_STOP__");
+        lua_Integer step = left > 50 ? 50 : left;
+        usleep((useconds_t)(step * 1000));
+        left -= step;
+    }
     return 0;
 }
 
@@ -1002,15 +1021,24 @@ NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName)
     maEngineLogAppend([NSString stringWithFormat:@"开始运行脚本 %@\n", disp]);
 
     NSMutableDictionary *r = [NSMutableDictionary dictionary];
+    gRunStop = NO;
+    lua_sethook(L, runHook, LUA_MASKCOUNT, 50);   // stop 命令 → gRunStop → 下一拍中断
     int status = luaL_loadbufferx(L, source.UTF8String, (size_t)[source lengthOfBytesUsingEncoding:NSUTF8StringEncoding], chunk.UTF8String, "t");
     if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
+    lua_sethook(L, NULL, 0, 0);
     if (status == LUA_OK) {
         r[@"ok"] = @YES;
         r[@"output"] = out;
     } else {
         const char *err = lua_tostring(L, -1);
         NSString *msg = err ? [NSString stringWithUTF8String:err] : @"unknown error";
-        if ([msg containsString:@"__MATISU_EXIT__"]) {
+        if ([msg containsString:@"__MATISU_STOP__"]) {
+            // stop 命令中断：视为正常结束
+            r[@"ok"] = @YES;
+            r[@"stopped"] = @YES;
+            r[@"output"] = out;
+            maEngineLogAppend(@"脚本已停止\n");
+        } else if ([msg containsString:@"__MATISU_EXIT__"]) {
             // exitScript() 主动结束：视为正常结束（对齐原版语义）
             r[@"ok"] = @YES;
             r[@"output"] = out;
@@ -1036,7 +1064,6 @@ NSDictionary* _Nullable MatisuLuaRun(NSString *source) {
 #import <pthread.h>
 
 static lua_State *gSvcL = NULL;
-static volatile BOOL gSvcStop = NO;
 static volatile BOOL gSvcRunning = NO;
 static pthread_t gSvcTid;
 static NSMutableString *gSvcOut = nil;
@@ -1074,6 +1101,12 @@ static int l_printSvc(lua_State *L) {
 static void svcHook(lua_State *L, lua_Debug *ar) {
     (void)ar;
     if (gSvcStop) luaL_error(L, "__MATISU_STOP__");
+}
+
+// one-shot(F5) 中断 hook：由 MatisuLuaRunNamed 挂载，stop 命令置 gRunStop 后触发
+static void runHook(lua_State *L, lua_Debug *ar) {
+    (void)ar;
+    if (gRunStop) luaL_error(L, "__MATISU_STOP__");
 }
 
 static void *svcThread(void *arg) {
@@ -1126,6 +1159,10 @@ BOOL MatisuLuaStart(NSString *source) {
 void MatisuLuaStop(void) {
     if (!gSvcRunning) return;
     gSvcStop = YES;   // hook 下一拍触发 luaL_error
+}
+
+void MatisuLuaRunStop(void) {
+    gRunStop = YES;   // one-shot(F5)：hook / sleep 切片下一拍触发 __MATISU_STOP__
 }
 
 BOOL MatisuLuaRunning(void) { return gSvcRunning; }

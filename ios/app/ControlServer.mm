@@ -280,6 +280,7 @@ static void* MAClientLoop(void* arg) {
                     sendLE(cli, resp, strlen(resp));
                 } else if (strcmp(line, "stop") == 0) {
                     MatisuLuaStop();
+                    MatisuLuaRunStop();   // one-shot(F5) 同样中断
                     sendOK(cli);
                 } else if (strcmp(line, "state") == 0) {
                     // state：常驻脚本状态 + 累计输出（取走即清）
