@@ -580,6 +580,39 @@ object LuaEngine {
                 return FALSE
             }
         })
+        // ---------------- 动态 UI（showUI：WebView 渲染，语义移植原版 showUI.lua ts 风格） ----------------
+        g.set("showUI", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val raw = args.optjstring(1, "")
+                if (raw.isEmpty()) return LuaValue.varargsOf(LuaValue.valueOf(0))
+                val ut = try {
+                    JSONObject(raw)   // JSON 字符串（主流用法）
+                } catch (e: Exception) {
+                    null
+                } ?: run {
+                    // table 入参：用 jsonLib 序列化
+                    try {
+                        val enc = g.get("jsonLib").get("encode")
+                        JSONObject(enc.call(LuaValue.valueOf(raw)).checkjstring())
+                    } catch (e: Exception) {
+                        EngineLog.append("[WARN] showUI: 参数需 JSON 字符串或 table（${e.message}）\n")
+                        null
+                    }
+                } ?: return LuaValue.varargsOf(LuaValue.valueOf(0))
+                val ctx = AutoAccessibilityService.instance
+                if (ctx == null) {
+                    EngineLog.append("[WARN] showUI: 无障碍服务未连接\n")
+                    return LuaValue.varargsOf(LuaValue.valueOf(0))
+                }
+                val out = ShowUI.runForLua(ctx, ut)
+                val vars = out.map { LuaValue.valueOf(it) }.toTypedArray()
+                return LuaValue.varargsOf(*vars)
+            }
+        })
+        g.set("closeWindow", object : ZeroArg() {
+            // 无 onUIEvent 回调模式：窗口由 确定/取消 自动关闭，此函数保留兼容
+            override fun call0(): LuaValue = TRUE
+        })
         // ---------------- 日志控制台 ----------------
         g.set("logPrint", logf("INFO"))
         g.set("logDebug", logf("DEBUG"))
