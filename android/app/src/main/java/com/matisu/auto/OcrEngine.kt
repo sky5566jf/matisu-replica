@@ -255,7 +255,7 @@ object OcrEngine {
                                 var v: Any? = rres[0].value
                                 while (v is Array<*> && v.size > 0) {
                                     val sub = v[0]
-                                    if (sub is Array<*> && sub.size > 0 && sub[0] is FloatArray) break  // v 已是 [T][C]
+                                    if (sub is FloatArray) break  // v 已是 [T][C]
                                     v = sub
                                 }
                                 val logits3 = v as? Array<FloatArray>
