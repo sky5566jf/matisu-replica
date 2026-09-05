@@ -24,6 +24,14 @@ def ios_registered():
             fns.add(mod + "." + f.group(1))
     # strutils（Lua 实现）
     fns.update("strutils." + w for w in re.findall(r'strutils\.(\w+)', txt))
+    # QDictionary 实例方法：l_qdOpen 内 lua_createtable + setfield("方法") 块
+    mq = re.search(r'static int l_qdOpen\(lua_State \*L\).*?lua_createtable\(L[^)]*\);(.*?)return 1;', txt, re.S)
+    if mq:
+        for f in re.finditer(r'lua_setfield\(L,\s*-2,\s*"(\w+)"\)', mq.group(1)):
+            if f.group(1) != "_name":
+                fns.add("QDictionary." + f.group(1))
+    if re.search(r'lua_setglobal\(L,\s*"QDictionary"\)', txt):
+        fns.add("QDictionary.open")     # open 为全局入口（lua_setglobal），实例方法见上
     return fns
 
 def android_registered():
@@ -40,6 +48,18 @@ def android_registered():
                 fns.add(mod + "." + f.group(1))
     # strutils（Lua 实现）
     fns.update("strutils." + w for w in re.findall(r'strutils\.(\w+)', txt))
+    # QDictionary 实例方法：g.set("QDictionary", ...) 闭包内 t = tableOf + t.set("方法")
+    mq = re.search(r'g\.set\("QDictionary",\s*object[^{]*\{(.*?)\n        \}\)', txt, re.S)
+    if not mq:
+        mq = re.search(r'g\.set\("QDictionary".*$', txt, re.S)
+    if mq:
+        mt = re.search(r'val t = LuaValue\.tableOf\(\)(.*?)return t', mq.group(1), re.S)
+        if mt:
+            for f in re.finditer(r'\bt\.set\("(\w+)",', mt.group(1)):
+                if f.group(1) != "_name":
+                    fns.add("QDictionary." + f.group(1))
+    if "QDictionary" in fns:
+        fns.add("QDictionary.open")     # open 为全局入口（g.set("QDictionary", ...)），实例方法见上
     return fns
 
 core = core_catalog()

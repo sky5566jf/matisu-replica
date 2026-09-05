@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""官方文档补齐批次冒烟（双端）：文件IO/时间/toast/OCR别名/zip/getter。
+"""官方文档补齐批次冒烟（双端）：文件IO/时间/toast/OCR别名/zip/getter/cryptLib(AES5模式+RSA)/QDictionary。
 用法：python smoke_gap.py --target ios   # 192.69.0.38:18182
       python smoke_gap.py --target android   # adb 192.69.0.34:5555 -> 18183
 预期输出含 GAPSMOKE，所有项 =OK（iOS zip 场景断言可调用返回 boolean）。
@@ -68,6 +68,64 @@ else
     delfile(zp) delfile(out) delfile(d)
   end)
 end
+ck('aes.roundtrip', function()
+  local key = '1234567890123456'
+  local iv  = '0123456789abcdef'
+  local plain = 'matisu-gap-smoke-测试'
+  for _, m in ipairs({'ecb','cbc','cfb','ofb','ctr'}) do
+    local enc = cryptLib.aes_crypt(plain, key, 'encrypt', m, m == 'ecb' and nil or iv, true)
+    assert(type(enc) == 'string' and #enc > 0, m .. ' enc')
+    local dec = cryptLib.aes_crypt(enc, key, 'decrypt', m, m == 'ecb' and nil or iv, true)
+    assert(dec == plain, m .. ' dec=' .. tostring(dec))
+  end
+end)
+ck('aes.keygen', function()
+  local k32 = cryptLib.aes_keygen(32) assert(#k32 == 32, 'k32')
+  local iv = cryptLib.aes_ivgen() assert(#iv == 16, 'iv')
+  local p16 = '0123456789abcdef'
+  local enc = cryptLib.aes_crypt(p16, k32, 'encrypt', 'cbc', iv, false)
+  assert(#enc == 16, 'rawlen=' .. tostring(#enc))
+  local dec = cryptLib.aes_crypt(enc, k32, 'decrypt', 'cbc', iv, false)
+  assert(dec == p16, 'rawdec')
+end)
+ck('rsa.roundtrip', function()
+  local pub, priv = cryptLib.rsa_generate_key(1024)
+  assert(type(pub) == 'string' and pub:find('BEGIN', 1, true), 'pub')
+  assert(type(priv) == 'string' and priv:find('BEGIN', 1, true), 'priv')
+  local msg = 'rsa-matisu'
+  local enc = cryptLib.rsa_encrypt(msg, pub, true)
+  assert(#enc > 0, 'enc')
+  local dec = cryptLib.rsa_decrypt(enc, priv, false)
+  assert(dec == msg, 'dec=' .. tostring(dec))
+  local sig = cryptLib.rsa_encrypt(msg, priv, false)
+  local ver = cryptLib.rsa_decrypt(sig, pub, true)
+  assert(ver == msg, 'verify=' .. tostring(ver))
+end)
+ck('qdict', function()
+  local d = QDictionary.open('_gap_qdict')
+  assert(d, 'open')
+  d:put('s', '中文值') d:put('i', 42) d:put('f', 3.5) d:put('b', true)
+  assert(d:get('s') == '中文值', 'get s')
+  assert(d:get('i') == 42, 'get i=' .. tostring(d:get('i')))
+  assert(d:get('f') == 3.5, 'get f')
+  assert(d:get('b') == true, 'get b')
+  assert(d:getType('i') == 'int', 'type i=' .. tostring(d:getType('i')))
+  assert(d:getType('s') == 'string', 'type s')
+  assert(d:getType('b') == 'bool', 'type b')
+  assert(d:getInt('i') == 42, 'getInt')
+  assert(d:getString('s') == '中文值', 'getString')
+  assert(d:getDouble('f') == 3.5, 'getDouble')
+  assert(d:getBool('b') == true, 'getBool')
+  assert(d:contains('s') == true, 'contains')
+  assert(d:size() == 4, 'size=' .. tostring(d:size()))
+  d:remove('f')
+  assert(d:size() == 3 and d:contains('f') == false, 'remove')
+  assert(d:commit() == true, 'commit')
+  local d2 = QDictionary.open('_gap_qdict')
+  assert(d2:get('i') == 42 and d2:size() == 3, 'persist')
+  d2:clear()
+  assert(d2:size() == 0, 'clear')
+end)
 ck('getNetWorkTime', function() local t = getNetWorkTime() assert(type(t) == 'string' and #t == 19, 't=' .. tostring(t)) end)
 
 print('GAPSMOKE ' .. table.concat(r, ' '))

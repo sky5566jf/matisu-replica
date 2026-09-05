@@ -463,6 +463,46 @@ encodeBase64 = _stub("encodeBase64")
 decodeBase64 = _stub("decodeBase64")
 
 -- ============================================================
+-- 十二.5 加解密 cryptLib 模块表（AES/RSA，双端一致）
+-- ============================================================
+cryptLib = {
+  -- cryptLib.aes_crypt AES 加密/解密(data,key,operation,mode,[iv],[padding])，模式 ecb/cbc/cfb/ofb/ctr，PKCS#7 填充默认开
+  aes_crypt = _stub("cryptLib.aes_crypt"),
+  -- cryptLib.aes_keygen 随机生成 AES 密钥(16/24/32 字节)
+  aes_keygen = _stub("cryptLib.aes_keygen"),
+  -- cryptLib.aes_ivgen 生成 16 字节随机 IV
+  aes_ivgen = _stub("cryptLib.aes_ivgen"),
+  -- cryptLib.rsa_generate_key 生成 RSA 密钥对([key_bits])，返回 PEM 公钥, PEM 私钥
+  rsa_generate_key = _stub("cryptLib.rsa_generate_key"),
+  -- cryptLib.rsa_encrypt RSA 加密/签名(data,PEM密钥,is_public_key)
+  rsa_encrypt = _stub("cryptLib.rsa_encrypt"),
+  -- cryptLib.rsa_decrypt RSA 解密/验签(data,PEM密钥,is_public_key)
+  rsa_decrypt = _stub("cryptLib.rsa_decrypt"),
+}
+
+-- ============================================================
+-- 十二.6 数据存储读取 QDictionary 模块表（键值字典，持久化到磁盘）
+-- ============================================================
+QDictionary = {
+  -- QDictionary.open 打开或创建字典(name 对应磁盘文件名)，返回对象或 nil
+  open = _stub("QDictionary.open"),
+}
+-- 以下为实例方法（dict:put(k,v) 形式调用），此处登记契约
+QDictionary.put      = _stub("QDictionary.put")       -- 存键值(string/number/bool)
+QDictionary.get      = _stub("QDictionary.get")       -- 取值(自动识别类型，不存在返回 nil)
+QDictionary.getString = _stub("QDictionary.getString")
+QDictionary.getInt   = _stub("QDictionary.getInt")
+QDictionary.getDouble = _stub("QDictionary.getDouble")
+QDictionary.getBool  = _stub("QDictionary.getBool")
+QDictionary.contains = _stub("QDictionary.contains")  -- 是否存在键
+QDictionary.remove   = _stub("QDictionary.remove")    -- 删除键值对
+QDictionary.size     = _stub("QDictionary.size")      -- 键值对数量
+QDictionary.clear    = _stub("QDictionary.clear")     -- 清空
+QDictionary.commit   = _stub("QDictionary.commit")    -- 保存到磁盘
+QDictionary.getType  = _stub("QDictionary.getType")   -- 取值类型 string/int/double/bool/null/unknown
+QDictionary.print    = _stub("QDictionary.print")     -- 打印全部键值对
+
+-- ============================================================
 -- 十三、JSON（jsonLib / json 别名表）
 -- ============================================================
 -- json.encode 表编码为 JSON 字符串

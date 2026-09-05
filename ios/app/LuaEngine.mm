@@ -18,6 +18,9 @@
 #import "MatisuPaths.h"
 #import "ShowUI.h"
 #import <UIKit/UIKit.h>
+#import <CommonCrypto/CommonCryptor.h>
+#import <CommonCrypto/CommonDigest.h>
+#import <Security/Security.h>
 #import <unistd.h>
 #import <stdlib.h>
 
@@ -519,6 +522,397 @@ static int l_decodeBase64(lua_State *L) {
     NSData *d = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
     if (!d) { lua_pushnil(L); return 1; }
     lua_pushlstring(L, (const char *)d.bytes, (size_t)d.length);
+    return 1;
+}
+
+// ---------------- cryptLib（AES: CCCryptor 全模式；RSA: Security.framework，PEM PKCS#1/#8/SPKI 互认） ----------------
+static int l_cryptAes(lua_State *L) {
+    size_t dlen = 0, klen = 0;
+    const unsigned char *data = (const unsigned char *)luaL_checklstring(L, 1, &dlen);
+    const unsigned char *key = (const unsigned char *)luaL_checklstring(L, 2, &klen);
+    const char *op = luaL_checkstring(L, 3);
+    const char *mode = luaL_checkstring(L, 4);
+    const char *iv = luaL_optstring(L, 5, NULL);
+    int padding = lua_isnoneornil(L, 6) ? 1 : lua_toboolean(L, 6);
+    if (klen != 16 && klen != 24 && klen != 32) return luaL_error(L, "aes key length must be 16/24/32");
+    CCOperation ccop = strcmp(op, "encrypt") == 0 ? kCCEncrypt : kCCDecrypt;
+    CCMode m;
+    if      (!strcmp(mode, "ecb")) m = kCCModeECB;
+    else if (!strcmp(mode, "cbc")) m = kCCModeCBC;
+    else if (!strcmp(mode, "cfb")) m = kCCModeCFB;
+    else if (!strcmp(mode, "ofb")) m = kCCModeOFB;
+    else if (!strcmp(mode, "ctr")) m = kCCModeCTR;
+    else return luaL_error(L, "unsupported aes mode: %s", mode);
+    if (m != kCCModeECB && (!iv || strlen(iv) != 16))
+        return luaL_error(L, "aes mode %s requires 16-byte iv", mode);
+    CCPadding p = (padding && (m == kCCModeECB || m == kCCModeCBC)) ? kCCModePaddingPKCS7 : kCCModePaddingNone;
+    CCModeOptions opt2 = (m == kCCModeCTR) ? kCCModeOptionCTR_BE : 0;
+    CCCryptorRef cr = NULL;
+    CCCryptorStatus st = CCCryptorCreateWithMode(ccop, 0, m, p, iv, key, klen, NULL, 0, 0, opt2, &cr);
+    if (st != kCCSuccess) return luaL_error(L, "aes init failed %d", st);
+    NSMutableData *out = [NSMutableData dataWithCapacity:dlen + 32];
+    unsigned char buf[512 + 16];
+    size_t moved = 0, off = 0;
+    while (off < dlen) {
+        size_t chunk = dlen - off; if (chunk > 512) chunk = 512;
+        st = CCCryptorUpdate(cr, data + off, chunk, buf, sizeof(buf), &moved);
+        if (st != kCCSuccess) { CCCryptorRelease(cr); return luaL_error(L, "aes update failed %d", st); }
+        [out appendBytes:buf length:moved]; off += chunk;
+    }
+    st = CCCryptorFinal(cr, buf, sizeof(buf), &moved);
+    if (st == kCCSuccess && moved) [out appendBytes:buf length:moved];
+    CCCryptorRelease(cr);
+    if (st != kCCSuccess) return luaL_error(L, "aes final failed %d", st);
+    lua_pushlstring(L, (const char *)out.bytes, (size_t)out.length);
+    return 1;
+}
+static int l_cryptAesKeygen(lua_State *L) {
+    int n = (int)luaL_checkinteger(L, 1);
+    if (n != 16 && n != 24 && n != 32) return luaL_error(L, "key length must be 16/24/32");
+    unsigned char buf[32];
+    if (SecRandomCopyBytes(kSecRandomDefault, (size_t)n, buf) != errSecSuccess)
+        return luaL_error(L, "random gen failed");
+    lua_pushlstring(L, (const char *)buf, (size_t)n);
+    return 1;
+}
+static int l_cryptAesIvgen(lua_State *L) {
+    unsigned char buf[16];
+    if (SecRandomCopyBytes(kSecRandomDefault, 16, buf) != errSecSuccess)
+        return luaL_error(L, "random gen failed");
+    lua_pushlstring(L, (const char *)buf, 16);
+    return 1;
+}
+
+// --- DER 小工具：PKCS#1 <-> SPKI/PKCS#8 包装与解包 ---
+static void maDerAppendLen(NSMutableData *d, size_t n) {
+    if (n < 0x80) { unsigned char b = (unsigned char)n; [d appendBytes:&b length:1]; }
+    else if (n <= 0xFF) { unsigned char b[2] = {0x81, (unsigned char)n}; [d appendBytes:b length:2]; }
+    else { unsigned char b[3] = {0x82, (unsigned char)(n >> 8), (unsigned char)(n & 0xFF)}; [d appendBytes:b length:3]; }
+}
+static NSMutableData *maDerTlv(unsigned char tag, NSData *content) {
+    NSMutableData *d = [NSMutableData data];
+    [d appendBytes:&tag length:1];
+    maDerAppendLen(d, content.length);
+    [d appendData:content];
+    return d;
+}
+static NSMutableData *maRsaAlgId(void) {
+    NSMutableData *alg = [NSMutableData data];
+    unsigned char oidTlv[11] = {0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01};
+    [alg appendBytes:oidTlv length:11];
+    unsigned char nullTlv[2] = {0x05, 0x00};
+    [alg appendBytes:nullTlv length:2];
+    return alg;
+}
+static NSData *maPkcs1PubToSpki(NSData *pkcs1) {
+    NSMutableData *bit = [NSMutableData data];
+    unsigned char zero = 0;
+    [bit appendBytes:&zero length:1];
+    [bit appendData:pkcs1];
+    NSMutableData *inner = [NSMutableData data];
+    [inner appendData:maDerTlv(0x30, maRsaAlgId())];
+    [inner appendData:maDerTlv(0x03, bit)];
+    return maDerTlv(0x30, inner);
+}
+static NSData *maPkcs1PrivToPkcs8(NSData *pkcs1) {
+    unsigned char verTlv[3] = {0x02, 0x01, 0x00};
+    NSMutableData *inner = [NSMutableData data];
+    [inner appendBytes:verTlv length:3];
+    [inner appendData:maDerTlv(0x30, maRsaAlgId())];
+    [inner appendData:maDerTlv(0x04, pkcs1)];
+    return maDerTlv(0x30, inner);
+}
+static BOOL maDerReadLen(const unsigned char *b, size_t n, size_t pos, size_t *outLen, size_t *outAdv) {
+    if (pos >= n) return NO;
+    unsigned char f = b[pos];
+    if (f < 0x80) { *outLen = f; *outAdv = 1; return YES; }
+    int cnt = f & 0x7F;
+    if (cnt == 0 || cnt > 4 || pos + (size_t)cnt >= n) return NO;
+    uint64_t v = 0;
+    for (int i = 0; i < cnt; i++) v = (v << 8) | b[pos + 1 + i];
+    *outLen = (size_t)v; *outAdv = (size_t)cnt + 1;
+    return YES;
+}
+// 任意 RSA DER（PKCS#1 / SPKI / PKCS#8）→ PKCS#1 裸结构
+// 注意：PKCS#8 与 PKCS#1 私钥首字段同为 INTEGER(version)，须看第二内层字段
+// （SEQUENCE=算法标识 → PKCS#8；INTEGER=模数 → 已是 PKCS#1）区分。
+static NSData *maDerToPkcs1(NSData *der) {
+    const unsigned char *b = (const unsigned char *)der.bytes;
+    size_t n = der.length;
+    if (n < 2 || b[0] != 0x30) return der;
+    size_t pos = 1, adv = 0; size_t outerLen = 0;
+    if (!maDerReadLen(b, n, pos, &outerLen, &adv)) return der;
+    pos += adv;
+    if (pos >= n) return der;
+    unsigned char t1 = b[pos];
+    if (t1 == 0x02) {                                        // INTEGER(version)：PKCS#1 私钥 或 PKCS#8 私钥
+        size_t len1 = 0;
+        if (!maDerReadLen(b, n, pos + 1, &len1, &adv)) return der;
+        size_t p2 = pos + 1 + adv + len1;
+        if (p2 >= n) return der;
+        if (b[p2] != 0x30) return der;                       // INTEGER(模数) → 已是 PKCS#1
+        size_t lenA = 0;                                     // PKCS#8：跳过算法 SEQUENCE
+        if (!maDerReadLen(b, n, p2 + 1, &lenA, &adv)) return der;
+        p2 = p2 + 1 + adv + lenA;
+        if (p2 >= n || b[p2] != 0x04) return der;
+        size_t lenO = 0;
+        if (!maDerReadLen(b, n, p2 + 1, &lenO, &adv)) return der;
+        size_t cs = p2 + 1 + adv;
+        if (cs + lenO > n) return der;
+        return [NSData dataWithBytes:b + cs length:lenO];
+    }
+    if (t1 == 0x30) {                                        // SEQUENCE(算法标识) → SPKI 公钥
+        size_t len1 = 0;
+        if (!maDerReadLen(b, n, pos + 1, &len1, &adv)) return der;
+        pos = pos + 1 + adv + len1;
+        if (pos >= n || b[pos] != 0x03) return der;
+        size_t len2 = 0;
+        if (!maDerReadLen(b, n, pos + 1, &len2, &adv)) return der;
+        size_t cs = pos + 1 + adv;
+        cs++;                                                // BIT STRING 跳过未用位数 0x00
+        if (cs >= n) return der;
+        return [NSData dataWithBytes:b + cs length:n - cs];
+    }
+    return der;
+}
+static NSString *maPemWrap(NSString *label, NSData *der) {
+    NSString *b64 = [der base64EncodedStringWithOptions:0];
+    NSMutableString *out = [NSMutableString stringWithFormat:@"-----BEGIN %@-----\n", label];
+    for (NSUInteger i = 0; i < b64.length; i += 64) {
+        NSUInteger e = MIN(i + 64, b64.length);
+        [out appendFormat:@"%@\n", [b64 substringWithRange:NSMakeRange(i, e - i)]];
+    }
+    [out appendFormat:@"-----END %@-----", label];
+    return out;
+}
+static NSData *maPemUnwrap(NSString *pem) {
+    // 过滤掉 PEM 标记行与所有空白，只保留 base64 字符
+    NSMutableString *s = [NSMutableString string];
+    for (NSUInteger i = 0; i < pem.length; i++) {
+        unichar c = [pem characterAtIndex:i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+            c == '+' || c == '/' || c == '=')
+            [s appendFormat:@"%C", c];
+    }
+    return [[NSData alloc] initWithBase64EncodedString:s options:0];
+}
+static NSDictionary *maRsaKeyAttrs(BOOL isPublic, int bits) {
+    return @{(id)kSecAttrKeyType: (id)kSecAttrKeyTypeRSA,
+             (id)kSecAttrKeyClass: (id)(isPublic ? kSecAttrKeyClassPublic : kSecAttrKeyClassPrivate),
+             (id)kSecAttrKeySizeInBits: @(bits)};
+}
+static int l_cryptRsaKeygen(lua_State *L) {
+    int bits = (int)luaL_optinteger(L, 1, 2048);
+    if (bits < 1024 || bits > 4096) return luaL_error(L, "rsa bits must be 1024/2048/4096");
+    NSDictionary *attrs = @{(id)kSecAttrKeyType: (id)kSecAttrKeyTypeRSA,
+                            (id)kSecAttrKeySizeInBits: @(bits)};
+    CFErrorRef err = NULL;
+    SecKeyRef priv = SecKeyCreateRandomKey((__bridge CFDictionaryRef)attrs, &err);
+    if (!priv) return luaL_error(L, "rsa keygen failed");
+    NSData *pkcs1Priv = CFBridgingRelease(SecKeyCopyExternalRepresentation(priv, &err));
+    SecKeyRef pub = SecKeyCopyPublicKey(priv);
+    NSData *pkcs1Pub = CFBridgingRelease(SecKeyCopyExternalRepresentation(pub, &err));
+    NSString *pubPem = maPemWrap(@"PUBLIC KEY", maPkcs1PubToSpki(pkcs1Pub));
+    NSString *privPem = maPemWrap(@"PRIVATE KEY", maPkcs1PrivToPkcs8(pkcs1Priv));
+    CFRelease(priv); CFRelease(pub);
+    lua_pushstring(L, pubPem.UTF8String);
+    lua_pushstring(L, privPem.UTF8String);
+    return 2;
+}
+static SecKeyRef maRsaImport(NSString *pem, BOOL isPublic) {
+    NSData *pkcs1 = maDerToPkcs1(maPemUnwrap(pem));
+    if (!pkcs1.length) return NULL;
+    CFErrorRef err = NULL;
+    SecKeyRef k = SecKeyCreateWithData(pkcs1, (__bridge CFDictionaryRef)maRsaKeyAttrs(isPublic, 2048), &err);
+    return k;   // 调用方负责 CFRelease
+}
+static int l_cryptRsaEncrypt(lua_State *L) {
+    size_t dlen = 0;
+    const char *data = luaL_checklstring(L, 1, &dlen);
+    NSString *pem = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    BOOL isPublic = lua_toboolean(L, 3);
+    SecKeyRef key = maRsaImport(pem, isPublic);
+    if (!key) return luaL_error(L, "rsa import key failed");
+    CFErrorRef err = NULL;
+    NSData *out = CFBridgingRelease(SecKeyCreateEncryptedData(key, kSecKeyAlgorithmRSAEncryptionPKCS1,
+                                                              [NSData dataWithBytes:data length:dlen], &err));
+    CFRelease(key);
+    if (!out) return luaL_error(L, "rsa encrypt failed");
+    lua_pushlstring(L, (const char *)out.bytes, (size_t)out.length);
+    return 1;
+}
+static int l_cryptRsaDecrypt(lua_State *L) {
+    size_t dlen = 0;
+    const char *data = luaL_checklstring(L, 1, &dlen);
+    NSString *pem = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    BOOL isPublic = lua_toboolean(L, 3);
+    SecKeyRef key = maRsaImport(pem, isPublic);
+    if (!key) return luaL_error(L, "rsa import key failed");
+    CFErrorRef err = NULL;
+    NSData *out = CFBridgingRelease(SecKeyCreateDecryptedData(key, kSecKeyAlgorithmRSAEncryptionPKCS1,
+                                                              [NSData dataWithBytes:data length:dlen], &err));
+    CFRelease(key);
+    if (!out) return luaL_error(L, "rsa decrypt failed");
+    lua_pushlstring(L, (const char *)out.bytes, (size_t)out.length);
+    return 1;
+}
+
+// ---------------- QDictionary（键值字典，JSON 文件持久化到工作目录） ----------------
+static NSString *qdPath(NSString *name) {
+    NSMutableString *safe = [name mutableCopy];
+    [safe replaceOccurrencesOfString:@"/" withString:@"_" options:0 range:NSMakeRange(0, safe.length)];
+    return [MatisuWorkDir() stringByAppendingPathComponent:[NSString stringWithFormat:@"qdict_%@.json", safe]];
+}
+static NSMutableDictionary *qdLoad(NSString *name) {
+    NSData *d = [NSData dataWithContentsOfFile:qdPath(name)];
+    if (!d) return [NSMutableDictionary dictionary];
+    id obj = [NSJSONSerialization JSONObjectWithData:d options:NSJSONReadingMutableContainers error:nil];
+    if ([obj isKindOfClass:[NSMutableDictionary class]]) return obj;
+    return [NSMutableDictionary dictionary];
+}
+static BOOL qdSave(NSString *name, NSDictionary *dict) {
+    NSData *d = [NSJSONSerialization dataWithJSONObject:dict options:0 error:nil];
+    if (!d) return NO;
+    return [d writeToFile:qdPath(name) atomically:YES];
+}
+static NSString *qdSelfName(lua_State *L) {
+    lua_getfield(L, 1, "_name");
+    NSString *name = [NSString stringWithUTF8String:lua_tostring(L, -1) ?: ""];
+    lua_pop(L, 1);
+    return name;
+}
+static id qdLuaToStore(lua_State *L, int idx) {   // put 的值：nil->空串 / number(int/double) / bool / string
+    switch (lua_type(L, idx)) {
+        case LUA_TNIL:     return @"";
+        case LUA_TBOOLEAN: return @(lua_toboolean(L, idx) ? YES : NO);
+        case LUA_TNUMBER: {
+            double v = lua_tonumber(L, idx);
+            if (v == floor(v) && v >= -9007199254740992.0 && v <= 9007199254740992.0)
+                return @(long long)v;
+            return @(v);
+        }
+        default: return [NSString stringWithUTF8String:lua_tostring(L, idx) ?: ""];
+    }
+}
+static void qdPushStore(lua_State *L, id v) {     // get：按存储类型还原 Lua 值
+    if (!v || v == [NSNull null]) { lua_pushnil(L); return; }
+    if ([v isKindOfClass:[NSString class]]) { lua_pushstring(L, [v UTF8String]); return; }
+    if ([v isKindOfClass:[NSNumber class]]) {
+        NSNumber *n = v;
+        if (strcmp([n objCType], "c") == 0 || strcmp([n objCType], "B") == 0) { lua_pushboolean(L, n.boolValue); return; }
+        lua_pushnumber(L, n.doubleValue);
+        return;
+    }
+    lua_pushstring(L, [[v description] UTF8String]);
+}
+static int l_qdPut(lua_State *L) {
+    NSString *name = qdSelfName(L);
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    NSMutableDictionary *dict = qdLoad(name);
+    dict[key] = qdLuaToStore(L, 3);
+    lua_pushboolean(L, qdSave(name, dict));
+    return 1;
+}
+static int l_qdGet(lua_State *L) {
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    qdPushStore(L, qdLoad(qdSelfName(L))[key]);
+    return 1;
+}
+static int l_qdGetString(lua_State *L) {
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    id v = qdLoad(qdSelfName(L))[key];
+    if (!v || v == [NSNull null]) { lua_pushnil(L); return 1; }
+    lua_pushstring(L, [[v description] UTF8String]);
+    return 1;
+}
+static int l_qdGetNumber(lua_State *L) {
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    id v = qdLoad(qdSelfName(L))[key];
+    if ([v isKindOfClass:[NSNumber class]]) { lua_pushnumber(L, [v doubleValue]); return 1; }
+    if ([v isKindOfClass:[NSString class]]) { lua_pushnumber(L, strtod([v UTF8String], NULL)); return 1; }
+    lua_pushnil(L); return 1;
+}
+static int l_qdGetBool(lua_State *L) {
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    id v = qdLoad(qdSelfName(L))[key];
+    if ([v isKindOfClass:[NSNumber class]]) { lua_pushboolean(L, v.boolValue); return 1; }
+    if ([v isKindOfClass:[NSString class]]) {
+        lua_pushboolean(L, [v isEqualToString:@"true"] || [v isEqualToString:@"1"] || [v boolValue]);
+        return 1;
+    }
+    lua_pushnil(L); return 1;
+}
+static int l_qdContains(lua_State *L) {
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    lua_pushboolean(L, qdLoad(qdSelfName(L))[key] != nil);
+    return 1;
+}
+static int l_qdRemove(lua_State *L) {
+    NSString *name = qdSelfName(L);
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    NSMutableDictionary *dict = qdLoad(name);
+    if (!dict[key]) { lua_pushboolean(L, 0); return 1; }
+    [dict removeObjectForKey:key];
+    lua_pushboolean(L, qdSave(name, dict));
+    return 1;
+}
+static int l_qdSize(lua_State *L) {
+    lua_pushinteger(L, (lua_Integer)qdLoad(qdSelfName(L)).count);
+    return 1;
+}
+static int l_qdClear(lua_State *L) {
+    NSString *name = qdSelfName(L);
+    NSMutableDictionary *dict = qdLoad(name);
+    [dict removeAllObjects];
+    lua_pushboolean(L, qdSave(name, dict));
+    return 1;
+}
+static int l_qdCommit(lua_State *L) {           // put 即时落盘，commit 恒成功
+    lua_pushboolean(L, 1);
+    return 1;
+}
+static int l_qdGetType(lua_State *L) {
+    NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
+    id v = qdLoad(qdSelfName(L))[key];
+    if (!v) { lua_pushstring(L, "unknown"); return 1; }
+    if (v == [NSNull null]) { lua_pushstring(L, "null"); return 1; }
+    if ([v isKindOfClass:[NSString class]]) { lua_pushstring(L, "string"); return 1; }
+    if ([v isKindOfClass:[NSNumber class]]) {
+        if (strcmp([(NSNumber *)v objCType], "c") == 0 || strcmp([(NSNumber *)v objCType], "B") == 0) {
+            lua_pushstring(L, "bool"); return 1;
+        }
+        lua_pushstring(L, [(NSNumber *)v doubleValue] == floor([(NSNumber *)v doubleValue]) ? "int" : "double");
+        return 1;
+    }
+    lua_pushstring(L, "unknown");
+    return 1;
+}
+static int l_qdPrint(lua_State *L) {
+    NSMutableDictionary *dict = qdLoad(qdSelfName(L));
+    NSMutableString *out = maOut(L);
+    for (NSString *k in dict) {
+        [out appendFormat:@"%@ = %@\n", k, dict[k]];
+    }
+    return 0;
+}
+static int l_qdOpen(lua_State *L) {
+    const char *name = luaL_checkstring(L, 1);
+    if (!name[0]) { lua_pushnil(L); return 1; }
+    lua_createtable(L, 0, 16);
+    lua_pushstring(L, name); lua_setfield(L, -2, "_name");
+    lua_pushcfunction(L, l_qdPut);        lua_setfield(L, -2, "put");
+    lua_pushcfunction(L, l_qdGet);        lua_setfield(L, -2, "get");
+    lua_pushcfunction(L, l_qdGetString);  lua_setfield(L, -2, "getString");
+    lua_pushcfunction(L, l_qdGetNumber);  lua_setfield(L, -2, "getInt");
+    lua_pushcfunction(L, l_qdGetNumber);  lua_setfield(L, -2, "getDouble");
+    lua_pushcfunction(L, l_qdGetBool);    lua_setfield(L, -2, "getBool");
+    lua_pushcfunction(L, l_qdContains);   lua_setfield(L, -2, "contains");
+    lua_pushcfunction(L, l_qdRemove);     lua_setfield(L, -2, "remove");
+    lua_pushcfunction(L, l_qdSize);       lua_setfield(L, -2, "size");
+    lua_pushcfunction(L, l_qdClear);      lua_setfield(L, -2, "clear");
+    lua_pushcfunction(L, l_qdCommit);     lua_setfield(L, -2, "commit");
+    lua_pushcfunction(L, l_qdGetType);    lua_setfield(L, -2, "getType");
+    lua_pushcfunction(L, l_qdPrint);      lua_setfield(L, -2, "print");
     return 1;
 }
 
@@ -1719,6 +2113,16 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
     lua_pushcfunction(L, l_sha1); lua_setfield(L, -2, "sha1");
     lua_pushcfunction(L, l_encodeBase64); lua_setfield(L, -2, "base64");
     lua_setglobal(L, "cipher");
+    // cryptLib（AES/RSA）+ QDictionary（键值字典）
+    lua_createtable(L, 0, 6);
+    lua_pushcfunction(L, l_cryptAes);       lua_setfield(L, -2, "aes_crypt");
+    lua_pushcfunction(L, l_cryptAesKeygen); lua_setfield(L, -2, "aes_keygen");
+    lua_pushcfunction(L, l_cryptAesIvgen);  lua_setfield(L, -2, "aes_ivgen");
+    lua_pushcfunction(L, l_cryptRsaKeygen); lua_setfield(L, -2, "rsa_generate_key");
+    lua_pushcfunction(L, l_cryptRsaEncrypt); lua_setfield(L, -2, "rsa_encrypt");
+    lua_pushcfunction(L, l_cryptRsaDecrypt); lua_setfield(L, -2, "rsa_decrypt");
+    lua_setglobal(L, "cryptLib");
+    lua_pushcfunction(L, l_qdOpen); lua_setglobal(L, "QDictionary");
     lua_pushcfunction(L, printFn);
     lua_setglobal(L, "print");
     // strutils（两端同源 Lua 实现）

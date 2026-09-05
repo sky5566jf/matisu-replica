@@ -22,6 +22,9 @@ import org.luaj.vm2.lib.jse.JsePlatform
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * MatisuAuto Android 设备端 Lua 引擎（LuaJ）
@@ -913,6 +916,196 @@ object LuaEngine {
         cipher.set("sha1", sha1Fn)
         cipher.set("base64", b64encFn)
         g.set("cipher", cipher)
+        // ---------------- cryptLib（AES 全模式 + RSA，PEM 与 iOS 互认） ----------------
+        val aesFn = object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val data = luaBytes(args.checkstring(1))
+                val keyB = luaBytes(args.checkstring(2))
+                val op = args.checkjstring(3)
+                val mode = args.checkjstring(4).lowercase()
+                val padding = args.optboolean(6, true)
+                if (keyB.size !in intArrayOf(16, 24, 32)) throw LuaError("aes key length must be 16/24/32")
+                val usePad = padding && (mode == "ecb" || mode == "cbc")
+                val transform = when (mode) {
+                    "ecb" -> "AES/ECB/" + if (usePad) "PKCS5Padding" else "NoPadding"
+                    "cbc" -> "AES/CBC/" + if (usePad) "PKCS5Padding" else "NoPadding"
+                    "cfb" -> "AES/CFB/NoPadding"
+                    "ofb" -> "AES/OFB/NoPadding"
+                    "ctr" -> "AES/CTR/NoPadding"
+                    else -> throw LuaError("unsupported aes mode: $mode")
+                }
+                val c = Cipher.getInstance(transform)
+                val ks = SecretKeySpec(keyB, "AES")
+                val opMode = if (op == "encrypt") Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE
+                if (mode == "ecb") {
+                    c.init(opMode, ks)
+                } else {
+                    val ivB = luaBytes(args.checkstring(5))
+                    if (ivB.size != 16) throw LuaError("aes mode $mode requires 16-byte iv")
+                    c.init(opMode, ks, IvParameterSpec(ivB))
+                }
+                return LuaString.valueOf(c.doFinal(data))
+            }
+        }
+        val aesKeygenFn = object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue {
+                val n = p.checkint()
+                if (n != 16 && n != 24 && n != 32) throw LuaError("key length must be 16/24/32")
+                val b = ByteArray(n)
+                java.security.SecureRandom().nextBytes(b)
+                return LuaString.valueOf(b)
+            }
+        }
+        val aesIvgenFn = object : ZeroArg() {
+            val b = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+            override fun call0(): LuaValue {
+                java.security.SecureRandom().nextBytes(b)
+                return LuaString.valueOf(b)
+            }
+        }
+        val rsaKeygenFn = object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue {
+                val bits = p.optint(2048)
+                if (bits < 1024 || bits > 4096) throw LuaError("rsa bits must be 1024/2048/4096")
+                val kpg = java.security.KeyPairGenerator.getInstance("RSA")
+                kpg.initialize(bits)
+                val kp = kpg.generateKeyPair()
+                return LuaValue.varargsOf(
+                    LuaValue.valueOf(pemWrap("PUBLIC KEY", kp.public.encoded)),
+                    LuaValue.valueOf(pemWrap("PRIVATE KEY", kp.private.encoded)))
+            }
+        }
+        val rsaEncFn = object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val data = luaBytes(args.checkstring(1))
+                val key = rsaImportKey(args.checkjstring(2), args.checkboolean(3))
+                val c = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+                c.init(Cipher.ENCRYPT_MODE, key)
+                return LuaString.valueOf(c.doFinal(data))
+            }
+        }
+        val rsaDecFn = object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val data = luaBytes(args.checkstring(1))
+                val key = rsaImportKey(args.checkjstring(2), args.checkboolean(3))
+                val c = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+                c.init(Cipher.DECRYPT_MODE, key)
+                return LuaString.valueOf(c.doFinal(data))
+            }
+        }
+        val cryptT = LuaValue.tableOf()
+        cryptT.set("aes_crypt", aesFn)
+        cryptT.set("aes_keygen", aesKeygenFn)
+        cryptT.set("aes_ivgen", aesIvgenFn)
+        cryptT.set("rsa_generate_key", rsaKeygenFn)
+        cryptT.set("rsa_encrypt", rsaEncFn)
+        cryptT.set("rsa_decrypt", rsaDecFn)
+        g.set("cryptLib", cryptT)
+        // ---------------- QDictionary（键值字典，JSON 文件持久化） ----------------
+        g.set("QDictionary", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue {
+                val name = p.checkjstring()
+                if (name.isEmpty()) return LuaValue.NIL
+                val t = LuaValue.tableOf()
+                t.set("_name", LuaValue.valueOf(name))
+                t.set("put", object : TwoArgFunction() {
+                    override fun call(k: LuaValue, v: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        obj.put(k.checkjstring(), qdStoreValue(v) ?: "")
+                        return LuaValue.valueOf(qdSave(name, obj))
+                    }
+                })
+                t.set("get", object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        return if (obj.has(k.checkjstring())) qdToLua(obj.get(k.checkjstring())) else LuaValue.NIL
+                    }
+                })
+                t.set("getString", object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        return if (obj.has(k.checkjstring())) LuaValue.valueOf(obj.get(k.checkjstring()).toString()) else LuaValue.NIL
+                    }
+                })
+                val numGetter = object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        if (!obj.has(k.checkjstring())) return LuaValue.NIL
+                        return when (val v = obj.get(k.checkjstring())) {
+                            is Number -> LuaValue.valueOf(v.toDouble())
+                            is String -> LuaValue.valueOf(v.toDoubleOrNull() ?: 0.0)
+                            is Boolean -> LuaValue.valueOf(if (v) 1.0 else 0.0)
+                            else -> LuaValue.NIL
+                        }
+                    }
+                }
+                t.set("getInt", numGetter)
+                t.set("getDouble", numGetter)
+                t.set("getBool", object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        if (!obj.has(k.checkjstring())) return LuaValue.NIL
+                        return when (val v = obj.get(k.checkjstring())) {
+                            is Boolean -> LuaValue.valueOf(v)
+                            is Number -> LuaValue.valueOf(v.toDouble() != 0.0)
+                            is String -> LuaValue.valueOf(v == "true" || v == "1" || v.toBooleanStrictOrNull() == true)
+                            else -> LuaValue.NIL
+                        }
+                    }
+                })
+                t.set("contains", object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue = LuaValue.valueOf(qdLoad(name).has(k.checkjstring()))
+                })
+                t.set("remove", object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        val key = k.checkjstring()
+                        if (!obj.has(key)) return LuaValue.FALSE
+                        obj.remove(key)
+                        return LuaValue.valueOf(qdSave(name, obj))
+                    }
+                })
+                t.set("size", object : ZeroArg() {
+                    override fun call0(): LuaValue = LuaValue.valueOf(qdLoad(name).length())
+                })
+                t.set("clear", object : ZeroArg() {
+                    override fun call0(): LuaValue {
+                        val obj = qdLoad(name)
+                        val keys = obj.keys().toList()
+                        for (k in keys) obj.remove(k)
+                        return LuaValue.valueOf(qdSave(name, obj))
+                    }
+                })
+                t.set("commit", object : ZeroArg() {
+                    override fun call0(): LuaValue = LuaValue.TRUE   // put 即时落盘
+                })
+                t.set("getType", object : OneArgFunction() {
+                    override fun call(k: LuaValue): LuaValue {
+                        val obj = qdLoad(name)
+                        if (!obj.has(k.checkjstring())) return LuaValue.valueOf("unknown")
+                        return when (val v = obj.get(k.checkjstring())) {
+                            is Boolean -> LuaValue.valueOf("bool")
+                            is Int -> LuaValue.valueOf("int")
+                            is Long -> LuaValue.valueOf("int")
+                            is Double -> LuaValue.valueOf(if (v == Math.floor(v)) "int" else "double")
+                            is String -> LuaValue.valueOf("string")
+                            else -> LuaValue.valueOf("unknown")
+                        }
+                    }
+                })
+                t.set("print", object : ZeroArg() {
+                    override fun call0(): LuaValue {
+                        val obj = qdLoad(name)
+                        val sb = StringBuilder()
+                        for (k in obj.keys()) sb.append("$k = ${obj.get(k)}\n")
+                        synchronized(outLock) { out.append(sb) }
+                        EngineLog.append(sb.toString())
+                        return NIL
+                    }
+                })
+                return t
+            }
+        })
         // ---------------- JSON（jsonLib 表，json 为别名） ----------------
         val jsonEncFn = object : OneArgFunction() {
             override fun call(v: LuaValue): LuaValue {
@@ -949,6 +1142,134 @@ object LuaEngine {
 
     private fun digestHex(algo: String, data: ByteArray): String =
         java.security.MessageDigest.getInstance(algo).digest(data).joinToString("") { String.format("%02x", it) }
+
+    /** Lua 字符串 → 原始字节（LuaJ 3.0.1 无 getBytes()，走 m_length+copyInto，保证 offset 正确） */
+    private fun luaBytes(v: LuaValue): ByteArray {
+        val s = v.checkstring()
+        val b = ByteArray(s.m_length)
+        s.copyInto(0, b, 0, s.m_length)
+        return b
+    }
+
+    // ---------------- DER/PEM 小工具（RSA PKCS#1 <-> SPKI/PKCS#8，与 iOS maDerToPkcs1 同源） ----------------
+    private fun derLen(n: Int): ByteArray = if (n < 0x80) byteArrayOf(n.toByte())
+        else if (n <= 0xFF) byteArrayOf(0x81.toByte(), n.toByte())
+        else byteArrayOf(0x82.toByte(), (n shr 8).toByte(), (n and 0xFF).toByte())
+
+    private fun derTlv(tag: Int, content: ByteArray): ByteArray = byteArrayOf(tag.toByte()) + derLen(content.size) + content
+
+    private fun rsaAlgSeq(): ByteArray {
+        val oid = byteArrayOf(0x2A.toByte(), 0x86.toByte(), 0x48.toByte(), 0x86.toByte(), 0xF7.toByte(),
+                              0x0D.toByte(), 0x01.toByte(), 0x01.toByte(), 0x01.toByte())
+        return derTlv(0x30, derTlv(0x06, oid) + derTlv(0x05, ByteArray(0)))
+    }
+
+    private fun pkcs1ToSpki(p: ByteArray): ByteArray =
+        derTlv(0x30, rsaAlgSeq() + derTlv(0x03, byteArrayOf(0) + p))
+
+    private fun pkcs1ToPkcs8(p: ByteArray): ByteArray =
+        derTlv(0x30, derTlv(0x02, byteArrayOf(0)) + rsaAlgSeq() + derTlv(0x04, p))
+
+    private fun derReadLen(b: ByteArray, p: Int): Pair<Int, Int>? {  // (len, advance) or null
+        if (p >= b.size) return null
+        val f = b[p].toInt() and 0xFF
+        return when {
+            f < 0x80 -> Pair(f, 1)
+            f == 0x81 -> if (p + 1 < b.size) Pair(b[p + 1].toInt() and 0xFF, 2) else null
+            f == 0x82 -> if (p + 2 < b.size) Pair(((b[p + 1].toInt() and 0xFF) shl 8) or (b[p + 2].toInt() and 0xFF), 3) else null
+            else -> null
+        }
+    }
+
+    /** 任意 RSA DER（PKCS#1/SPKI/PKCS#8）→ PKCS#1 裸结构。PKCS#8 与 PKCS#1 私钥
+     *  首字段同为 INTEGER(version)，须看第二内层字段（SEQUENCE→PKCS#8 / INTEGER→PKCS#1）区分。 */
+    private fun derToPkcs1(der: ByteArray): ByteArray {
+        if (der.size < 2 || der[0] != 0x30.toByte()) return der
+        val r0 = derReadLen(der, 1) ?: return der
+        var pos = 1 + r0.second
+        if (pos >= der.size) return der
+        when (der[pos].toInt() and 0xFF) {
+            0x02 -> {  // INTEGER(version)：PKCS#1 私钥 或 PKCS#8 私钥
+                val rv = derReadLen(der, pos + 1) ?: return der
+                val p2 = pos + 1 + rv.second + rv.first
+                if (p2 >= der.size) return der
+                if (der[p2].toInt() and 0xFF != 0x30) return der   // INTEGER(模数) → 已是 PKCS#1
+                val ra = derReadLen(der, p2 + 1) ?: return der     // PKCS#8：跳过算法 SEQUENCE
+                val p3 = p2 + 1 + ra.second + ra.first
+                if (p3 >= der.size || der[p3].toInt() and 0xFF != 0x04) return der
+                val ro = derReadLen(der, p3 + 1) ?: return der
+                val cs = p3 + 1 + ro.second
+                return if (cs + ro.first <= der.size) der.copyOfRange(cs, cs + ro.first) else der
+            }
+            0x30 -> {  // SEQUENCE(算法标识) → SPKI 公钥
+                val ra = derReadLen(der, pos + 1) ?: return der
+                val p2 = pos + 1 + ra.second + ra.first
+                if (p2 >= der.size || der[p2].toInt() and 0xFF != 0x03) return der
+                val rb = derReadLen(der, p2 + 1) ?: return der
+                val cs = p2 + 1 + rb.second + 1                    // BIT STRING 跳过未用位数 0x00
+                return if (cs < der.size) der.copyOfRange(cs, der.size) else der
+            }
+            else -> return der
+        }
+    }
+
+    private fun pemWrap(label: String, der: ByteArray): String {
+        val b64 = android.util.Base64.encodeToString(der, android.util.Base64.NO_WRAP)
+        return "-----BEGIN $label-----\n" + b64.chunked(64).joinToString("\n") + "\n-----END $label-----"
+    }
+
+    private fun pemUnwrap(pem: String): ByteArray = try {
+        android.util.Base64.decode(pem.replace(Regex("-----(BEGIN|END)[^-]*-----"), "").replace(Regex("\\s+"), ""),
+                                   android.util.Base64.DEFAULT)
+    } catch (e: Exception) { ByteArray(0) }
+
+    private fun rsaImportKey(pem: String, isPublic: Boolean): java.security.Key {
+        val raw = pemUnwrap(pem)
+        if (raw.isEmpty()) throw LuaError("rsa import key failed")
+        val pkcs1 = derToPkcs1(raw)
+        val kf = java.security.KeyFactory.getInstance("RSA")
+        return try {
+            if (isPublic) kf.generatePublic(java.security.spec.X509EncodedKeySpec(pkcs1ToSpki(pkcs1)))
+            else kf.generatePrivate(java.security.spec.PKCS8EncodedKeySpec(pkcs1ToPkcs8(pkcs1)))
+        } catch (e: Exception) {
+            // 兜底：入参可能本来就是 SPKI/PKCS#8
+            if (isPublic) kf.generatePublic(java.security.spec.X509EncodedKeySpec(raw))
+            else kf.generatePrivate(java.security.spec.PKCS8EncodedKeySpec(raw))
+        }
+    }
+
+    // ---------------- QDictionary（键值字典，JSON 文件持久化到工作目录） ----------------
+    private fun qdFile(name: String): File {
+        val safe = name.replace("/", "_")
+        return File(resolvePath("qdict_$safe.json").absolutePath)
+    }
+
+    private fun qdLoad(name: String): JSONObject = try { qdFile(name).readText().let { JSONObject(it) } } catch (e: Exception) { JSONObject() }
+
+    private fun qdSave(name: String, obj: JSONObject): Boolean = try {
+        qdFile(name).writeText(obj.toString())
+        true
+    } catch (e: Exception) { false }
+
+    private fun qdStoreValue(v: LuaValue): Any? = when (v.type()) {
+        LuaValue.TNIL -> ""
+        LuaValue.TBOOLEAN -> v.toboolean()
+        LuaValue.TNUMBER -> {
+            val d = v.todouble()
+            if (d == Math.floor(d) && !d.isInfinite()) v.tolong() else d
+        }
+        else -> v.tojstring()
+    }
+
+    private fun qdToLua(v: Any?): LuaValue = when (v) {
+        null -> LuaValue.NIL
+        is Boolean -> LuaValue.valueOf(v)
+        is Int -> LuaValue.valueOf(v)
+        is Long -> LuaValue.valueOf(v.toDouble())
+        is Double -> LuaValue.valueOf(v)
+        is String -> LuaValue.valueOf(v)
+        else -> LuaValue.valueOf(v.toString())
+    }
 
     private fun http(method: String, urlStr: String, body: ByteArray?, timeoutS: Double): Pair<ByteArray?, Int> {
         return try {
