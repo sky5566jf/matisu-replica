@@ -6,11 +6,12 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
 import java.io.File
+import java.nio.FloatBuffer
 import kotlin.math.abs
 import kotlin.math.ceil
-import kotlin.math.lround
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * 设备端 OCR（PP-OCRv6 small / onnxruntime-android）——与 iOS OcrEngine.mm 同构移植。
@@ -222,7 +223,7 @@ object OcrEngine {
         preprocessDet(px, w, h, dw, dh, din)
         var items: List<Item> = emptyList()
         try {
-            OnnxTensor.createTensor(e, din, longArrayOf(1, 3, dh.toLong(), dw.toLong())).use { t ->
+            OnnxTensor.createTensor(e, FloatBuffer.wrap(din), longArrayOf(1, 3, dh.toLong(), dw.toLong())).use { t ->
                 d.run(java.util.Collections.singletonMap(d.inputNames.iterator().next(), t)).use { res ->
                     // 兼容 [1,1,H,W] / [1,2,H,W]：剥前导维取 [H][W]（多通道取第一通道概率图）
                     var vd: Any? = res[0].value
@@ -245,10 +246,10 @@ object OcrEngine {
                         val bx0 = max(0, b.x0.toInt()); val by0 = max(0, b.y0.toInt())
                         val bx1 = min(w, ceil(b.x1.toDouble()).toInt()); val by1 = min(h, ceil(b.y1.toDouble()).toInt())
                         val cw = max(1, bx1 - bx0); val chh = max(1, by1 - by0)
-                        var rw = max(1, lround(cw.toFloat() * REC_H / chh))
+                        var rw = max(1, (cw.toFloat() * REC_H / chh).roundToInt())
                         rw = min(rw, 640)   // 限长（同 iOS）
                         val rin = preprocessRec(px, w, h, b, rw)
-                        OnnxTensor.createTensor(e, rin, longArrayOf(1, 3, REC_H.toLong(), rw.toLong())).use { rt ->
+                        OnnxTensor.createTensor(e, FloatBuffer.wrap(rin), longArrayOf(1, 3, REC_H.toLong(), rw.toLong())).use { rt ->
                             r.run(java.util.Collections.singletonMap(r.inputNames.iterator().next(), rt)).use { rres ->
                                 // 兼容 [1,T,C] / [1,1,T,C]：剥掉前导 1 维，得到 [T][C]（同 iOS 取最后两维）
                                 var v: Any? = rres[0].value
