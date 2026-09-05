@@ -1121,7 +1121,7 @@ static NSDictionary *maDbgCapture(lua_State *L, lua_Debug *ar, NSInteger line) {
     int depth = 0;
     while (lua_getstack(L, depth, &d)) depth++;
     NSString *src = ar->source ? [NSString stringWithUTF8String:ar->source] : @"";
-    return @{ @"line": @(line), @"source": src, @"locals": locals,
+    return @{ @"paused": @YES, @"line": @(line), @"source": src, @"locals": locals,
               @"globals": maDumpGlobals(L), @"stack": @(depth) };
 }
 
