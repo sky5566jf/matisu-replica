@@ -567,10 +567,18 @@ object LuaEngine {
             }
         })
         g.set("lockScreen", object : ZeroArg() {
-            override fun call0(): LuaValue { EngineLog.append("[WARN] lockScreen: Android 端暂未实现\n"); return FALSE }
+            override fun call0(): LuaValue {
+                val ok = AutoAccessibilityService.instance?.lockScreen() ?: false
+                if (!ok) EngineLog.append("[WARN] lockScreen: 失败（需 API 28+ 且无障碍在线）\n")
+                return LuaValue.valueOf(ok)
+            }
         })
         g.set("unLockScreen", object : ZeroArg() {
-            override fun call0(): LuaValue { EngineLog.append("[WARN] unLockScreen: Android 端暂未实现\n"); return FALSE }
+            override fun call0(): LuaValue {
+                // 亮屏/解锁需 root 或系统级注入通道，无障碍无对应全局动作
+                EngineLog.append("[WARN] unLockScreen: Android 无障碍通道不支持（需 root）\n")
+                return FALSE
+            }
         })
         // ---------------- 日志控制台 ----------------
         g.set("logPrint", logf("INFO"))

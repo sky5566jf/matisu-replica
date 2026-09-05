@@ -3,6 +3,9 @@ package com.matisu.auto
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.accessibilityservice.GestureDescription.StrokeDescription
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -160,14 +163,25 @@ class AutoAccessibilityService : AccessibilityService() {
         return performGlobalAction(action)
     }
 
-    /** 向当前焦点输入框写文本（无障碍 ACTION_SET_TEXT） */
+    /** 向当前焦点输入框写文本（无障碍 ACTION_SET_TEXT，失败 fallback 剪贴板+ACTION_PASTE） */
     fun inputText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val target = findFocusedEditable(root) ?: return false
         val args = android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
-        return target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        if (target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return true
+        // fallback：WebView/内嵌编辑框 SET_TEXT 常失效 → 剪贴板粘贴
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return false
+        cm.setPrimaryClip(ClipData.newPlainText("matisu", text))
+        return target.performAction(AccessibilityNodeInfo.ACTION_PASTE, null)
+    }
+
+    /** 锁屏（无障碍全局动作，API 28+） */
+    fun lockScreen(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= 28) {
+            performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+        } else false
     }
 
     private fun findFocusedEditable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
