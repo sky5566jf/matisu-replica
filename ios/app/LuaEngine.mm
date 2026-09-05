@@ -766,7 +766,7 @@ static int l_cryptRsaKeygen(lua_State *L) {
 }
 static void maRsaDbg(NSString *line) {   // 临时诊断：写 logdir/rsa_debug.log
     @autoreleasepool {
-        NSString *dir = [MatisuWorkDir() stringByAppendingPathComponent:@"../logs"];
+        NSString *dir = MatisuLogDir();
         NSString *p = [dir stringByAppendingPathComponent:@"rsa_debug.log"];
         NSDateFormatter *f = [[NSDateFormatter alloc] init];
         f.dateFormat = @"HH:mm:ss.SSS";
