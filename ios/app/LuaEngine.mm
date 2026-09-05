@@ -771,8 +771,7 @@ static void maRsaDbg(NSString *line) {   // 临时诊断：写 logdir/rsa_debug.
         NSDateFormatter *f = [[NSDateFormatter alloc] init];
         f.dateFormat = @"HH:mm:ss.SSS";
         NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
-        NSData *d = [[NSString stringWithFormat:@"%@ %@
-", [f stringFromDate:[NSDate date]], line] dataUsingEncoding:NSUTF8StringEncoding];
+        NSData *d = [[NSString stringWithFormat:@"%@ %@\n", [f stringFromDate:[NSDate date]], line] dataUsingEncoding:NSUTF8StringEncoding];
         if (!fh) { [[NSFileManager defaultManager] createFileAtPath:p contents:nil attributes:nil]; fh = [NSFileHandle fileHandleForWritingAtPath:p]; }
         if (fh) { [fh seekToEndOfFile]; [fh writeData:d]; [fh closeFile]; }
     }
