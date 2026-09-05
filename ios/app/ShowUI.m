@@ -6,6 +6,7 @@
 // POSIX 网络头必须最前（Darwin module 要求 sockaddr_in 先于其他模块化头导入）。
 #import <sys/socket.h>
 #import <netinet/in.h>
+#import <pthread.h>
 #import "ShowUI.h"
 #import "MatisuPaths.h"
 #import <WebKit/WebKit.h>
