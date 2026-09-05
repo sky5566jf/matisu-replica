@@ -779,10 +779,11 @@ static void maRsaDbg(NSString *line) {   // 临时诊断：写 logdir/rsa_debug.
 static SecKeyRef maRsaImport(NSString *pem, BOOL isPublic) {
     NSData *raw = maPemUnwrap(pem);
     NSData *pkcs1 = maDerToPkcs1(raw);
+    const unsigned char *hb = (const unsigned char *)pkcs1.bytes;
     maRsaDbg([NSString stringWithFormat:@"import: pem=%lu raw=%lu pkcs1=%lu pub=%d head=%02x%02x%02x%02x",
               (unsigned long)pem.length, (unsigned long)raw.length, (unsigned long)pkcs1.length, isPublic ? 1 : 0,
-              pkcs1.length > 3 ? pkcs1.bytes[0] : 0, pkcs1.length > 3 ? pkcs1.bytes[1] : 0,
-              pkcs1.length > 3 ? pkcs1.bytes[2] : 0, pkcs1.length > 3 ? pkcs1.bytes[3] : 0]);
+              pkcs1.length > 3 ? hb[0] : 0, pkcs1.length > 3 ? hb[1] : 0,
+              pkcs1.length > 3 ? hb[2] : 0, pkcs1.length > 3 ? hb[3] : 0]);
     if (!pkcs1.length) return NULL;
     CFErrorRef err = NULL;
     SecKeyRef k = SecKeyCreateWithData((__bridge CFDataRef)pkcs1, (__bridge CFDictionaryRef)maRsaKeyAttrs(isPublic, 2048), &err);
