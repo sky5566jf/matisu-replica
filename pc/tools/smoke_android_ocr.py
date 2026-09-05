@@ -16,7 +16,7 @@ LUA = (
     "ck('ocrText.region',function() local s=ocrText(0,0,200,120) assert(type(s)=='string') end) "
     "local ex=ocrTextEx(0,0,0,0) "
     "if #ex>0 then local sub=ex[1].text:sub(1,1) "
-    "ck('findStr.hit',function() local x,y=findStr(0,0,0,0,sub) assert(x>=0, 'not found:'..sub) end) "
+    "ck('findStr.hit',function() local ret,x,y=findStr(0,0,0,0,sub) assert(ret>=1 and x>=0, 'not found:'..sub) end) "
     "else r[#r+1]='findStr.hit=SKIP' end "
     "print('OCRSMOKE ' .. table.concat(r, ' '))"
 )

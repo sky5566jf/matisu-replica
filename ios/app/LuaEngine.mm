@@ -913,21 +913,28 @@ static int l_ocrTextEx(lua_State *L) {
     }];
     return 1;
 }
-// findStr(x1,y1,x2,y2, text) -> x,y（命中首行中心）；未命中 -1,-1
+// findStr(x1,y1,x2,y2, "a|b|c") -> ret(命中序号1-based), x, y；未命中 0,-1,-1（对齐官方：多关键词 | 分隔）
 static int l_findStr(lua_State *L) {
-    NSString *needle = [NSString stringWithUTF8String:luaL_checkstring(L, 5)];
+    NSString *spec = [NSString stringWithUTF8String:luaL_checkstring(L, 5)];
     NSArray<MAOcrItem*> *items = MatisuOcrRegion((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
                                                  (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0));
+    NSArray<NSString *> *keys = [spec componentsSeparatedByString:@"|"];
+    int idx = 0;
     for (MAOcrItem *it in items) {
-        if ([it.text containsString:needle]) {
-            lua_pushinteger(L, it.x + it.w / 2);
-            lua_pushinteger(L, it.y + it.h / 2);
-            return 2;
+        for (NSString *k in keys) {
+            if (k.length && [it.text containsString:k]) {
+                lua_pushinteger(L, idx + 1);
+                lua_pushinteger(L, it.x + it.w / 2);
+                lua_pushinteger(L, it.y + it.h / 2);
+                return 3;
+            }
         }
+        idx++;
     }
+    lua_pushinteger(L, 0);
     lua_pushinteger(L, -1);
     lua_pushinteger(L, -1);
-    return 2;
+    return 3;
 }
 
 static int l_readPasteboard(lua_State *L) {
@@ -935,6 +942,188 @@ static int l_readPasteboard(lua_State *L) {
     lua_pushstring(L, s.UTF8String);
     return 1;
 }
+
+// ---------------- OCR 官方别名层（ocr/ocrj/findStrEx + *New 带字库索引变体，单引擎忽略 index） ----------------
+static int l_ocrAliasText(lua_State *L) { return l_ocrText(L); }
+static int l_ocrAliasEx(lua_State *L) { return l_ocrTextEx(L); }
+static int l_ocrNew(lua_State *L) { lua_remove(L, 1); return l_ocrText(L); }       // (index,x1,y1,x2,y2,...)
+static int l_ocrjNew(lua_State *L) { lua_remove(L, 1); return l_ocrTextEx(L); }
+static int l_findStrNew(lua_State *L) { lua_remove(L, 1); return l_findStr(L); }
+// findStrEx(x1,y1,x2,y2,text) -> 全部命中 {text=,x=,y=,w=,h=} 表
+static int l_findStrExImpl(lua_State *L) {
+    NSString *needle = [NSString stringWithUTF8String:luaL_checkstring(L, 5)];
+    NSArray<MAOcrItem *> *items = MatisuOcrRegion((int)luaL_optinteger(L, 1, 0), (int)luaL_optinteger(L, 2, 0),
+                                                  (int)luaL_optinteger(L, 3, 0), (int)luaL_optinteger(L, 4, 0));
+    lua_createtable(L, 0, 0);
+    int n = 0;
+    for (MAOcrItem *it in items) {
+        if (![it.text containsString:needle]) continue;
+        lua_createtable(L, 0, 5);
+        lua_pushstring(L, it.text.UTF8String); lua_setfield(L, -2, "text");
+        lua_pushinteger(L, it.x); lua_setfield(L, -2, "x");
+        lua_pushinteger(L, it.y); lua_setfield(L, -2, "y");
+        lua_pushinteger(L, it.w); lua_setfield(L, -2, "w");
+        lua_pushinteger(L, it.h); lua_setfield(L, -2, "h");
+        lua_seti(L, -2, ++n);
+    }
+    return 1;
+}
+static int l_findStrEx(lua_State *L) { return l_findStrExImpl(L); }
+static int l_findStrExNew(lua_State *L) { lua_remove(L, 1); return l_findStrExImpl(L); }
+
+// ---------------- 文件 IO（官方 io 语义：相对路径拼工作目录） ----------------
+static NSString *l_pathResolve(lua_State *L, int idx) {
+    const char *s = luaL_checkstring(L, idx);
+    NSString *p = [NSString stringWithUTF8String:s];
+    if (![p hasPrefix:@"/"]) p = [MatisuWorkDir() stringByAppendingPathComponent:p];
+    return p;
+}
+static int l_readFile(lua_State *L) {
+    NSString *p = l_pathResolve(L, 1);
+    NSString *s = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil];
+    if (s) { lua_pushstring(L, s.UTF8String); return 1; }
+    NSData *d = [NSData dataWithContentsOfFile:p];   // 非UTF8按二进制读
+    if (d) { lua_pushlstring(L, d.bytes, d.length); return 1; }
+    lua_pushnil(L); return 1;
+}
+static int l_writeFile(lua_State *L) {
+    NSString *p = l_pathResolve(L, 1);
+    size_t len; const char *s = luaL_checklstring(L, 2, &len);
+    BOOL append = lua_toboolean(L, 3);
+    if (!append) {
+        BOOL ok = [[NSData dataWithBytes:s length:len] writeToFile:p atomically:YES];
+        lua_pushboolean(L, ok); return 1;
+    }
+    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
+    if (!fh) {
+        if (![[NSFileManager defaultManager] createFileAtPath:p contents:[NSData data] attributes:nil]) {
+            lua_pushboolean(L, 0); return 1;
+        }
+        fh = [NSFileHandle fileHandleForWritingAtPath:p];
+        if (!fh) { lua_pushboolean(L, 0); return 1; }
+    }
+    [fh seekToEndOfFile];
+    [fh writeData:[NSData dataWithBytes:s length:len]];
+    [fh closeFile];
+    lua_pushboolean(L, 1); return 1;
+}
+static int l_fileSize(lua_State *L) {
+    NSDictionary *at = [[NSFileManager defaultManager] attributesOfItemAtPath:l_pathResolve(L, 1) error:nil];
+    lua_pushinteger(L, at ? (lua_Integer)[at fileSize] : -1);
+    return 1;
+}
+static int l_fileExist(lua_State *L) {
+    lua_pushboolean(L, [[NSFileManager defaultManager] fileExistsAtPath:l_pathResolve(L, 1)]);
+    return 1;
+}
+static int l_mkdir(lua_State *L) {
+    NSError *err = nil;
+    BOOL ok = [[NSFileManager defaultManager] createDirectoryAtPath:l_pathResolve(L, 1)
+                                        withIntermediateDirectories:YES attributes:nil error:&err];
+    lua_pushboolean(L, ok); return 1;
+}
+static int l_delfile(lua_State *L) {
+    NSError *err = nil;
+    BOOL ok = [[NSFileManager defaultManager] removeItemAtPath:l_pathResolve(L, 1) error:&err];
+    lua_pushboolean(L, ok); return 1;
+}
+static int l_listDir(lua_State *L) {
+    NSArray *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:l_pathResolve(L, 1) error:nil];
+    lua_createtable(L, (int)names.count, 0);
+    for (NSUInteger i = 0; i < names.count; i++) {
+        lua_pushstring(L, [names[i] UTF8String]);
+        lua_seti(L, -2, (lua_Integer)i + 1);
+    }
+    return 1;
+}
+// zip/unZip：iOS 暂不支持（官方语义保留，返回 false）
+static int l_zip(lua_State *L) { lua_pushboolean(L, 0); return 1; }
+static int l_unZip(lua_State *L) { lua_pushboolean(L, 0); return 1; }
+
+// ---------------- 时间 ----------------
+static int64_t gTickCountBase = 0;   // registerAll 时设为引擎启动时刻
+static int l_systemTime(lua_State *L) {
+    lua_pushinteger(L, (lua_Integer)([[NSDate date] timeIntervalSince1970] * 1000.0));
+    return 1;
+}
+static int l_tickCount(lua_State *L) {
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    int64_t now = ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
+    if (gTickCountBase == 0) gTickCountBase = now;
+    lua_pushinteger(L, now - gTickCountBase);
+    return 1;
+}
+// getNetWorkTime：同步取 HTTP Date 头（5s 超时），失败回退系统时间；输出 yyyy-MM-dd_HH-mm-ss 本地时区
+static int l_getNetWorkTime(lua_State *L) {
+    NSDate *dt = nil;
+    @try {
+        NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://captive.apple.com/hotspot-detect.html"]];
+        req.timeoutInterval = 5.0; req.HTTPMethod = @"HEAD";
+        __block NSString *date = nil;
+        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req
+                                                                     completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+            date = [(NSHTTPURLResponse *)r allHeaderFields][@"Date"];
+            dispatch_semaphore_signal(sem);
+        }];
+        [task resume];
+        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 5LL * NSEC_PER_SEC));
+        if (date) {
+            NSDateFormatter *f = [[NSDateFormatter alloc] init];
+            f.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+            f.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"GMT"];
+            f.dateFormat = @"EEE, dd MMM yyyy HH:mm:ss zzz";
+            dt = [f dateFromString:date];
+        }
+    } @catch (NSException *ex) { dt = nil; }
+    if (!dt) dt = [NSDate date];
+    NSDateFormatter *out = [[NSDateFormatter alloc] init];
+    out.dateFormat = @"yyyy-MM-dd_HH-mm-ss";
+    lua_pushstring(L, [out stringFromDate:dt].UTF8String);
+    return 1;
+}
+
+// ---------------- showToast（iOS 无法全局弹窗：进程内 keyWindow 顶部横幅 3s） ----------------
+static int l_showToast(lua_State *L) {
+    NSString *msg = [NSString stringWithUTF8String:luaL_optstring(L, 1, "")];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow *win = nil;
+        for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+            if ([sc isKindOfClass:[UIWindowScene class]] &&
+                sc.activationState == UISceneActivationStateForegroundActive) {
+                UIWindowScene *wsc = (UIWindowScene *)sc;
+                win = wsc.windows.firstObject;
+                if (!win) {
+                    win = [[UIWindow alloc] initWithWindowScene:wsc];
+                    win.windowLevel = UIWindowLevelAlert + 200;
+                }
+                break;
+            }
+        }
+        if (!win) return;
+        UILabel *lb = [[UILabel alloc] initWithFrame:CGRectMake(20, 80, win.bounds.size.width - 40, 40)];
+        lb.text = msg; lb.textAlignment = NSTextAlignmentCenter;
+        lb.textColor = UIColor.whiteColor; lb.backgroundColor = [UIColor colorWithWhite:0 alpha:0.75];
+        lb.layer.cornerRadius = 8; lb.clipsToBounds = YES; lb.numberOfLines = 3;
+        [win addSubview:lb];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3LL * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            [lb removeFromSuperview];
+        });
+    });
+    lua_pushboolean(L, 1); return 1;
+}
+
+// ---------------- 系统 getter ----------------
+static int l_getWorkPath(lua_State *L) {
+    lua_pushstring(L, MatisuWorkDir().UTF8String); return 1;
+}
+static int l_getPackageName(lua_State *L) {
+    lua_pushstring(L, NSBundle.mainBundle.bundleIdentifier.UTF8String); return 1;
+}
+static int l_getScriptVersion(lua_State *L) {
+    pushInfoStr(L, @"CFBundleShortVersionString"); return 1;
+}
+
 static int l_writePasteboard(lua_State *L) {
     MatisuWritePasteboard([NSString stringWithUTF8String:luaL_checkstring(L, 1)]);
     lua_pushboolean(L, 1);
@@ -1493,6 +1682,19 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "findPicFast", l_findPic }, { "findImage", l_findPic },
         // OCR（PP-OCRv6 small 内置）
         { "ocrText", l_ocrText }, { "ocrTextEx", l_ocrTextEx }, { "findStr", l_findStr },
+        // OCR 官方别名层（2026-09-06 对齐官方文档）
+        { "ocr", l_ocrAliasText }, { "ocrj", l_ocrAliasEx },
+        { "ocrNew", l_ocrNew }, { "ocrjNew", l_ocrjNew },
+        { "findStrEx", l_findStrEx }, { "findStrNew", l_findStrNew }, { "findStrExNew", l_findStrExNew },
+        // 文件 IO（官方 io 语义）
+        { "readFile", l_readFile }, { "writeFile", l_writeFile }, { "fileSize", l_fileSize },
+        { "fileExist", l_fileExist }, { "mkdir", l_mkdir }, { "delfile", l_delfile },
+        { "listDir", l_listDir }, { "zip", l_zip }, { "unZip", l_unZip },
+        // 时间 / toast / 系统 getter
+        { "systemTime", l_systemTime }, { "tickCount", l_tickCount }, { "getNetWorkTime", l_getNetWorkTime },
+        { "showToast", l_showToast },
+        { "getWorkPath", l_getWorkPath }, { "getPackageName", l_getPackageName },
+        { "getScriptVersion", l_getScriptVersion },
         // 动态 UI（WKWebView 渲染，与 Android 同构）
         { "showUI", l_showUI }, { "closeWindow", l_closeWindow },
         { NULL, NULL },

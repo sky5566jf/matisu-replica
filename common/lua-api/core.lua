@@ -127,8 +127,22 @@ findCircle     = _stub("findCircle")
 ocrText        = _stub("ocrText")
 -- ocrTextEx 识别区域文字并返回明细表 {text=,x=,y=,w=,h=,score=}
 ocrTextEx      = _stub("ocrTextEx")
--- findStr 在区域内查找文字，命中返回中心坐标 x,y
+-- findStr 区域查找文字 findStr(x1,y1,x2,y2,"a|b|c") -> ret(命中序号1-based),x,y；未命中 0,-1,-1（多关键词 | 分隔）
 findStr        = _stub("findStr")
+-- findStrEx 在区域内查找文字，返回全部命中明细表 {text=,x=,y=,w=,h=}
+findStrEx      = _stub("findStrEx")
+-- ocr 识别区域所有文字组成的字符串（官方别名，同 ocrText）
+ocr            = _stub("ocr")
+-- ocrj 识别区域文字并返回明细表（官方别名，同 ocrTextEx）
+ocrj           = _stub("ocrj")
+-- ocrNew 识别区域文字（带字库索引参数版，索引暂忽略单引擎）
+ocrNew         = _stub("ocrNew")
+-- ocrjNew 识别区域文字返回明细（带字库索引参数版）
+ocrjNew        = _stub("ocrjNew")
+-- findStrNew 区域文字查找（带字库索引参数版），返回 ret,x,y（同 findStr）
+findStrNew     = _stub("findStrNew")
+-- findStrExNew 区域文字查找全部命中（带字库索引参数版）
+findStrExNew   = _stub("findStrExNew")
 
 -- ============================================================
 -- 五、节点选择器（全局工厂函数 + 选择器对象，两端设备端暂未实现）
@@ -347,6 +361,42 @@ setStopCallBack     = _stub("setStopCallBack")
 lockScreen          = _stub("lockScreen")
 -- unLockScreen 解锁屏幕
 unLockScreen        = _stub("unLockScreen")
+-- systemTime 系统当前时间戳（毫秒）
+systemTime          = _stub("systemTime")
+-- tickCount 脚本自启动以来运行时长（毫秒）
+tickCount           = _stub("tickCount")
+-- getNetWorkTime 从网络取时间，返回 年-月-日_时-分-秒 字符串（失败回退系统时间）
+getNetWorkTime      = _stub("getNetWorkTime")
+-- showToast 显示一个 toast 消息（iOS 为进程内窗口顶部横幅）
+showToast           = _stub("showToast")
+
+-- ============================================================
+-- 九.四、文件 IO（官方 io 模块常用全局函数）
+-- ============================================================
+-- readFile 读取文件全部内容（相对路径自动拼工作目录）
+readFile            = _stub("readFile")
+-- writeFile 写字符串到文件 writeFile(path, str, [append])
+writeFile           = _stub("writeFile")
+-- fileSize 获取文件大小（字节）
+fileSize            = _stub("fileSize")
+-- fileExist 文件/目录是否存在
+fileExist           = _stub("fileExist")
+-- mkdir 创建目录（含多级）
+mkdir               = _stub("mkdir")
+-- delfile 删除文件或目录
+delfile             = _stub("delfile")
+-- listDir 列出目录内容，返回文件/子目录名表；失败返回空表
+listDir             = _stub("listDir")
+-- zip 压缩文件或文件夹 zip(file, saveZip, [containroot])（iOS 暂不支持返回 false）
+zip                 = _stub("zip")
+-- unZip 解压 zip 到目录 unZip(zippath, outdir, [pass], [charset])（iOS 暂不支持返回 false）
+unZip               = _stub("unZip")
+-- getWorkPath 脚本工作目录绝对路径
+getWorkPath         = _stub("getWorkPath")
+-- getPackageName 当前应用包名/BundleID
+getPackageName      = _stub("getPackageName")
+-- getScriptVersion 脚本包/应用版本号
+getScriptVersion    = _stub("getScriptVersion")
 
 -- ============================================================
 -- 九.五、动态 UI（showUI：WebView 参数配置面板）

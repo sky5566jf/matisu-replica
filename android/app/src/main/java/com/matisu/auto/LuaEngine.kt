@@ -52,6 +52,66 @@ object LuaEngine {
     /** 脚本目录（app 私有可写） */
     var scriptDir: File? = null
 
+    /** tickCount 基点（引擎类加载时刻） */
+    private val tickBase = android.os.SystemClock.elapsedRealtime()
+
+    private fun ocrExTable(items: List<OcrEngine.Item>): LuaValue {
+        val t = LuaValue.tableOf()
+        for ((i, it) in items.withIndex()) {
+            val row = LuaValue.tableOf()
+            row.set("text", LuaValue.valueOf(it.text))
+            row.set("x", LuaValue.valueOf(it.x))
+            row.set("y", LuaValue.valueOf(it.y))
+            row.set("w", LuaValue.valueOf(it.w))
+            row.set("h", LuaValue.valueOf(it.h))
+            row.set("score", LuaValue.valueOf(it.score.toDouble()))
+            t.set(i + 1, row)
+        }
+        return t
+    }
+
+    private fun findStrImpl(items: List<OcrEngine.Item>, spec: String): Varargs {
+        // 官方语义：多关键词 "|" 分隔，返回 ret(命中序号1-based), x, y；未命中 0,-1,-1
+        val keys = spec.split("|")
+        var idx = 0
+        for (it in items) {
+            for (k in keys) {
+                if (k.isNotEmpty() && it.text.contains(k)) {
+                    return LuaValue.varargsOf(LuaValue.valueOf(idx + 1),
+                        LuaValue.varargsOf(LuaValue.valueOf(it.x + it.w / 2), LuaValue.valueOf(it.y + it.h / 2)))
+                }
+            }
+            idx++
+        }
+        return LuaValue.varargsOf(LuaValue.valueOf(0),
+            LuaValue.varargsOf(LuaValue.valueOf(-1), LuaValue.valueOf(-1)))
+    }
+
+    private fun findStrExTable(items: List<OcrEngine.Item>, needle: String): LuaValue {
+        val t = LuaValue.tableOf()
+        var n = 0
+        for (it in items) {
+            if (!it.text.contains(needle)) continue
+            val row = LuaValue.tableOf()
+            row.set("text", LuaValue.valueOf(it.text))
+            row.set("x", LuaValue.valueOf(it.x))
+            row.set("y", LuaValue.valueOf(it.y))
+            row.set("w", LuaValue.valueOf(it.w))
+            row.set("h", LuaValue.valueOf(it.h))
+            t.set(++n, row)
+        }
+        return t
+    }
+
+    /** 相对路径解析：官方语义拼工作目录 */
+    private fun resolvePath(p: String): File {
+        val f = File(p)
+        if (f.isAbsolute) return f
+        val base = scriptDir ?: ctx?.getExternalFilesDir(null) ?: File("/sdcard/MatisuAuto")
+        return File(base, p)
+    }
+
+
     private val ctx: Context? get() = AutoAccessibilityService.instance
 
     // ---------------- 参数解包工具（对齐 iOS maTbl*：具名字段优先，数组下标兜底） ----------------
@@ -378,17 +438,53 @@ object LuaEngine {
                 return t
             }
         })
-        g.set("findStr", object : VarArgFunction() {
+        g.set("findStr", object : VarArgFunction() {   // (x1,y1,x2,y2,"a|b") -> ret(1-based),x,y；未命中 0,-1,-1
+            override fun invoke(args: Varargs): Varargs {
+                return findStrImpl(OcrEngine.region(ctx,
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0)), args.checkjstring(5))
+            }
+        })
+        // ---------------- OCR 官方别名层（2026-09-06 对齐官方文档；*New 带字库索引，单引擎忽略） ----------------
+        g.set("ocr", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val items = OcrEngine.region(ctx, args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0))
+                return LuaValue.valueOf(items.joinToString("\n") { it.text })
+            }
+        })
+        g.set("ocrj", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                return ocrExTable(OcrEngine.region(ctx, args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0)))
+            }
+        })
+        g.set("ocrNew", object : VarArgFunction() {   // (index,x1,y1,x2,y2,...) index 忽略
+            override fun invoke(args: Varargs): Varargs {
+                val items = OcrEngine.region(ctx, args.optint(2, 0), args.optint(3, 0), args.optint(4, 0), args.optint(5, 0))
+                return LuaValue.valueOf(items.joinToString("\n") { it.text })
+            }
+        })
+        g.set("ocrjNew", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                return ocrExTable(OcrEngine.region(ctx, args.optint(2, 0), args.optint(3, 0), args.optint(4, 0), args.optint(5, 0)))
+            }
+        })
+        g.set("findStrEx", object : VarArgFunction() {   // (x1,y1,x2,y2,text) -> 全部命中明细表
             override fun invoke(args: Varargs): Varargs {
                 val needle = args.checkjstring(5)
-                val items = OcrEngine.region(ctx,
-                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0))
-                for (it in items) {
-                    if (it.text.contains(needle)) {
-                        return LuaValue.varargsOf(LuaValue.valueOf(it.x + it.w / 2), LuaValue.valueOf(it.y + it.h / 2))
-                    }
-                }
-                return LuaValue.varargsOf(LuaValue.valueOf(-1), LuaValue.valueOf(-1))
+                return findStrExTable(OcrEngine.region(ctx,
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0)), needle)
+            }
+        })
+        g.set("findStrNew", object : VarArgFunction() {  // (index,x1,y1,x2,y2,text,...)
+            override fun invoke(args: Varargs): Varargs {
+                return findStrImpl(OcrEngine.region(ctx,
+                    args.optint(2, 0), args.optint(3, 0), args.optint(4, 0), args.optint(5, 0)), args.checkjstring(6))
+            }
+        })
+        g.set("findStrExNew", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val needle = args.checkjstring(6)
+                return findStrExTable(OcrEngine.region(ctx,
+                    args.optint(2, 0), args.optint(3, 0), args.optint(4, 0), args.optint(5, 0)), needle)
             }
         })
         // ---------------- 休眠（切片 50ms 可中断） ----------------
@@ -484,6 +580,136 @@ object LuaEngine {
         })
         g.set("frontAppName", object : ZeroArg() {
             override fun call0(): LuaValue = LuaValue.valueOf(svc?.rootInActiveWindow?.packageName?.toString() ?: "")
+        })
+        // ---------------- 文件 IO（官方 io 语义：相对路径拼工作目录） ----------------
+        g.set("readFile", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue {
+                val f = resolvePath(p.checkjstring())
+                if (!f.isFile) return NIL
+                return try { LuaValue.valueOf(f.readBytes()) } catch (e: Exception) { NIL }
+            }
+        })
+        g.set("writeFile", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                return try {
+                    val f = resolvePath(args.checkjstring(1))
+                    val data = args.checkjstring(2).toByteArray(Charsets.UTF_8)
+                    if (args.optboolean(3, false)) f.appendText(args.checkjstring(2)) else f.writeBytes(data)
+                    TRUE
+                } catch (e: Exception) { FALSE }
+            }
+        })
+        g.set("fileSize", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue {
+                val f = resolvePath(p.checkjstring())
+                return LuaValue.valueOf(if (f.isFile) f.length() else -1L)
+            }
+        })
+        g.set("fileExist", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue = LuaValue.valueOf(resolvePath(p.checkjstring()).exists())
+        })
+        g.set("mkdir", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue = LuaValue.valueOf(resolvePath(p.checkjstring()).mkdirs())
+        })
+        g.set("delfile", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue = LuaValue.valueOf(resolvePath(p.checkjstring()).deleteRecursively())
+        })
+        g.set("listDir", object : OneArgFunction() {
+            override fun call(p: LuaValue): LuaValue {
+                val t = LuaValue.tableOf()
+                val names = resolvePath(p.checkjstring()).list()?.sorted() ?: return t
+                for ((i, n) in names.withIndex()) t.set(i + 1, LuaValue.valueOf(n))
+                return t
+            }
+        })
+        g.set("zip", object : VarArgFunction() {   // zip(file, saveZip, [containroot])
+            override fun invoke(args: Varargs): Varargs {
+                return try {
+                    val src = resolvePath(args.checkjstring(1))
+                    val dst = resolvePath(args.checkjstring(2))
+                    val root = args.optboolean(3, true)
+                    fun zipWalk(f: File, entry: String, zs: java.util.zip.ZipOutputStream) {
+                        if (f.isDirectory) {
+                            f.listFiles()?.forEach { zipWalk(it, if (entry.isEmpty()) it.name else "$entry/${it.name}", zs) }
+                        } else {
+                            zs.putNextEntry(java.util.zip.ZipEntry(entry))
+                            f.inputStream().use { it.copyTo(zs) }
+                            zs.closeEntry()
+                        }
+                    }
+                    java.util.zip.ZipOutputStream(dst.outputStream().buffered()).use { zs ->
+                        if (src.isDirectory) {
+                            if (root) zipWalk(src, src.name, zs) else src.listFiles()?.forEach { zipWalk(it, it.name, zs) }
+                        } else zipWalk(src, src.name, zs)
+                    }
+                    TRUE
+                } catch (e: Exception) { FALSE }
+            }
+        })
+        g.set("unZip", object : TwoArgFunction() {   // unZip(zippath, outdir)，密码参数忽略
+            override fun call(zp: LuaValue, od: LuaValue): LuaValue {
+                return try {
+                    val outDir = resolvePath(od.checkjstring()); outDir.mkdirs()
+                    java.util.zip.ZipInputStream(resolvePath(zp.checkjstring()).inputStream().buffered()).use { zs ->
+                        while (true) {
+                            val e = zs.nextEntry ?: break
+                            val out = File(outDir, e.name)
+                            if (e.isDirectory) { out.mkdirs() } else {
+                                out.parentFile?.mkdirs()
+                                out.outputStream().use { zs.copyTo(it) }
+                            }
+                            zs.closeEntry()
+                        }
+                    }
+                    TRUE
+                } catch (e: Exception) { FALSE }
+            }
+        })
+        // ---------------- 时间 / toast / 系统 getter ----------------
+        g.set("systemTime", object : ZeroArg() {
+            override fun call0(): LuaValue = LuaValue.valueOf(System.currentTimeMillis())
+        })
+        g.set("tickCount", object : ZeroArg() {
+            override fun call0(): LuaValue = LuaValue.valueOf((android.os.SystemClock.elapsedRealtime() - tickBase))
+        })
+        g.set("getNetWorkTime", object : ZeroArg() {
+            override fun call0(): LuaValue {
+                val httpDf = java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", java.util.Locale.US)
+                httpDf.timeZone = java.util.TimeZone.getTimeZone("GMT")
+                return try {
+                    val conn = URL("http://captive.apple.com/hotspot-detect.html").openConnection() as HttpURLConnection
+                    conn.requestMethod = "HEAD"; conn.connectTimeout = 5000; conn.readTimeout = 5000
+                    val date = conn.getHeaderField("Date"); conn.disconnect()
+                    val ms = if (date != null) httpDf.parse(date)?.time else null
+                    val df = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss")
+                    LuaValue.valueOf(df.format(ms ?: System.currentTimeMillis()))
+                } catch (e: Exception) {
+                    LuaValue.valueOf(java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(java.util.Date()))
+                }
+            }
+        })
+        g.set("showToast", object : OneArgFunction() {
+            override fun call(msg: LuaValue): LuaValue {
+                val cc = c ?: return FALSE
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    try { android.widget.Toast.makeText(cc, msg.tojstring(), android.widget.Toast.LENGTH_SHORT).show() } catch (e: Exception) {}
+                }
+                return TRUE
+            }
+        })
+        g.set("getWorkPath", object : ZeroArg() {
+            override fun call0(): LuaValue = LuaValue.valueOf(
+                scriptDir?.absolutePath ?: c?.getExternalFilesDir(null)?.absolutePath ?: "")
+        })
+        g.set("getPackageName", object : ZeroArg() {
+            override fun call0(): LuaValue = LuaValue.valueOf(c?.packageName ?: "com.matisu.auto")
+        })
+        g.set("getScriptVersion", object : ZeroArg() {
+            override fun call0(): LuaValue {
+                val cc = c ?: return LuaValue.valueOf("1.0")
+                return try { LuaValue.valueOf(cc.packageManager.getPackageInfo(cc.packageName, 0).versionName ?: "1.0") }
+                catch (e: Exception) { LuaValue.valueOf("1.0") }
+            }
         })
         // ---------------- 应用管理 ----------------
         g.set("runApp", object : OneArgFunction() {
