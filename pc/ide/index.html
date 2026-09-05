@@ -80,6 +80,13 @@
   #vartable .vrow .vno { width: 22px; flex: none; border-right: 1px solid #101215; text-align: center; align-self: stretch; display: flex; align-items: center; justify-content: center; padding: 0; }
   #vartable .vrow .vname { flex: 2; min-width: 52px; border-right: 1px solid #101215; color: #c0c7d0; }
   #vartable .vrow .vval { flex: 3; color: #9aa4b0; }
+  /* 变量表动态区 */
+  #varrows { flex: none; overflow-y: auto; }
+  #varhint { padding: 8px 10px; color: #5a6370; font-size: 11px; }
+  .vtico { margin-left: 5px; font-size: 9px; color: #fff; background: #55606a; border-radius: 2px; padding: 0 3px; font-family: Consolas, monospace; }
+  .vtico[data-t="number"] { background: #2d6a9f; } .vtico[data-t="string"] { background: #3a8a4a; }
+  .vtico[data-t="table"] { background: #c87d2f; } .vtico[data-t="function"] { background: #7a5fc4; }
+  .vtico[data-t="boolean"] { background: #a34a9f; }
 
   /* 文件树（对齐原版：目录可展开 + 类型图标） */
   .tnode { display: flex; align-items: center; gap: 4px; padding: 2px 4px; cursor: pointer; color: #b8c0ca; font-size: 12px; border-radius: 2px; white-space: nowrap; }
@@ -327,12 +334,8 @@
         </div>
         <div id="vartable">
           <div class="vhead"><div class="vno"></div><div class="vname">变量名</div><div class="vval">变量值</div></div>
-          <div class="vrow"><div class="vno">1</div><div class="vname"></div><div class="vval"></div></div>
-          <div class="vrow"><div class="vno">2</div><div class="vname"></div><div class="vval"></div></div>
-          <div class="vrow"><div class="vno">3</div><div class="vname"></div><div class="vval"></div></div>
-          <div class="vrow"><div class="vno">4</div><div class="vname"></div><div class="vval"></div></div>
-          <div class="vrow"><div class="vno">5</div><div class="vname"></div><div class="vval"></div></div>
-          <div class="vrow"><div class="vno">6</div><div class="vname"></div><div class="vval"></div></div>
+          <div id="varrows"></div>
+          <div id="varhint">运行结束后显示脚本全局变量</div>
         </div>
       </div>
       <div id="svcstate">常驻</div>
@@ -438,6 +441,9 @@ print("screen: " .. w .. "x" .. h)
           <button class="mini" id="btnLogPrev">上一个</button>
           <button class="mini" id="btnLogNext">下一个</button>
           <button class="mini" id="btnClearLog">清空</button>
+          <button class="mini" id="btnCopyLog" title="复制全部日志">复制</button>
+          <button class="mini" id="btnExportLog" title="导出为 txt">导出</button>
+          <label class="mini" style="display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none"><input type="checkbox" id="logAuto" checked>滚动</label>
         </div>
         <div id="logout"></div>
       </div>
@@ -616,7 +622,7 @@ function logAppend(s) {
   const el = $('logout');
   if (q) { renderLog(); return; }
   el.innerHTML = LOG_LINES.map(logHtml).join('\n');
-  el.scrollTop = el.scrollHeight;
+  if ($('logAuto').checked) el.scrollTop = el.scrollHeight;   // 自动滚动关闭时不打断查看
 }
 function logTs() {
   const d = new Date(), p = (n, w) => String(n).padStart(w || 2, '0');
@@ -637,6 +643,46 @@ $('logsearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') logJu
 $('btnLogPrev').onclick = () => logJump(-1);
 $('btnLogNext').onclick = () => logJump(1);
 $('btnClearLog').onclick = () => { LOG_LINES.length = 0; $('logout').innerHTML = ''; };
+// 复制全部日志（降级：clipboard API 失败用 execCommand）
+$('btnCopyLog').onclick = async () => {
+  const txt = LOG_LINES.join('\n');
+  try { await navigator.clipboard.writeText(txt); }
+  catch (_) {
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+  $('btnCopyLog').textContent = '已复制';
+  setTimeout(() => ($('btnCopyLog').textContent = '复制'), 1200);
+};
+// 导出日志为 txt（时间戳文件名）
+$('btnExportLog').onclick = () => {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  const name = `matisu_log_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.txt`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([LOG_LINES.join('\n')], { type: 'text/plain;charset=utf-8' }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  log('日志已导出 ' + name);
+};
+
+// ============ 调试面板变量表（运行结束后显示脚本全局变量） ============
+function renderVartable(globals) {
+  const box = $('varrows');
+  if (!Array.isArray(globals) || !globals.length) {
+    box.innerHTML = '';
+    $('varhint').style.display = '';
+    return;
+  }
+  $('varhint').style.display = 'none';
+  box.innerHTML = globals.map((g, i) => {
+    const [name, val, type] = g;
+    const tico = type === 'number' ? '#' : type === 'string' ? 'S' : type === 'table' ? 'T' : type === 'function' ? 'F' : type === 'boolean' ? 'B' : '·';
+    return `<div class="vrow" title="${esc(String(name))} = ${esc(String(val))}">
+      <div class="vno">${i + 1}</div><div class="vname">${esc(String(name))}<span class="vtico" data-t="${esc(String(type))}">${tico}</span></div>
+      <div class="vval">${esc(String(val))}</div></div>`;
+  }).join('');
+}
 
 // ============ 行号 + 高亮 ============
 function syncGutter() {
@@ -1466,6 +1512,7 @@ async function runCurrent() {
   const r = await (await fetch('/api/runfile', { method: 'POST', body: JSON.stringify({ name: devName }) })).json().catch(() => null);
   runActive = false; updateDbgBtns(false);
   if (!r) { log('[错误] 运行请求失败（设备无响应）'); return; }
+  renderVartable(r.globals);   // 变量表：脚本结束后全局变量快照
   if (!r.ok) log('[错误] ' + (r.error || '未知'));
 }
 $('btnRun2').onclick = runCurrent;

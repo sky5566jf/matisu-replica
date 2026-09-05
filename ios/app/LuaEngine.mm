@@ -934,6 +934,53 @@ static int l_openUrl(lua_State *L) {
     return 1;
 }
 
+// ---- 运行后全局变量快照（调试面板变量表）----
+// 遍历全局表，过滤标准库/引擎注入符号；value 用类型化表示（table/function 不展开），截断 120 字符。
+static NSArray<NSArray<NSString *> *> *maDumpGlobals(lua_State *L) {
+    static NSSet *gSkip = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        gSkip = [NSSet setWithArray:@[
+            @"_G", @"_VERSION", @"assert", @"collectgarbage", @"dofile", @"error", @"getfenv",
+            @"getmetatable", @"ipairs", @"load", @"loadfile", @"loadstring", @"next", @"pairs",
+            @"pcall", @"print", @"rawequal", @"rawget", @"rawset", @"require", @"select",
+            @"setfenv", @"setmetatable", @"tonumber", @"tostring", @"type", @"unpack",
+            @"xpcall", @"string", @"table", @"math", @"os", @"io", @"debug", @"coroutine",
+            @"package", @"gcinfo", @"newproxy", @"exitScript", @"sleep", @"init",
+        ]];
+    });
+    NSMutableArray<NSArray<NSString *> *> *rows = [NSMutableArray array];
+    @autoreleasepool {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+        if (lua_istable(L, -1)) {
+            lua_pushnil(L);
+            while (lua_next(L, -2) != 0 && rows.count < 100) {
+                if (lua_type(L, -2) == LUA_TSTRING) {
+                    const char *k = lua_tostring(L, -2);
+                    NSString *name = k ? @(k) : @"";
+                    if (![gSkip containsString:name]) {
+                        NSString *val;
+                        int t = lua_type(L, -1);
+                        if (t == LUA_TTABLE) val = @"<table>";
+                        else if (t == LUA_TFUNCTION) val = @"<function>";
+                        else {
+                            luaL_tolstring(L, -1, NULL);
+                            const char *s = lua_tostring(L, -1);
+                            val = s ? @(s) : @"?";
+                            lua_pop(L, 1);
+                            if (val.length > 120) val = [[val substringToIndex:120] stringByAppendingString:@"…"];
+                        }
+                        [rows addObject:@[name, val, @(lua_typename(L, t))]];
+                    }
+                }
+                lua_pop(L, 1);   // 弹 value，留 key 给下次 lua_next
+            }
+        }
+        lua_pop(L, 1);           // 弹全局表
+    }
+    return rows;
+}
+
 NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName) {
     if (!source) return nil;
     NSString *chunk = chunkName.length ? chunkName : @"=script";
@@ -974,6 +1021,7 @@ NSDictionary* _Nullable MatisuLuaRunNamed(NSString *source, NSString *chunkName)
         }
     }
     maEngineLogAppend(@"脚本停止运行\n");
+    r[@"globals"] = maDumpGlobals(L);   // 调试面板变量表：脚本结束后全局变量快照
     lua_close(L);
     return r;
 }

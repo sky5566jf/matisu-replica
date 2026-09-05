@@ -86,6 +86,7 @@ class ScriptServer(private val port: Int = 18183) {
                         val r = LuaEngine.run(f.readText(), arg)
                         JSONObject().put("ok", r.ok).put("output", r.output).apply {
                             if (r.error != null) put("error", r.error)
+                            if (r.globals != null) put("globals", org.json.JSONArray(r.globals))
                         }
                     } else JSONObject().put("ok", false).put("output", "").put("error", "script not found: $arg")
                     respond(cli, j.toString().toByteArray())

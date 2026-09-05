@@ -20,7 +20,7 @@ import java.io.File
  */
 object LuaEngine {
 
-    data class RunResult(val ok: Boolean, val output: String, val error: String? = null)
+    data class RunResult(val ok: Boolean, val output: String, val error: String? = null, val globals: String? = null)
 
     private var svcThread: Thread? = null
     @Volatile private var svcStop = false
@@ -193,15 +193,49 @@ object LuaEngine {
     // ---------------- one-shot ----------------
     fun run(source: String, chunk: String = "script"): RunResult {
         val out = StringBuilder()
+        val g = JsePlatform.debugGlobals()
         return try {
-            val g = JsePlatform.debugGlobals()
             registerFns(g, out) { false }
             wrapPrintLoc(g)
             g.load(source, chunk).call()
-            RunResult(true, out.toString())
+            RunResult(true, out.toString(), globals = dumpGlobals(g))
         } catch (e: Throwable) {
-            RunResult(false, out.toString(), e.message ?: e.toString())
+            RunResult(false, out.toString(), e.message ?: e.toString(), globals = dumpGlobals(g))
         }
+    }
+
+    // ---------------- 全局变量快照（调试面板变量表） ----------------
+    // 遍历全局表，过滤标准库符号；table/function 不展开，值截断 120 字符。返回 JSON 数组文本。
+    private val G_SKIP = setOf(
+        "_G", "_VERSION", "assert", "collectgarbage", "dofile", "error", "getfenv",
+        "getmetatable", "ipairs", "load", "loadfile", "loadstring", "next", "pairs",
+        "pcall", "print", "rawequal", "rawget", "rawset", "require", "select",
+        "setfenv", "setmetatable", "tonumber", "tostring", "type", "unpack",
+        "xpcall", "string", "table", "math", "os", "io", "debug", "coroutine",
+        "package", "exitScript", "sleep", "init"
+    )
+
+    private fun dumpGlobals(g: Globals): String {
+        val arr = org.json.JSONArray()
+        try {
+            val keys = g.keys()
+            for (i in 1..keys.length()) {
+                val k = keys.arg(i)  // keys() 返回的表中 1 起始
+                if (!k.isstring()) continue
+                val name = k.tojstring()
+                if (name in G_SKIP) continue
+                val v = g.get(k)
+                val vt = v.typename()
+                val sv = when {
+                    v.istable() -> "<table>"
+                    v.isfunction() -> "<function>"
+                    else -> v.tojstring().let { if (it.length > 120) it.substring(0, 120) + "…" else it }
+                }
+                arr.put(org.json.JSONArray().put(name).put(sv).put(vt))
+                if (arr.length() >= 100) break
+            }
+        } catch (_: Throwable) {}
+        return arr.toString()
     }
 
     // ---------------- 常驻 ----------------
