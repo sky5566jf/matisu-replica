@@ -545,7 +545,7 @@ static int l_cryptAes(lua_State *L) {
     else return luaL_error(L, "unsupported aes mode: %s", mode);
     if (m != kCCModeECB && (!iv || strlen(iv) != 16))
         return luaL_error(L, "aes mode %s requires 16-byte iv", mode);
-    CCPadding p = (padding && (m == kCCModeECB || m == kCCModeCBC)) ? kCCModePaddingPKCS7 : kCCModePaddingNone;
+    CCPadding p = (padding && (m == kCCModeECB || m == kCCModeCBC)) ? kCCPaddingPKCS7 : kCCPaddingNone;
     CCModeOptions opt2 = (m == kCCModeCTR) ? kCCModeOptionCTR_BE : 0;
     CCCryptorRef cr = NULL;
     CCCryptorStatus st = CCCryptorCreateWithMode(ccop, 0, m, p, iv, key, klen, NULL, 0, 0, opt2, &cr);
@@ -723,7 +723,7 @@ static SecKeyRef maRsaImport(NSString *pem, BOOL isPublic) {
     NSData *pkcs1 = maDerToPkcs1(maPemUnwrap(pem));
     if (!pkcs1.length) return NULL;
     CFErrorRef err = NULL;
-    SecKeyRef k = SecKeyCreateWithData(pkcs1, (__bridge CFDictionaryRef)maRsaKeyAttrs(isPublic, 2048), &err);
+    SecKeyRef k = SecKeyCreateWithData((__bridge CFDataRef)pkcs1, (__bridge CFDictionaryRef)maRsaKeyAttrs(isPublic, 2048), &err);
     return k;   // 调用方负责 CFRelease
 }
 static int l_cryptRsaEncrypt(lua_State *L) {
@@ -735,7 +735,7 @@ static int l_cryptRsaEncrypt(lua_State *L) {
     if (!key) return luaL_error(L, "rsa import key failed");
     CFErrorRef err = NULL;
     NSData *out = CFBridgingRelease(SecKeyCreateEncryptedData(key, kSecKeyAlgorithmRSAEncryptionPKCS1,
-                                                              [NSData dataWithBytes:data length:dlen], &err));
+                                                              (__bridge CFDataRef)[NSData dataWithBytes:data length:dlen], &err));
     CFRelease(key);
     if (!out) return luaL_error(L, "rsa encrypt failed");
     lua_pushlstring(L, (const char *)out.bytes, (size_t)out.length);
@@ -750,7 +750,7 @@ static int l_cryptRsaDecrypt(lua_State *L) {
     if (!key) return luaL_error(L, "rsa import key failed");
     CFErrorRef err = NULL;
     NSData *out = CFBridgingRelease(SecKeyCreateDecryptedData(key, kSecKeyAlgorithmRSAEncryptionPKCS1,
-                                                              [NSData dataWithBytes:data length:dlen], &err));
+                                                              (__bridge CFDataRef)[NSData dataWithBytes:data length:dlen], &err));
     CFRelease(key);
     if (!out) return luaL_error(L, "rsa decrypt failed");
     lua_pushlstring(L, (const char *)out.bytes, (size_t)out.length);
@@ -788,7 +788,7 @@ static id qdLuaToStore(lua_State *L, int idx) {   // put 的值：nil->空串 / 
         case LUA_TNUMBER: {
             double v = lua_tonumber(L, idx);
             if (v == floor(v) && v >= -9007199254740992.0 && v <= 9007199254740992.0)
-                return @(long long)v;
+                return [NSNumber numberWithLongLong:(long long)v];
             return @(v);
         }
         default: return [NSString stringWithUTF8String:lua_tostring(L, idx) ?: ""];
@@ -835,7 +835,7 @@ static int l_qdGetNumber(lua_State *L) {
 static int l_qdGetBool(lua_State *L) {
     NSString *key = [NSString stringWithUTF8String:luaL_checkstring(L, 2)];
     id v = qdLoad(qdSelfName(L))[key];
-    if ([v isKindOfClass:[NSNumber class]]) { lua_pushboolean(L, v.boolValue); return 1; }
+    if ([v isKindOfClass:[NSNumber class]]) { lua_pushboolean(L, [(NSNumber *)v boolValue]); return 1; }
     if ([v isKindOfClass:[NSString class]]) {
         lua_pushboolean(L, [v isEqualToString:@"true"] || [v isEqualToString:@"1"] || [v boolValue]);
         return 1;

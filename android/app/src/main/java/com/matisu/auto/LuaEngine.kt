@@ -963,9 +963,9 @@ object LuaEngine {
                 return LuaString.valueOf(b)
             }
         }
-        val rsaKeygenFn = object : OneArgFunction() {
-            override fun call(p: LuaValue): LuaValue {
-                val bits = p.optint(2048)
+        val rsaKeygenFn = object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val bits = args.optint(1, 2048)
                 if (bits < 1024 || bits > 4096) throw LuaError("rsa bits must be 1024/2048/4096")
                 val kpg = java.security.KeyPairGenerator.getInstance("RSA")
                 kpg.initialize(bits)
@@ -1071,7 +1071,9 @@ object LuaEngine {
                 t.set("clear", object : ZeroArg() {
                     override fun call0(): LuaValue {
                         val obj = qdLoad(name)
-                        val keys = obj.keys().toList()
+                        val keys = ArrayList<String>()
+                        val kit = obj.keys()
+                        while (kit.hasNext()) keys.add(kit.next())
                         for (k in keys) obj.remove(k)
                         return LuaValue.valueOf(qdSave(name, obj))
                     }
