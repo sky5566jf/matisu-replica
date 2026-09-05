@@ -7,11 +7,11 @@
 """
 import sys, socket, base64, argparse
 
-def build_lua():
+def build_lua(is_ios):
     return r"""
 local r = {}
 local function ck(n, f) local ok, err = pcall(f) r[#r+1] = n .. (ok and '=OK' or '=FAIL:' .. tostring(err)) end
-local IS_IOS = getDeviceType() == 'ios'
+local IS_IOS = IS_IOS_PLACEHOLDER
 
 ck('systemTime', function() local t = systemTime() assert(t and t > 1600000000000, 'ts=' .. tostring(t)) end)
 ck('tickCount', function() local a = tickCount() sleep(0.05) local b = tickCount() assert(b >= a and a >= 0) end)
@@ -71,7 +71,7 @@ end
 ck('getNetWorkTime', function() local t = getNetWorkTime() assert(type(t) == 'string' and #t == 19, 't=' .. tostring(t)) end)
 
 print('GAPSMOKE ' .. table.concat(r, ' '))
-"""
+""".replace("IS_IOS_PLACEHOLDER", "true" if is_ios else "false")
 
 def run_ios(lua):
     s = socket.create_connection(("192.69.0.38", 18182), timeout=300)
@@ -110,7 +110,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", choices=["ios", "android"], required=True)
     a = ap.parse_args()
-    lua = build_lua()
+    lua = build_lua(a.target == "ios")
     s = run_ios(lua) if a.target == "ios" else run_android(lua)
     resp = read_frame(s)
     obj = resp if isinstance(resp, dict) else {}
