@@ -764,11 +764,33 @@ static int l_cryptRsaKeygen(lua_State *L) {
     lua_pushstring(L, privPem.UTF8String);
     return 2;
 }
+static void maRsaDbg(NSString *line) {   // 临时诊断：写 logdir/rsa_debug.log
+    @autoreleasepool {
+        NSString *dir = [MatisuWorkDir() stringByAppendingPathComponent:@"../logs"];
+        NSString *p = [dir stringByAppendingPathComponent:@"rsa_debug.log"];
+        NSDateFormatter *f = [[NSDateFormatter alloc] init];
+        f.dateFormat = @"HH:mm:ss.SSS";
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:p];
+        NSData *d = [[NSString stringWithFormat:@"%@ %@
+", [f stringFromDate:[NSDate date]], line] dataUsingEncoding:NSUTF8StringEncoding];
+        if (!fh) { [[NSFileManager defaultManager] createFileAtPath:p contents:nil attributes:nil]; fh = [NSFileHandle fileHandleForWritingAtPath:p]; }
+        if (fh) { [fh seekToEndOfFile]; [fh writeData:d]; [fh closeFile]; }
+    }
+}
 static SecKeyRef maRsaImport(NSString *pem, BOOL isPublic) {
-    NSData *pkcs1 = maDerToPkcs1(maPemUnwrap(pem));
+    NSData *raw = maPemUnwrap(pem);
+    NSData *pkcs1 = maDerToPkcs1(raw);
+    maRsaDbg([NSString stringWithFormat:@"import: pem=%lu raw=%lu pkcs1=%lu pub=%d head=%02x%02x%02x%02x",
+              (unsigned long)pem.length, (unsigned long)raw.length, (unsigned long)pkcs1.length, isPublic ? 1 : 0,
+              pkcs1.length > 3 ? pkcs1.bytes[0] : 0, pkcs1.length > 3 ? pkcs1.bytes[1] : 0,
+              pkcs1.length > 3 ? pkcs1.bytes[2] : 0, pkcs1.length > 3 ? pkcs1.bytes[3] : 0]);
     if (!pkcs1.length) return NULL;
     CFErrorRef err = NULL;
     SecKeyRef k = SecKeyCreateWithData((__bridge CFDataRef)pkcs1, (__bridge CFDictionaryRef)maRsaKeyAttrs(isPublic, 2048), &err);
+    if (!k) {
+        NSString *desc = err ? (__bridge_transfer NSString *)CFErrorCopyDescription(err) : @"nil";
+        maRsaDbg([NSString stringWithFormat:@"import FAILED: %@", desc]);
+    }
     return k;   // 调用方负责 CFRelease
 }
 static int l_cryptRsaEncrypt(lua_State *L) {
