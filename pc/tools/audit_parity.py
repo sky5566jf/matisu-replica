@@ -47,7 +47,7 @@ ios = ios_registered()
 andrd = android_registered()
 
 # 平台差异白名单：标注「本轮先落地某端、另一端待补」的函数
-ANDROID_ONLY = {"showUI", "closeWindow"}   # iOS WKWebView 版待补
+ANDROID_ONLY = set()   # showUI/closeWindow 双端均已落地（2026-09-05 iOS WKWebView 版补齐）
 
 miss_ios = [f for f in core if f not in ios and f not in ANDROID_ONLY]
 miss_and = [f for f in core if f not in andrd]

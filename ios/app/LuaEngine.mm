@@ -16,6 +16,7 @@
 #import "SysUtil.h"
 #import "OcrEngine.h"
 #import "MatisuPaths.h"
+#import "ShowUI.h"
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 #import <stdlib.h>
@@ -849,6 +850,42 @@ static int l_restartScript(lua_State *L) {
     return luaL_error(L, "__MATISU_RESTART__");
 }
 
+// ---------------- 动态 UI（showUI，WKWebView 渲染，见 ShowUI.m） ----------------
+// showUI(JSON字符串 或 table)：确认返回 1,值1,值2...；取消返回 0
+static int l_showUI(lua_State *L) {
+    NSString *json = nil;
+    if (lua_isstring(L, 1)) {
+        const char *s = lua_tostring(L, 1);
+        if (s && s[0]) json = [NSString stringWithUTF8String:s];
+    } else if (lua_istable(L, 1)) {
+        lua_getglobal(L, "jsonLib");
+        if (lua_istable(L, -1)) {
+            lua_getfield(L, -1, "encode");
+            lua_pushvalue(L, 1);
+            if (lua_pcall(L, 1, 1, 0) == LUA_OK) {
+                const char *enc = lua_tostring(L, -1);
+                if (enc) json = [NSString stringWithUTF8String:enc];
+            } else lua_pop(L, 1);   // 错误对象
+        }
+        lua_pop(L, 1);   // jsonLib 表
+    }
+    NSDictionary *ut = nil;
+    if (json.length) {
+        NSData *d = [json dataUsingEncoding:NSUTF8StringEncoding];
+        id o = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+        if ([o isKindOfClass:[NSDictionary class]]) ut = o;
+    }
+    if (!ut) { lua_pushinteger(L, 0); return 1; }
+    NSArray<NSString *> *out = MatisuShowUIRun(ut);
+    for (NSString *v in out) lua_pushstring(L, v.UTF8String);
+    return (int)out.count;
+}
+// closeWindow：无回调模式下窗口自动关闭，保留兼容
+static int l_closeWindow(lua_State *L) {
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 // ---------------- OCR（PP-OCRv6 small 内置） ----------------
 // ocrText(x1,y1,x2,y2) -> 纯文本（换行分隔）；区域 0,0,0,0=全屏
 static int l_ocrText(lua_State *L) {
@@ -1347,6 +1384,8 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
         { "findPicFast", l_findPic }, { "findImage", l_findPic },
         // OCR（PP-OCRv6 small 内置）
         { "ocrText", l_ocrText }, { "ocrTextEx", l_ocrTextEx }, { "findStr", l_findStr },
+        // 动态 UI（WKWebView 渲染，与 Android 同构）
+        { "showUI", l_showUI }, { "closeWindow", l_closeWindow },
         { NULL, NULL },
     };
     // jsonLib 表（encode/decode）
