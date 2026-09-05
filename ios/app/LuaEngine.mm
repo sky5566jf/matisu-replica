@@ -958,7 +958,7 @@ static NSArray<NSArray<NSString *> *> *maDumpGlobals(lua_State *L) {
                 if (lua_type(L, -2) == LUA_TSTRING) {
                     const char *k = lua_tostring(L, -2);
                     NSString *name = k ? @(k) : @"";
-                    if (![gSkip containsString:name]) {
+                    if (![gSkip containsObject:name]) {
                         NSString *val;
                         int t = lua_type(L, -1);
                         if (t == LUA_TTABLE) val = @"<table>";

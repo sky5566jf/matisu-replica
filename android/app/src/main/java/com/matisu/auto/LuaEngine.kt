@@ -216,26 +216,39 @@ object LuaEngine {
     )
 
     private fun dumpGlobals(g: Globals): String {
-        val arr = org.json.JSONArray()
+        val sb = StringBuilder("[")
+        var n = 0
         try {
-            val keys = g.keys()
-            for (i in 1..keys.length()) {
-                val k = keys.arg(i)  // keys() 返回的表中 1 起始
+            // lua_next 语义遍历（next 返回 varargs: key, value）
+            var k: LuaValue = LuaValue.NIL
+            while (n < 100) {
+                val nv: Varargs = g.next(k)
+                k = nv.arg1()
+                if (k.isnil()) break
                 if (!k.isstring()) continue
                 val name = k.tojstring()
                 if (name in G_SKIP) continue
-                val v = g.get(k)
+                val v = nv.arg(2)
                 val vt = v.typename()
                 val sv = when {
                     v.istable() -> "<table>"
                     v.isfunction() -> "<function>"
-                    else -> v.tojstring().let { if (it.length > 120) it.substring(0, 120) + "…" else it }
+                    else -> {
+                        val s = v.tojstring()
+                        if (s.length > 120) s.substring(0, 120) + "…" else s
+                    }
                 }
-                arr.put(org.json.JSONArray().put(name).put(sv).put(vt))
-                if (arr.length() >= 100) break
+                if (n > 0) sb.append(',')
+                sb.append('[')
+                    .append(org.json.JSONObject.quote(name)).append(',')
+                    .append(org.json.JSONObject.quote(sv)).append(',')
+                    .append(org.json.JSONObject.quote(vt))
+                    .append(']')
+                n++
             }
         } catch (_: Throwable) {}
-        return arr.toString()
+        sb.append(']')
+        return sb.toString()
     }
 
     // ---------------- 常驻 ----------------
