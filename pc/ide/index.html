@@ -333,7 +333,7 @@
           <button class="tb" id="btnCont">继续(F9)</button>
         </div>
         <div id="vartable">
-          <div class="vhead"><div class="vno"></div><div class="vname">变量名</div><div class="vval">变量值</div></div>
+          <div class="vhead"><div class="vno"></div><div class="vname">变量名</div><div class="vval">变量值 <label style="float:right;display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;font-weight:400"><input type="checkbox" id="varFns">函数</label></div></div>
           <div id="varrows"></div>
           <div id="varhint">运行结束后显示脚本全局变量</div>
         </div>
@@ -667,15 +667,20 @@ $('btnExportLog').onclick = () => {
 };
 
 // ============ 调试面板变量表（运行结束后显示脚本全局变量） ============
+// 默认隐藏 function 类型（引擎预注册的 90+ API 会淹没用户变量），勾选「函数」查看全部；
+// 排序：值类型(布尔/数字/字符串)在前，其次 table，最后 function，同类型按名称。
+let VAR_LAST = [];
 function renderVartable(globals) {
+  if (Array.isArray(globals)) VAR_LAST = globals;
+  const showFn = $('varFns').checked;
+  const rows = VAR_LAST.filter((g) => showFn || g[2] !== 'function');
+  const tp = { boolean: 0, number: 1, string: 2, table: 3, function: 4 };
+  rows.sort((a, b) => (tp[a[2]] ?? 9) - (tp[b[2]] ?? 9) || String(a[0]).localeCompare(String(b[0])));
   const box = $('varrows');
-  if (!Array.isArray(globals) || !globals.length) {
-    box.innerHTML = '';
-    $('varhint').style.display = '';
-    return;
-  }
+  if (!VAR_LAST.length) { box.innerHTML = ''; $('varhint').textContent = '运行结束后显示脚本全局变量'; $('varhint').style.display = ''; return; }
+  if (!rows.length) { box.innerHTML = ''; $('varhint').textContent = '只有函数变量——勾选右上角「函数」查看'; $('varhint').style.display = ''; return; }
   $('varhint').style.display = 'none';
-  box.innerHTML = globals.map((g, i) => {
+  box.innerHTML = rows.map((g, i) => {
     const [name, val, type] = g;
     const tico = type === 'number' ? '#' : type === 'string' ? 'S' : type === 'table' ? 'T' : type === 'function' ? 'F' : type === 'boolean' ? 'B' : '·';
     return `<div class="vrow" title="${esc(String(name))} = ${esc(String(val))}">
@@ -683,6 +688,7 @@ function renderVartable(globals) {
       <div class="vval">${esc(String(val))}</div></div>`;
   }).join('');
 }
+$('varFns').onchange = () => renderVartable();
 
 // ============ 行号 + 高亮 ============
 function syncGutter() {
