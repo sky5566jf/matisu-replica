@@ -634,6 +634,12 @@ function logTs() {
   return `[${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}]`;
 }
 function log(s) { logAppend(`${logTs()} ${s}`); }
+// 每次运行前清空调试输出：连带清掉搜索过滤，避免残留 filter 让新日志被过滤不显示
+function logClear() {
+  LOG_LINES.length = 0;
+  $('logout').innerHTML = '';
+  if ($('logsearch').value) { $('logsearch').value = ''; }
+}
 function logJump(dir) {
   const el = $('logout');
   if (!$('logsearch').value.trim()) return;
@@ -1529,6 +1535,7 @@ async function runCurrent() {
   // 设备端只认文件名：工程文件保存是写本地工程目录，不会自动上传到设备，
   // 直接 runfile 会报 "script not found"。这里运行前先同步当前代码到设备。
   const devName = String(name).split(/[\\/]/).pop();
+  logClear();   // 每次运行清空上一轮调试输出，从本轮开始记录
   log('开始发送脚本到设备 ' + devName);
   const up = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: devName, code: getCode() }) })).json().catch(() => ({ ok: false }));
   if (!up.ok) { log('[错误] 同步脚本到设备失败：' + devName + '（检查设备是否已连接）'); return; }
