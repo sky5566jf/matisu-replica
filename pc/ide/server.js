@@ -245,13 +245,21 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- API 契约清单（从 core.lua 解析：分节注释 + _stub 函数名 + 表方法，注释作描述）----
+  // 中文描述优先级：懒人精灵技能/ios/*.md 的帮助标题 > core.lua 紧邻注释 > 空
   if (p === '/api/apis') {
     try {
       const core = fs.readFileSync(path.join(__dirname, '..', '..', 'common', 'lua-api', 'core.lua'), 'utf8');
       const sections = [];
       let cur = { name: '全局', fns: [] };
       let comments = [];                     // 累积的紧邻注释行
+      const helpTitle = (name) => {
+        const short = name.split('.').pop();
+        const info = global.__HELP_CACHE__ && (global.__HELP_CACHE__.get(name) || global.__HELP_CACHE__.get(short));
+        return (info && info.title) || '';
+      };
       const descFor = (name) => {
+        const ht = helpTitle(name);
+        if (ht) return ht.length > 60 ? ht.slice(0, 60) + '…' : ht;
         // 优先取以函数名开头的注释行，剥掉名字前缀后作为描述
         let line = comments.find((c) => c.startsWith(name)) || comments[comments.length - 1] || '';
         line = line.replace(new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '');
@@ -273,6 +281,8 @@ const server = http.createServer(async (req, res) => {
         if (m) { pushFn(m[1]); comments = []; continue; }
         const m2 = t.match(/^\s*(?:function\s+)?(?:jsonLib|imeLib|ImageUtil|ui|nodeLib|strutils|cryptLib|console|lfs|json|cipher|network)\.(\w+)/);
         if (m2) { pushFn(t.trim().split('.')[0].replace(/^\W+/, '') + '.' + m2[1]); comments = []; continue; }
+        // 模块表打开行（cipher = { 等）不断开注释——表内首个条目要用表前的注释
+        if (/^\s*[\w.]+\s*=\s*\{\s*$/.test(t)) continue;
         comments = [];   // 普通代码行隔断注释
       }
       if (cur.fns.length) sections.push(cur);

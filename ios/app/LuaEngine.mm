@@ -1226,6 +1226,67 @@ void MatisuLuaAutoRun(void) {
 }
 
 // FNS 表共享注册（one-shot 用 l_print，常驻用 l_printSvc）
+// strutils：两端同源 Lua 实现（与 Android LuaEngine.kt STRUTILS_LUA 保持逐字一致）
+static const char *STRUTILS_LUA =
+    "strutils = {}\n"
+    "function strutils.bin2Hex(data, ishex)\n"
+    "  data = tostring(data or \"\")\n"
+    "  local parts = {}\n"
+    "  for i = 1, #data do\n"
+    "    local b = string.byte(data, i)\n"
+    "    if ishex then parts[i] = string.format(\"%02x\", b)\n"
+    "    else parts[i] = tostring(b) end\n"
+    "  end\n"
+    "  return table.concat(parts, ishex and \"\" or \" \")\n"
+    "end\n"
+    "function strutils.split(str, delimiter, limit)\n"
+    "  str = tostring(str or \"\")\n"
+    "  delimiter = delimiter == nil and \" \" or tostring(delimiter)\n"
+    "  limit = tonumber(limit) or 0\n"
+    "  local out = {}\n"
+    "  if delimiter == \"\" then\n"
+    "    for i = 1, #str do out[i] = string.sub(str, i, i) end\n"
+    "    return out\n"
+    "  end\n"
+    "  local pos = 1\n"
+    "  while true do\n"
+    "    if limit > 0 and #out >= limit then break end\n"
+    "    local s, e = string.find(str, delimiter, pos, true)\n"
+    "    if not s then break end\n"
+    "    out[#out + 1] = string.sub(str, pos, s - 1)\n"
+    "    pos = e + 1\n"
+    "  end\n"
+    "  out[#out + 1] = string.sub(str, pos)\n"
+    "  return out\n"
+    "end\n"
+    "function strutils.trim(s)\n"
+    "  return (tostring(s or \"\"):gsub(\"^%s+\", \"\"):gsub(\"%s+$\", \"\"))\n"
+    "end\n"
+    "function strutils.replace(s, a, b)\n"
+    "  s = tostring(s or \"\"); a = tostring(a or \"\"); b = tostring(b or \"\")\n"
+    "  if a == \"\" then return s end\n"
+    "  local out, pos = {}, 1\n"
+    "  while true do\n"
+    "    local i, j = string.find(s, a, pos, true)\n"
+    "    if not i then break end\n"
+    "    out[#out + 1] = string.sub(s, pos, i - 1) .. b\n"
+    "    pos = j + 1\n"
+    "  end\n"
+    "  out[#out + 1] = string.sub(s, pos)\n"
+    "  return table.concat(out)\n"
+    "end\n"
+    "function strutils.startswith(s, p)\n"
+    "  s = tostring(s or \"\"); p = tostring(p or \"\")\n"
+    "  return string.sub(s, 1, #p) == p\n"
+    "end\n"
+    "function strutils.endswith(s, p)\n"
+    "  s = tostring(s or \"\"); p = tostring(p or \"\")\n"
+    "  if p == \"\" then return true end\n"
+    "  return string.sub(s, -#p) == p\n"
+    "end\n"
+    "function strutils.upper(s) return string.upper(tostring(s or \"\")) end\n"
+    "function strutils.lower(s) return string.lower(tostring(s or \"\")) end\n";
+
 static void registerFns(lua_State *L, lua_CFunction printFn) {
     static const struct { const char *name; lua_CFunction fn; } FNS[] = {
         { "tap", l_tap }, { "longTap", l_longTap }, { "swipe", l_swipe },
@@ -1303,6 +1364,8 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
     lua_setglobal(L, "cipher");
     lua_pushcfunction(L, printFn);
     lua_setglobal(L, "print");
+    // strutils（两端同源 Lua 实现）
+    luaL_dostring(L, STRUTILS_LUA);
     for (int i = 0; FNS[i].name; i++) {
         lua_pushcfunction(L, FNS[i].fn);
         lua_setglobal(L, FNS[i].name);
