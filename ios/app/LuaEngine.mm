@@ -594,13 +594,13 @@ static int l_cryptAes(lua_State *L) {
             size_t n = (dlen - off) < 16 ? (dlen - off) : 16;
             for (size_t i = 0; i < n; i++) o[off + i] = src[off + i] ^ reg[i];
         }
-    } else {               // CFB8：逐字节，密文反馈（加解密同反馈源）
+    } else {               // CFB8：逐字节；加密反馈输出密文，解密反馈收到的密文字节
         for (size_t i = 0; i < dlen; i++) {
             if (!maAesEcbBlock(key, klen, reg, ks)) return luaL_error(L, "aes crypt failed");
             unsigned char c = src[i] ^ ks[0];
             o[i] = c;
             memmove(reg, reg + 1, 15);
-            reg[15] = c;
+            reg[15] = enc ? c : src[i];
         }
     }
     if (!enc && padding && dlen > 0) {
@@ -742,9 +742,9 @@ static NSData *maPemUnwrap(NSString *pem) {
     return [[NSData alloc] initWithBase64EncodedString:s options:0];
 }
 static NSDictionary *maRsaKeyAttrs(BOOL isPublic, int bits) {
+    // 不带 kSecAttrKeySizeInBits：导入时按数据实际大小接受（生成时才需显式位数）
     return @{(id)kSecAttrKeyType: (id)kSecAttrKeyTypeRSA,
-             (id)kSecAttrKeyClass: (id)(isPublic ? kSecAttrKeyClassPublic : kSecAttrKeyClassPrivate),
-             (id)kSecAttrKeySizeInBits: @(bits)};
+             (id)kSecAttrKeyClass: (id)(isPublic ? kSecAttrKeyClassPublic : kSecAttrKeyClassPrivate)};
 }
 static int l_cryptRsaKeygen(lua_State *L) {
     int bits = (int)luaL_optinteger(L, 1, 2048);
@@ -2167,7 +2167,9 @@ static void registerFns(lua_State *L, lua_CFunction printFn) {
     lua_pushcfunction(L, l_cryptRsaEncrypt); lua_setfield(L, -2, "rsa_encrypt");
     lua_pushcfunction(L, l_cryptRsaDecrypt); lua_setfield(L, -2, "rsa_decrypt");
     lua_setglobal(L, "cryptLib");
-    lua_pushcfunction(L, l_qdOpen); lua_setglobal(L, "QDictionary");
+    lua_createtable(L, 0, 1);
+    lua_pushcfunction(L, l_qdOpen); lua_setfield(L, -2, "open");
+    lua_setglobal(L, "QDictionary");
     lua_pushcfunction(L, printFn);
     lua_setglobal(L, "print");
     // strutils（两端同源 Lua 实现）

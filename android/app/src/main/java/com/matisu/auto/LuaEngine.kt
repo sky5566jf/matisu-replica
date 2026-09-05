@@ -1001,7 +1001,8 @@ object LuaEngine {
         cryptT.set("rsa_decrypt", rsaDecFn)
         g.set("cryptLib", cryptT)
         // ---------------- QDictionary（键值字典，JSON 文件持久化） ----------------
-        g.set("QDictionary", object : OneArgFunction() {
+        val qdTable = LuaValue.tableOf()
+        qdTable.set("open", object : OneArgFunction() {
             override fun call(p: LuaValue): LuaValue {
                 val name = p.checkjstring()
                 if (name.isEmpty()) return LuaValue.NIL
@@ -1107,6 +1108,7 @@ object LuaEngine {
                 return t
             }
         })
+        g.set("QDictionary", qdTable)
         // ---------------- JSON（jsonLib 表，json 为别名） ----------------
         val jsonEncFn = object : OneArgFunction() {
             override fun call(v: LuaValue): LuaValue {
@@ -1189,12 +1191,12 @@ object LuaEngine {
                     off += 16
                 }
             }
-            else -> {  // CFB8：逐字节，密文反馈
+            else -> {  // CFB8：逐字节；加密反馈输出密文，解密反馈收到的密文字节
                 for (i in src.indices) {
                     val ks = aesEcbBlock(key, reg)
                     val c = (src[i].toInt() xor ks[0].toInt()).toByte()
                     out[i] = c
-                    reg = reg.copyOfRange(1, 16) + c
+                    reg = reg.copyOfRange(1, 16) + (if (enc) c else src[i])
                 }
             }
         }
