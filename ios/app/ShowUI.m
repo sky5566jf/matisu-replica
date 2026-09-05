@@ -13,7 +13,7 @@
 #import <UIKit/UIKit.h>
 
 // ---------------- 全局状态 ----------------
-static volatile NSString *gResultJson = nil;   // JS 回传 {"Submit":0/1,"Data":[...]}（semaphore wait 自带内存屏障，无需 volatile）
+static NSString *gResultJson = nil;   // JS 回传 {"Submit":0/1,"Data":[...]}（semaphore wait 自带内存屏障，无需 volatile）
 static dispatch_semaphore_t gSem = nil;
 static UIWindow *gShowWin = nil;
 static WKWebView *gShowWeb = nil;
