@@ -54,7 +54,7 @@ def ocr_tap(needle):
 
 def adb_tap(x, y):
     import subprocess
-    subprocess.run(["/d/LDPlayer9.0.79.2/adb.exe", "-s", "192.69.0.34:5555",
+    subprocess.run(["D:/LDPlayer9.0.79.2/adb.exe", "-s", "192.69.0.34:5555",
                     "shell", f"input tap {x} {y}"], capture_output=True, timeout=30)
 
 # ---------------- 路径 1：确认 ----------------
