@@ -573,7 +573,7 @@ static int l_cryptAes(lua_State *L) {
         tmp = [NSMutableData dataWithLength:dlen + pad];
         memcpy(tmp.mutableBytes, data, dlen);
         memset((unsigned char *)tmp.mutableBytes + dlen, pad, pad);
-        src = tmp.bytes; dlen += pad;
+        src = (const unsigned char *)tmp.bytes; dlen += pad;
     } else if (!enc && padding) {
         if (dlen == 0 || dlen % 16 != 0) return luaL_error(L, "aes decrypt: bad padded length");
     }
