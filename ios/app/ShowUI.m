@@ -340,19 +340,22 @@ static NSArray<NSString *> *ForwardToApp(NSDictionary *uitable, NSTimeInterval t
     NSArray *out = nil;
     if (ok) {
         uint32_t hn = 0;
-        if (read(fd, &hn, 4) == 4 && hn > 0 && hn < 16 * 1024 * 1024) {
-            uint32_t len = ntohl(hn);
-            NSMutableData *d = [NSMutableData dataWithLength:len];
-            uint32_t got = 0;
-            while (got < len) {
-                ssize_t r = read(fd, (uint8_t *)d.mutableBytes + got, len - got);
-                if (r <= 0) break;
-                got += (uint32_t)r;
-            }
-            SULog(@"fwd", [NSString stringWithFormat:@"resp got=%u/%u", got, len]);
-            if (got == len) {
-                id o = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
-                if ([o isKindOfClass:[NSArray class]]) out = o;
+        if (read(fd, &hn, 4) == 4) {
+            uint32_t len = ntohl(hn);   // 先转主机序再做范围检查（此前误用网络序原值比较，恒被 16MB 上限误杀）
+            SULog(@"fwd", [NSString stringWithFormat:@"resp header len=%u", len]);
+            if (len > 0 && len < 16 * 1024 * 1024) {
+                NSMutableData *d = [NSMutableData dataWithLength:len];
+                uint32_t got = 0;
+                while (got < len) {
+                    ssize_t r = read(fd, (uint8_t *)d.mutableBytes + got, len - got);
+                    if (r <= 0) break;
+                    got += (uint32_t)r;
+                }
+                SULog(@"fwd", [NSString stringWithFormat:@"resp got=%u/%u", got, len]);
+                if (got == len) {
+                    id o = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                    if ([o isKindOfClass:[NSArray class]]) out = o;
+                }
             }
         } else {
             SULog(@"fwd", @"read header failed/closed");
