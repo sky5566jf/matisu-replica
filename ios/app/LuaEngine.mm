@@ -739,7 +739,10 @@ static NSData *maPemUnwrap(NSString *pem) {
             c == '+' || c == '/' || c == '=')
             [s appendFormat:@"%C", c];
     }
-    return [[NSData alloc] initWithBase64EncodedString:s options:0];
+    maRsaDbg([NSString stringWithFormat:@"pemUnwrap: s=%lu head=%@", (unsigned long)s.length, [s substringToIndex:MIN(20, s.length)]]);
+    NSData *d = [[NSData alloc] initWithBase64EncodedString:s options:NSDataBase64DecodingIgnoreUnknownCharacters];
+    maRsaDbg([NSString stringWithFormat:@"pemUnwrap: decoded=%lu", (unsigned long)d.length]);
+    return d;
 }
 static NSDictionary *maRsaKeyAttrs(BOOL isPublic, int bits) {
     // 不带 kSecAttrKeySizeInBits：导入时按数据实际大小接受（生成时才需显式位数）
