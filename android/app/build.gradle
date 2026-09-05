@@ -41,4 +41,6 @@ dependencies {
     // Lua 引擎：luaj 是纯 Java 的 Lua 5.2/5.3 实现，无需 NDK，Phase 0 直接可用。
     // 如需原生性能，可后续替换为 LuaJIT/AndroLua（需 NDK 交叉编译 .so）。
     implementation 'org.luaj:luaj-jse:3.0.1'
+    // OCR：onnxruntime-android（与 iOS 同版本 1.17.x，同一套 PP-OCRv6 模型 ir_version=9）
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.17.1'
 }

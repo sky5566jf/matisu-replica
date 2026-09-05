@@ -351,22 +351,42 @@ object LuaEngine {
                     LuaValue.varargsOf(LuaValue.valueOf(cy), LuaValue.valueOf(r)))
             }
         })
-        // ---------------- OCR（Android 端暂未内置模型，注册占位） ----------------
+        // ---------------- OCR（PP-OCRv6，模型放 <externalFiles>/ocr/ 懒加载，同 iOS 分发策略） ----------------
         g.set("ocrText", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                EngineLog.append("[WARN] ocrText: Android 端 OCR 暂未实现\n")
-                return LuaValue.valueOf("")
+                val items = OcrEngine.region(ctx,
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0))
+                return LuaValue.valueOf(items.joinToString("\n") { it.text })
             }
         })
         g.set("ocrTextEx", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                EngineLog.append("[WARN] ocrTextEx: Android 端 OCR 暂未实现\n")
-                return LuaValue.tableOf()
+                val items = OcrEngine.region(ctx,
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0))
+                val t = LuaValue.tableOf()
+                for ((i, it) in items.withIndex()) {
+                    val row = LuaValue.tableOf()
+                    row.set("text", LuaValue.valueOf(it.text))
+                    row.set("x", LuaValue.valueOf(it.x))
+                    row.set("y", LuaValue.valueOf(it.y))
+                    row.set("w", LuaValue.valueOf(it.w))
+                    row.set("h", LuaValue.valueOf(it.h))
+                    row.set("score", LuaValue.valueOf(it.score.toDouble()))
+                    t.set(i + 1, row)
+                }
+                return t
             }
         })
         g.set("findStr", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
-                EngineLog.append("[WARN] findStr: Android 端 OCR 暂未实现\n")
+                val needle = args.checkjstring(5)
+                val items = OcrEngine.region(ctx,
+                    args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0))
+                for (it in items) {
+                    if (it.text.contains(needle)) {
+                        return LuaValue.varargsOf(LuaValue.valueOf(it.x + it.w / 2), LuaValue.valueOf(it.y + it.h / 2))
+                    }
+                }
                 return LuaValue.varargsOf(LuaValue.valueOf(-1), LuaValue.valueOf(-1))
             }
         })
