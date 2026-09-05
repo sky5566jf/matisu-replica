@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Vibrator
+import org.json.JSONObject
 import org.luaj.vm2.Globals
 import org.luaj.vm2.LuaError
 import org.luaj.vm2.LuaString
@@ -584,7 +585,7 @@ object LuaEngine {
         g.set("showUI", object : VarArgFunction() {
             override fun invoke(args: Varargs): Varargs {
                 val raw = args.optjstring(1, "")
-                if (raw.isEmpty()) return LuaValue.varargsOf(LuaValue.valueOf(0))
+                if (raw.isEmpty()) return LuaValue.valueOf(0)
                 val ut = try {
                     JSONObject(raw)   // JSON 字符串（主流用法）
                 } catch (e: Exception) {
@@ -598,15 +599,15 @@ object LuaEngine {
                         EngineLog.append("[WARN] showUI: 参数需 JSON 字符串或 table（${e.message}）\n")
                         null
                     }
-                } ?: return LuaValue.varargsOf(LuaValue.valueOf(0))
+                } ?: return LuaValue.valueOf(0)
                 val ctx = AutoAccessibilityService.instance
                 if (ctx == null) {
                     EngineLog.append("[WARN] showUI: 无障碍服务未连接\n")
-                    return LuaValue.varargsOf(LuaValue.valueOf(0))
+                    return LuaValue.valueOf(0)
                 }
                 val out = ShowUI.runForLua(ctx, ut)
                 val vars = out.map { LuaValue.valueOf(it) }.toTypedArray()
-                return LuaValue.varargsOf(*vars)
+                return LuaValue.varargsOf(vars)
             }
         })
         g.set("closeWindow", object : ZeroArg() {

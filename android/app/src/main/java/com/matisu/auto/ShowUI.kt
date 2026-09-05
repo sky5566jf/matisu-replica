@@ -72,7 +72,7 @@ object ShowUI {
         }
         try {
             // JS 里的 timer 到时也会自动提交；这里只兜底总超时
-            val total = (if (timerSec > 0) timerSec + 30 else 3600).coerceAtMost(7200)
+            val total = (if (timerSec > 0) timerSec + 30L else 3600L).coerceAtMost(7200L)
             if (!l.await(total, TimeUnit.SECONDS)) {
                 EngineLog.append("[WARN] showUI 等待超时\n")
             }
