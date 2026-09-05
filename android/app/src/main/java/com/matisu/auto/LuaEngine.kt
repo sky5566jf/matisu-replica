@@ -5,7 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.BatteryManagerimport android.os.Build
+import android.os.BatteryManager
+import android.os.Build
 import android.os.Vibrator
 import org.luaj.vm2.Globals
 import org.luaj.vm2.LuaError
@@ -181,9 +182,9 @@ object LuaEngine {
                 return LuaValue.varargsOf(LuaValue.valueOf(x), LuaValue.valueOf(y))
             }
         })
-        g.set("findColorT", object : OneArgFunction() {
-            override fun call(t: LuaValue): LuaValue {
-                t.checktable()
+        g.set("findColorT", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val t = args.arg1().checktable()
                 val (x, y) = ColorFind.findColor(
                     tblInt(t, "x1", 1, 0), tblInt(t, "y1", 2, 0), tblInt(t, "x2", 3, 0), tblInt(t, "y2", 4, 0),
                     tblStr(t, "color", 5, ""), tblInt(t, "dir", 6, 0), tblNum(t, "sim", 7, 0.9))
@@ -198,9 +199,9 @@ object LuaEngine {
                 return LuaValue.varargsOf(LuaValue.valueOf(x), LuaValue.valueOf(y))
             }
         })
-        g.set("findMultiColorT", object : OneArgFunction() {
-            override fun call(t: LuaValue): LuaValue {
-                t.checktable()
+        g.set("findMultiColorT", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val t = args.arg1().checktable()
                 val (x, y) = ColorFind.findMultiColor(
                     tblInt(t, "x1", 1, 0), tblInt(t, "y1", 2, 0), tblInt(t, "x2", 3, 0), tblInt(t, "y2", 4, 0),
                     tblStr(t, "color", 5, ""), tblStr(t, "offset", 6, ""), tblInt(t, "dir", 7, 0), tblNum(t, "sim", 8, 0.9))
@@ -258,14 +259,14 @@ object LuaEngine {
             override fun call(c1: LuaValue, c2: LuaValue): LuaValue =
                 LuaValue.valueOf(ColorFind.colorDiff(c1.checkjstring(), c2.checkjstring()))
         })
-        g.set("colorToRGB", object : OneArgFunction() {
-            override fun call(cv: LuaValue): Varargs {
+        g.set("colorToRGB", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
+                val cv = args.arg1()
                 var v = if (cv.isnumber()) cv.checklong() else (cv.checkjstring().removePrefix("0x").toLongOrNull(16) ?: 0L)
                 v = v and 0xFFFFFF
-                return LuaValue.varargsOf(
-                    LuaValue.valueOf((v and 0xFF).toInt()),
-                    LuaValue.valueOf(((v shr 8) and 0xFF).toInt()),
-                    LuaValue.valueOf(((v shr 16) and 0xFF).toInt()))
+                return LuaValue.varargsOf(LuaValue.valueOf((v and 0xFF).toInt()),
+                    LuaValue.varargsOf(LuaValue.valueOf(((v shr 8) and 0xFF).toInt()),
+                        LuaValue.valueOf(((v shr 16) and 0xFF).toInt())))
             }
         })
         g.set("getScreenPixel", object : VarArgFunction() {
@@ -346,7 +347,8 @@ object LuaEngine {
                     args.optint(1, 0), args.optint(2, 0), args.optint(3, 0), args.optint(4, 0),
                     args.optint(5, 1), args.optint(6, 20), args.optint(7, 100),
                     args.optint(8, 30), args.optint(9, 5), args.optint(10, 200))
-                return LuaValue.varargsOf(LuaValue.valueOf(cx), LuaValue.valueOf(cy), LuaValue.valueOf(r))
+                return LuaValue.varargsOf(LuaValue.valueOf(cx),
+                    LuaValue.varargsOf(LuaValue.valueOf(cy), LuaValue.valueOf(r)))
             }
         })
         // ---------------- OCR（Android 端暂未内置模型，注册占位） ----------------
@@ -441,20 +443,22 @@ object LuaEngine {
         })
         g.set("getDeviceType", object : ZeroArg() { override fun call0(): LuaValue = LuaValue.valueOf("android") })
         g.set("getEngineVersion", object : ZeroArg() { override fun call0(): LuaValue = LuaValue.valueOf(ENGINE_VERSION) })
-        g.set("getScreenResolution", object : ZeroArg() {
-            override fun call0(): Varargs {
+        g.set("getScreenResolution", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
                 val f = ProjectionService.latestFrame()
                 if (f != null) return LuaValue.varargsOf(LuaValue.valueOf(f.width), LuaValue.valueOf(f.height))
                 val (w, h) = AutoAccessibilityService.displaySize()
                 return LuaValue.varargsOf(LuaValue.valueOf(w), LuaValue.valueOf(h))
             }
         })
-        g.set("getScreenFrame", object : ZeroArg() {
-            override fun call0(): Varargs {
+        g.set("getScreenFrame", object : VarArgFunction() {
+            override fun invoke(args: Varargs): Varargs {
                 val f = ProjectionService.latestFrame()
                 val w = f?.width ?: AutoAccessibilityService.displaySize().first
                 val h = f?.height ?: AutoAccessibilityService.displaySize().second
-                return LuaValue.varargsOf(LuaValue.valueOf(0), LuaValue.valueOf(0), LuaValue.valueOf(w), LuaValue.valueOf(h))
+                return LuaValue.varargsOf(LuaValue.valueOf(0),
+                    LuaValue.varargsOf(LuaValue.valueOf(0),
+                        LuaValue.varargsOf(LuaValue.valueOf(w), LuaValue.valueOf(h))))
             }
         })
         g.set("frontAppName", object : ZeroArg() {
@@ -633,7 +637,7 @@ object LuaEngine {
             override fun call(s: LuaValue): LuaValue {
                 return try {
                     val v = org.json.JSONTokener(s.checkjstring()).nextValue()
-                    jsonDec(v) ?: NIL
+                    jsonDec(v)
                 } catch (e: Exception) {
                     // 对齐 iOS/cjson：解析失败抛错
                     throw LuaError("json.decode: ${e.message}")
@@ -647,7 +651,6 @@ object LuaEngine {
         g.set("json", jsonLib)
         // ---------------- 字符串处理（strutils：两端同源 Lua 实现） ----------------
         try { g.load(STRUTILS_LUA.trimIndent(), "=strutils").call() } catch (_: Throwable) {}
-        NIL
     }
 
     /** ZeroArg 便捷基类 */
@@ -727,20 +730,20 @@ object LuaEngine {
         }
     }
 
-    private fun jsonDec(v: Any?): LuaValue? = when {
-        v == null || v == org.json.JSONObject.NULL -> NIL
+    private fun jsonDec(v: Any?): LuaValue = when {
+        v == null || v == org.json.JSONObject.NULL -> LuaValue.NIL
         v is org.json.JSONObject -> {
             val t = LuaValue.tableOf()
             val it = v.keys()
             while (it.hasNext()) {
                 val key = it.next()
-                t.set(key, jsonDec(v.opt(key)) ?: NIL)
+                t.set(key, jsonDec(v.opt(key)))
             }
             t
         }
         v is org.json.JSONArray -> {
             val t = LuaValue.tableOf()
-            for (i in 0 until v.length()) t.set(i + 1, jsonDec(v.get(i)) ?: NIL)
+            for (i in 0 until v.length()) t.set(i + 1, jsonDec(v.get(i)))
             t
         }
         v is Boolean -> LuaValue.valueOf(v)
