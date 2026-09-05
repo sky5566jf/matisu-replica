@@ -58,6 +58,58 @@ async function engineSock(cmd, timeout = 20000) {
   return iosSock(cmd, timeout);
 }
 
+// ---- 断点调试会话（iOS runfiledbg 多帧协议：暂停帧 + 最终帧；Android 待支持） ----
+// 独立长连接：bpset → runfiledbg → 循环读帧；dbggo/dbgstep/dbgstop 走短连接（跨连接恢复）。
+let dbgSess = null;   // {name,bps,state:'running'|'paused'|'done',line,source,locals,globals,stack,result,done}
+
+function dbgDevice() {
+  if (bridge.CFG.target === 'android') return null;   // Android 断点调试待支持
+  return { host: bridge.CFG.ios.host, port: bridge.CFG.ios.port | 0 || 18182 };
+}
+
+/** 从 sock 流里按「4B 大端长度 + 负载」切帧回调 */
+function dbgFrameReader(sock, onFrame) {
+  let buf = Buffer.alloc(0);
+  sock.on('data', (d) => {
+    buf = Buffer.concat([buf, d]);
+    for (;;) {
+      if (buf.length < 4) break;
+      const n = buf.readUInt32BE(0);
+      if (n > 64 * 1024 * 1024) { sock.destroy(); break; }
+      if (buf.length < 4 + n) break;
+      const payload = buf.slice(4, 4 + n);
+      buf = buf.slice(4 + n);
+      onFrame(payload);
+    }
+  });
+}
+
+/** 短连接发 dbggo/dbgstep/dbgstop，读一帧应答 */
+function dbgCmd(cmd, timeout = 8000) {
+  const dev = dbgDevice();
+  if (!dev) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const sock = new net.Socket();
+    let done = false, buf = Buffer.alloc(0);
+    const finish = (v) => { if (!done) { done = true; try { sock.destroy(); } catch (_) {} resolve(v); } };
+    sock.setTimeout(timeout);
+    sock.connect(dev.port, dev.host, () => sock.write(cmd + '\n'));
+    sock.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+      if (buf.length >= 4) {
+        const n = buf.readUInt32BE(0);
+        if (buf.length >= 4 + n) {
+          let obj = null;
+          try { obj = JSON.parse(buf.slice(4, 4 + n).toString('utf8')); } catch (_) {}
+          finish(obj);
+        }
+      }
+    });
+    sock.on('timeout', () => finish(null));
+    sock.on('error', () => finish(null));
+  });
+}
+
 const PORT = parseInt(process.argv[2] || '5586', 10);
 let lastScreen = null;   // 最近一次截图（裁剪/找图复用）
 const TPL_DIR = path.join(__dirname, 'templates');
@@ -355,6 +407,62 @@ const server = http.createServer(async (req, res) => {
     const out5 = await engineSock('runfile ' + String(b.name || ''), 60000);
     if (!out5) return send(res, 502, '{"ok":false,"error":"runfile 失败"}');
     return send(res, 200, String(out5));
+  }
+
+  if (p === '/api/dbgrun' && req.method === 'POST') {
+    // {name, bps:[行号]}：启动调试运行。长连接后台读帧，前端轮询 /api/dbgstate。
+    const b = await readBody(req);
+    const dev = dbgDevice();
+    if (!dev) return send(res, 501, '{"ok":false,"error":"当前设备类型不支持断点调试（Android 待支持）"}');
+    if (dbgSess && !dbgSess.done) return send(res, 409, '{"ok":false,"error":"调试会话进行中"}');
+    const name = String(b.name || '');
+    const bps = Array.isArray(b.bps) ? b.bps.map(Number).filter((x) => Number.isFinite(x) && x > 0) : [];
+    dbgSess = { name, bps, state: 'running', line: null, source: '', locals: [], globals: [], stack: 0, result: null, done: false };
+    const sock = new net.Socket();
+    let bpAcked = false;
+    const fail = (msg) => {
+      if (dbgSess.done) return;
+      dbgSess.done = true; dbgSess.state = 'done';
+      dbgSess.result = { ok: false, error: msg, output: '' };
+      try { sock.destroy(); } catch (_) {}
+    };
+    dbgFrameReader(sock, (payload) => {
+      if (!bpAcked) { bpAcked = true; sock.write('runfiledbg ' + name + '\n'); return; }
+      let obj = null;
+      try { obj = JSON.parse(payload.toString('utf8')); } catch (_) { return; }
+      if (obj && obj.paused) {
+        dbgSess.state = 'paused';
+        dbgSess.line = obj.line | 0;
+        dbgSess.source = String(obj.source || '');
+        dbgSess.locals = obj.locals || [];
+        dbgSess.globals = obj.globals || [];
+        dbgSess.stack = obj.stack | 0;
+      } else if (obj) {
+        dbgSess.state = 'done'; dbgSess.done = true; dbgSess.result = obj;
+        try { sock.destroy(); } catch (_) {}
+      }
+    });
+    sock.on('close', () => { if (!dbgSess.done) fail('设备连接断开'); });
+    sock.on('error', () => {});
+    sock.connect(dev.port, dev.host, () => {
+      sock.write('bpset ' + Buffer.from(JSON.stringify({ lines: bps })).toString('base64') + '\n');
+    });
+    sock.on('error', () => {});
+    return send(res, 200, '{"ok":true}');
+  }
+
+  if (p === '/api/dbgstate' && req.method === 'GET') {
+    if (!dbgSess) return send(res, 200, '{"ok":true,"idle":true}');
+    return send(res, 200, JSON.stringify({ ok: true, idle: false, ...dbgSess }));
+  }
+
+  if (p === '/api/dbg' && req.method === 'POST') {
+    // {op:'go'|'step'|'stop'}
+    const b = await readBody(req);
+    const cmd = { go: 'dbggo', step: 'dbgstep', stop: 'dbgstop' }[String(b.op || '')];
+    if (!cmd) return send(res, 400, '{"ok":false,"error":"bad op"}');
+    const out = await dbgCmd(cmd);
+    return send(res, 200, JSON.stringify(out || { ok: false, error: '设备无响应' }));
   }
 
   if (p === '/api/export' && req.method === 'POST') {

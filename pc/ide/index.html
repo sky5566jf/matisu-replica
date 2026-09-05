@@ -573,6 +573,16 @@ function setCode(text, name) {
       onChange: () => { if (!edSuppress) markDirty(); },
     });
     if (activeTab >= 0) setCode(tabs[activeTab].code, tabs[activeTab].name);
+    // 断点：gutter 点击回调回写 bpStore；换文件/启动调试时 applyBreakpoints 恢复
+    if (ED.onBreakpointToggle) {
+      ED.onBreakpointToggle((line, added) => {
+        const key = bpFileKey();
+        if (!key) return;
+        const cur = bpStore[key] || [];
+        bpStore[key] = added ? [...cur, line].sort((a, b) => a - b) : cur.filter((x) => x !== line);
+      });
+      applyBreakpoints();
+    }
     try {
       await ED.connectLsp(info.rootUri, info.libraryUri);
       log('LSP 已连接：API 补全 / 悬浮文档 / 语法诊断已启用');
@@ -1083,6 +1093,7 @@ function switchTab(i) {
   $('gutter').style.display = isRc ? 'none' : '';
   if (isRc) rcOpen(t);
   else setCode(t.code, t.name);
+  applyBreakpoints();   // 断点按文件存储：切文件恢复对应圆点
   renderTabs();
   if (!histNav) { histStack = histStack.slice(0, histPos + 1); histStack.push(i); histPos = histStack.length - 1; }
 }
@@ -1579,6 +1590,7 @@ $('btnEnc').onclick = () => todo('加密运行');
 
 async function stopSvc() {
   if ($('btnStop2').disabled) return;   // 空闲时 F6/按钮不动作
+  if (dbgActive) { await dbgOp('stop'); log('已请求停止调试'); return; }   // 调试会话：dbgstop
   await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'stop' }) });
   log('已请求停止脚本');
   setTimeout(refreshState, 800);
@@ -1586,10 +1598,96 @@ async function stopSvc() {
 $('btnStop2').onclick = stopSvc;
 
 // 调试器占位（原版调试/单步/步入/继续：复刻排期中）
-$('btnDbg').onclick = () => todo('调试(F4)');
-$('btnStep').onclick = () => todo('单步(F7)');
-$('btnStepIn').onclick = () => todo('步入(F8)');
-$('btnCont').onclick = () => todo('继续(F9)');
+// ---- 断点调试（iOS 设备端 runfiledbg；gutter 点击/F4 开调试/F7 单步/F9 继续） ----
+// 断点按文件名存储（工程内相对名）；暂停行高亮 + 局部变量进「堆栈调用」面板 + 全局变量进变量表。
+let dbgActive = false;        // 调试会话进行中（运行未结束）
+let dbgPausedLine = null;     // 当前暂停行（null=未暂停）
+const bpStore = {};           // { 文件名: [行号...] }（1 起，升序）
+let dbgPollTimer = null;
+
+function bpFileKey() { return activeTab >= 0 ? tabs[activeTab].name : null; }
+function applyBreakpoints() {
+  const key = bpFileKey();
+  if (ED && ED.setBreakpoints) ED.setBreakpoints(key ? (bpStore[key] || []) : []);
+}
+async function dbgStart() {
+  if (runActive || dbgActive) return;
+  if (activeTab < 0 || tabs[activeTab].kind === 'rc') { log('请先打开要调试的 .lua 脚本'); return; }
+  if (tabs[activeTab].dirty) await saveCur();
+  const projName = tabs[activeTab].name;
+  const devName = String(projName).split(/[\\/]/).pop();
+  const bps = (bpStore[projName] || []).slice();
+  logClear();
+  log('开始调试 ' + devName + (bps.length ? '（断点: 行 ' + bps.join(', ') + '）' : '（无断点，可用 F7 单步）'));
+  const up = await (await fetch('/api/script', { method: 'POST', body: JSON.stringify({ name: devName, code: getCode() }) })).json().catch(() => ({ ok: false }));
+  if (!up.ok) { log('[错误] 同步脚本到设备失败：' + devName); return; }
+  const r = await (await fetch('/api/dbgrun', { method: 'POST', body: JSON.stringify({ name: devName, bps }) })).json().catch(() => null);
+  if (!r || !r.ok) { log('[错误] 调试启动失败: ' + ((r && r.error) || '设备无响应')); return; }
+  dbgActive = true; dbgPausedLine = null;
+  updateDbgBtns(true);
+  pollDbg();
+}
+async function dbgOp(op) {
+  if (!dbgActive) return;
+  const r = await (await fetch('/api/dbg', { method: 'POST', body: JSON.stringify({ op }) })).json().catch(() => null);
+  if (!r || !r.ok) log('[错误] 调试命令失败（' + op + '）');
+}
+function dbgSetPauseBtns(paused) {
+  $('btnStep').disabled = !paused;    // F7 单步
+  $('btnStepIn').disabled = !paused;  // F8 步入（当前与单步同语义：逐行）
+  $('btnCont').disabled = !paused;    // F9 继续
+}
+function renderLocals(locals, stack, line) {
+  // 「堆栈调用」页：暂停行 + 调用栈深度 + 局部变量表
+  const rows = [['#', '局部变量 @ 行 ' + line, '']];
+  (locals || []).forEach((l) => rows.push([l[0], l[1], l[2]]));
+  rows.push(['', '调用栈深度', String(stack || 0)]);
+  const el = document.querySelector('#hpcall');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:4px 8px;">' + rows.map((r) =>
+    `<div style="display:flex;gap:10px;border-bottom:1px solid #1a1d23;padding:2px 0;">
+       <span style="width:26px;color:#5a6370;flex:none;">${r[0]}</span>
+       <span style="flex:1;color:#c0c7d0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${String(r[1])}</span>
+       <span style="flex:1.4;color:#9aa4b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${String(r[2])}</span>
+     </div>`).join('') + '</div>';
+}
+async function pollDbg() {
+  clearTimeout(dbgPollTimer);
+  while (dbgActive) {
+    const s = await (await fetch('/api/dbgstate')).json().catch(() => null);
+    if (!s || s.idle) { dbgActive = false; dbgPausedLine = null; ED.setDebugLine(null); dbgSetPauseBtns(false); updateDbgBtns(false); break; }
+    if (s.done) {
+      dbgActive = false; dbgPausedLine = null;
+      ED.setDebugLine(null);
+      dbgSetPauseBtns(false); updateDbgBtns(false);
+      renderVartable(s.result && s.result.globals);
+      const rr = s.result || {};
+      if (!rr.ok) log('[错误] ' + (rr.error || '未知'));
+      else if (rr.stopped) log('调试已停止');
+      else log('调试结束');
+      String(rr.output || '').split('\n').filter((x) => x.trim()).forEach((l) => log(l));
+      break;
+    }
+    if (s.state === 'paused' && dbgPausedLine !== s.line) {
+      dbgPausedLine = s.line;
+      if (ED.setDebugLine) ED.setDebugLine(s.line);
+      renderVartable(s.globals);
+      renderLocals(s.locals, s.stack, s.line);
+      log('断点暂停 @ 行 ' + s.line + '（F9 继续 / F7 单步 / F6 停止）');
+      dbgSetPauseBtns(true);
+    } else if (s.state === 'running' && dbgPausedLine !== null) {
+      dbgPausedLine = null;
+      if (ED.setDebugLine) ED.setDebugLine(null);
+      dbgSetPauseBtns(false);
+    }
+    await new Promise((r2) => setTimeout(r2, 500));
+  }
+}
+
+$('btnDbg').onclick = dbgStart;
+$('btnStep').onclick = () => dbgOp('step');
+$('btnStepIn').onclick = () => dbgOp('step');   // 步入暂与单步同语义（逐行）
+$('btnCont').onclick = () => dbgOp('go');
 
 async function refreshState() {
   const r = await (await fetch('/api/svc', { method: 'POST', body: JSON.stringify({ action: 'state' }) })).json();
@@ -2336,6 +2434,10 @@ $('rcExport').onclick = () => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'F5') { e.preventDefault(); runCurrent(); }
   if (e.key === 'F6') { e.preventDefault(); stopSvc(); }
+  if (e.key === 'F4' && !inField()) { e.preventDefault(); dbgStart(); }
+  if (e.key === 'F7') { e.preventDefault(); dbgOp('step'); }
+  if (e.key === 'F8') { e.preventDefault(); dbgOp('step'); }
+  if (e.key === 'F9') { e.preventDefault(); dbgOp('go'); }
   if (e.ctrlKey && e.key === 's') { e.preventDefault(); e.shiftKey ? saveAll() : saveCur(); }
   // 折叠/展开：文件级操作，不强制要求编辑器聚焦。
   // Ctrl+E 在 Chrome/Edge 里是 omnibox 搜索（浏览器级，页面收不到事件），故额外提供 Alt+E / Ctrl+Shift+E / F2。

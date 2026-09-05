@@ -1,6 +1,6 @@
 // MatisuAuto IDE 编辑器：CodeMirror 6 + 极简 LSP 客户端（WebSocket 桥到 lua-language-server）
-import { EditorState } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
+import { EditorState, StateField, StateEffect } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, GutterMarker, gutter, Decoration } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage, syntaxHighlighting, defaultHighlightStyle, HighlightStyle, indentOnInput, bracketMatching, foldGutter, foldAll, unfoldAll, foldCode, unfoldCode, foldService, toggleFold as cmToggleFold, codeFolding, foldable, foldEffect, unfoldEffect, foldState } from '@codemirror/language';
 import { indentationMarkers } from '@replit/codemirror-indentation-markers';
@@ -111,6 +111,10 @@ const darkTheme = EditorView.theme({
   // 折叠标记：对齐原版 ⊞/⊟ 红色方块
   '.cm-foldGutter .cm-gutterElement': { color: '#e05c66', cursor: 'pointer', fontSize: '12px', lineHeight: '18px', padding: '0 4px' },
   '.cm-foldGutter .cm-gutterElement:hover': { color: '#ff7b84' },
+  // 断点 gutter（最左列）与调试暂停行
+  '.cm-bp-gutter': { cursor: 'pointer', minWidth: '14px' },
+  '.cm-bp-marker': { color: '#e05c66', fontSize: '13px', lineHeight: 'inherit' },
+  '.cm-dbgline': { backgroundColor: '#4a3b15' },
 }, { dark: true });
 
 // 折叠标记 DOM：⊟=可展开（已折叠块） / ⊞=可折叠 —— 与原版一致的方块图形
@@ -318,11 +322,66 @@ const luaFoldService = foldService.of((state, lineStart) => {
   return to > from ? { from, to } : null;
 });
 
+// ---------------- 断点与调试暂停行 ----------------
+// 断点：gutter 圆点（点击切换）；暂停行：整行高亮。状态存 CM field，行号 1 起。
+const setBreakpointsEff = StateEffect.define();   // number[]
+const setDebugLineEff = StateEffect.define();     // number | null
+
+class BpMarker extends GutterMarker {
+  toDOM() {
+    const s = document.createElement('span');
+    s.className = 'cm-bp-marker';
+    s.textContent = '●';
+    s.title = '断点（点击取消）';
+    return s;
+  }
+}
+const BP_MARK = new BpMarker();
+
+const dbgField = StateField.define({
+  create() { return { bps: [], dbgLine: null, deco: Decoration.none }; },
+  update(value, tr) {
+    let { bps, dbgLine } = value;
+    for (const e of tr.effects) {
+      if (e.is(setBreakpointsEff)) bps = (e.value || []).slice().sort((a, b) => a - b);
+      if (e.is(setDebugLineEff)) dbgLine = e.value;
+    }
+    if (bps === value.bps && dbgLine === value.dbgLine && !tr.docChanged) return value;
+    // 暂停行装饰跟随文档变化重映射（行号有效性防御）
+    const arr = [];
+    if (dbgLine != null && dbgLine >= 1 && dbgLine <= tr.state.doc.lines) {
+      arr.push(Decoration.line({ class: 'cm-dbgline' }).range(tr.state.doc.line(dbgLine).from));
+    }
+    return { bps, dbgLine, deco: arr.length ? Decoration.set(arr) : Decoration.none };
+  },
+  provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
+});
+
+const bpGutter = gutter({
+  class: 'cm-bp-gutter',
+  lineMarker(view, line) {
+    const st = view.state.field(dbgField, false);
+    return st && st.bps.includes(line.number) ? BP_MARK : null;
+  },
+  domEventHandlers: {
+    mousedown(view, line) {
+      const st = view.state.field(dbgField);
+      const n = line.number;
+      const had = st.bps.includes(n);
+      const bps = had ? st.bps.filter((x) => x !== n) : [...st.bps, n].sort((a, b) => a - b);
+      view.dispatch({ effects: setBreakpointsEff.of(bps) });
+      if (bpToggleCb) bpToggleCb(n, !had);
+      return true;
+    },
+  },
+});
+
 // ---------------- 对外工厂 ----------------
 export function createEditor({ parent, doc, getUri, lspUrl, onChange }) {
   let lsp = null;
   let curUri = null;
   let changeTimer = null;
+  let bpToggleCb = null;   // (line, added) — gutter 点击切换断点回调
 
   const lspLint = linter(() => [], { delay: 0 }); // 诊断由 publishDiagnostics 推送注入
 
@@ -331,6 +390,7 @@ export function createEditor({ parent, doc, getUri, lspUrl, onChange }) {
     state: EditorState.create({
       doc: doc || '',
       extensions: [
+        dbgField, bpGutter,
         lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), drawSelection(),
         foldGutter({ markerDOM: foldMarkerDOM }), luaFoldService,
         // 对齐原版：折叠后行尾不显示「…」占位框，展开只走 gutter 标记（保留 class 供 edFold 检测折叠态）
@@ -475,5 +535,17 @@ export function createEditor({ parent, doc, getUri, lspUrl, onChange }) {
       // 折叠/展开切换：当前行有折叠则展开，否则折叠可折叠区域（保留原行为作备用）
       cmToggleFold(view);
     },
+    // ---- 断点调试 ----
+    getBreakpoints() {
+      const st = view.state.field(dbgField, false);
+      return st ? st.bps.slice() : [];
+    },
+    setBreakpoints(lines) {
+      view.dispatch({ effects: setBreakpointsEff.of(lines || []) });
+    },
+    setDebugLine(n) {
+      view.dispatch({ effects: setDebugLineEff.of(n == null ? null : n) });
+    },
+    onBreakpointToggle(cb) { bpToggleCb = cb; },
   };
 }

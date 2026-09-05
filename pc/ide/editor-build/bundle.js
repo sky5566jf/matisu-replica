@@ -22303,7 +22303,11 @@ var MatisuEditor = (() => {
     ".cm-lintRange-warning": { textDecoration: "underline wavy #cca700 1px" },
     // 折叠标记：对齐原版 ⊞/⊟ 红色方块
     ".cm-foldGutter .cm-gutterElement": { color: "#e05c66", cursor: "pointer", fontSize: "12px", lineHeight: "18px", padding: "0 4px" },
-    ".cm-foldGutter .cm-gutterElement:hover": { color: "#ff7b84" }
+    ".cm-foldGutter .cm-gutterElement:hover": { color: "#ff7b84" },
+    // 断点 gutter（最左列）与调试暂停行
+    ".cm-bp-gutter": { cursor: "pointer", minWidth: "14px" },
+    ".cm-bp-marker": { color: "#e05c66", fontSize: "13px", lineHeight: "inherit" },
+    ".cm-dbgline": { backgroundColor: "#4a3b15" }
   }, { dark: true });
   function foldMarkerDOM(open) {
     const el = document.createElement("span");
@@ -22502,16 +22506,68 @@ var MatisuEditor = (() => {
     const to = state.doc.line(endLn).to;
     return to > from ? { from, to } : null;
   });
+  var setBreakpointsEff = StateEffect.define();
+  var setDebugLineEff = StateEffect.define();
+  var BpMarker = class extends GutterMarker {
+    toDOM() {
+      const s = document.createElement("span");
+      s.className = "cm-bp-marker";
+      s.textContent = "\u25CF";
+      s.title = "\u65AD\u70B9\uFF08\u70B9\u51FB\u53D6\u6D88\uFF09";
+      return s;
+    }
+  };
+  var BP_MARK = new BpMarker();
+  var dbgField = StateField.define({
+    create() {
+      return { bps: [], dbgLine: null, deco: Decoration.none };
+    },
+    update(value, tr) {
+      let { bps, dbgLine } = value;
+      for (const e of tr.effects) {
+        if (e.is(setBreakpointsEff)) bps = (e.value || []).slice().sort((a, b) => a - b);
+        if (e.is(setDebugLineEff)) dbgLine = e.value;
+      }
+      if (bps === value.bps && dbgLine === value.dbgLine && !tr.docChanged) return value;
+      const arr = [];
+      if (dbgLine != null && dbgLine >= 1 && dbgLine <= tr.state.doc.lines) {
+        arr.push(Decoration.line({ class: "cm-dbgline" }).range(tr.state.doc.line(dbgLine).from));
+      }
+      return { bps, dbgLine, deco: arr.length ? Decoration.set(arr) : Decoration.none };
+    },
+    provide: (f) => EditorView.decorations.from(f, (v) => v.deco)
+  });
+  var bpGutter = gutter({
+    class: "cm-bp-gutter",
+    lineMarker(view, line) {
+      const st = view.state.field(dbgField, false);
+      return st && st.bps.includes(line.number) ? BP_MARK : null;
+    },
+    domEventHandlers: {
+      mousedown(view, line) {
+        const st = view.state.field(dbgField);
+        const n = line.number;
+        const had = st.bps.includes(n);
+        const bps = had ? st.bps.filter((x) => x !== n) : [...st.bps, n].sort((a, b) => a - b);
+        view.dispatch({ effects: setBreakpointsEff.of(bps) });
+        if (bpToggleCb) bpToggleCb(n, !had);
+        return true;
+      }
+    }
+  });
   function createEditor({ parent, doc: doc2, getUri, lspUrl, onChange }) {
     let lsp = null;
     let curUri = null;
     let changeTimer = null;
+    let bpToggleCb2 = null;
     const lspLint = linter(() => [], { delay: 0 });
     const view = new EditorView({
       parent,
       state: EditorState.create({
         doc: doc2 || "",
         extensions: [
+          dbgField,
+          bpGutter,
           lineNumbers(),
           highlightActiveLine(),
           highlightActiveLineGutter(),
@@ -22665,6 +22721,20 @@ var MatisuEditor = (() => {
       },
       toggleFold() {
         toggleFold(view);
+      },
+      // ---- 断点调试 ----
+      getBreakpoints() {
+        const st = view.state.field(dbgField, false);
+        return st ? st.bps.slice() : [];
+      },
+      setBreakpoints(lines) {
+        view.dispatch({ effects: setBreakpointsEff.of(lines || []) });
+      },
+      setDebugLine(n) {
+        view.dispatch({ effects: setDebugLineEff.of(n == null ? null : n) });
+      },
+      onBreakpointToggle(cb) {
+        bpToggleCb2 = cb;
       }
     };
   }
